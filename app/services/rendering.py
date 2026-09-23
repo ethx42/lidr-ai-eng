@@ -45,15 +45,19 @@ def render_markdown(b: EnrichedBreakdown, grounding: GroundingReport) -> str:
             for task in b.tasks
         ),
         "",
-        f"**Total estimated: {_hours(t.expected_hours)} hours** "
-        f"(range {_hours(t.optimistic_hours)}–{_hours(t.pessimistic_hours)} h)",
+        (
+            f"**Total estimated: {_hours(t.expected_hours)} hours** "
+            f"(range {_hours(t.optimistic_hours)}–{_hours(t.pessimistic_hours)} h)"
+        ),
         "",
         "### Team",
         *(f"- {m.count}× {m.role}" for m in b.team),
         "",
         "### Duration",
-        f"{t.duration_weeks_min:g}–{t.duration_weeks_max:g} weeks "
-        f"(team of {t.team_size}, {t.weekly_capacity_hours:g} h/week per person)",
+        (
+            f"{t.duration_weeks_min:g}–{t.duration_weeks_max:g} weeks "
+            f"(team of {t.team_size}, {t.weekly_capacity_hours:g} h/week per person)"
+        ),
     ]
     if t.estimated_cost is not None and t.hourly_rate is not None:
         lines += ["", "### Cost", f"{t.estimated_cost:,.2f} at {t.hourly_rate:g}/h blended rate"]

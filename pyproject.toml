@@ -22,11 +22,10 @@ required-version = ">=0.12.18,<0.13"
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
 extend-exclude = ["openspec", ".openspec", ".claude"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "S"]
+extend-select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "S"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
@@ -37,11 +36,20 @@ select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "S"]
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["app"]
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
 
-[tool.pytest.ini_options]
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest]
+strict = true
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [dependency-groups]
 dev = [

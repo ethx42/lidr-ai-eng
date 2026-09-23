@@ -7,10 +7,10 @@
 
 ## 2. Gate strictness (`chore:` commit)
 
-- [ ] 2.1 Migrate to a native `[tool.pytest]` table with `strict = true` and `asyncio_default_fixture_loop_scope = "function"`. Verify `uv run pytest -q -W error::DeprecationWarning` passes with no config warnings
-- [ ] 2.2 Switch ruff to `extend-select` and drop `target-version`. Fix the new findings. Verify `uv run ruff check .` and `ruff format --check .` pass
-- [ ] 2.3 Enable `warn_unreachable`, the extra error codes, and the `[tool.pydantic-mypy]` flags (D7). Fix the findings. Verify `uv run mypy` passes
-- [ ] 2.4 `make check` exits 0
+- [x] 2.1 Migrate to a native `[tool.pytest]` table with `strict = true` and `asyncio_default_fixture_loop_scope = "function"`. Verify the pytest header reports `asyncio_default_fixture_loop_scope=function`, the suite passes with `-W error::pytest.PytestDeprecationWarning -W error::pytest.PytestConfigWarning`, and an unknown key is rejected
+- [x] 2.2 Switch ruff to `extend-select` and drop `target-version`. Fix the new findings. Verify `uv run ruff check .` and `ruff format --check .` pass
+- [x] 2.3 Enable `warn_unreachable`, the extra error codes, and the `[tool.pydantic-mypy]` flags (D7). Fix the findings. Verify `uv run mypy` passes
+- [x] 2.4 `make check` exits 0
 
 ## 3. Anthropic context-window truncation (`fix:` commit)
 

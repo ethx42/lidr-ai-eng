@@ -136,7 +136,7 @@ async def test_explicit_report_path(tmp_path: Path, capsys: pytest.CaptureFixtur
 async def test_default_report_name_includes_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import evals.run_eval as run_eval
+    from evals import run_eval
 
     monkeypatch.setattr(run_eval, "REPORTS_DIR", tmp_path)
     settings = Settings(_env_file=None, openai_api_key="test-key")
