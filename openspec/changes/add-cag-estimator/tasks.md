@@ -45,9 +45,9 @@ Paths: app/services/providers/**, app/services/errors.py, app/observability.py, 
 Depends on: 4, 5
 Paths: app/services/llm_service.py, app/main.py, app/routers/estimations.py, tests/unit/test_llm_service.py, tests/api/**
 
-- [ ] 6.1 Implement `EstimationService` in `services/llm_service.py` (prompt → provider → totals → grounding → render → response); verify unit tests with `FakeProvider`
-- [ ] 6.2 Implement `create_app` with lifespan (client created once, closed on shutdown), request-id middleware, error handlers, `/health`, OpenAPI metadata; verify API tests for `/health` 200, `/docs` 200, `X-Request-ID` propagation
-- [ ] 6.3 Implement `POST /api/v1/estimate` router; verify API tests for success, 422 cases (empty, too long, extra field, no provider call), and each upstream error mapping (429/503/502)
+- [x] 6.1 Implement `EstimationService` in `services/llm_service.py` (prompt → provider → totals → grounding → render → response); verify unit tests with `FakeProvider`
+- [x] 6.2 Implement `create_app` with lifespan (client created once, closed on shutdown), request-id middleware, error handlers, `/health`, OpenAPI metadata; verify API tests for `/health` 200, `/docs` 200, `X-Request-ID` propagation
+- [x] 6.3 Implement `POST /api/v1/estimate` router; verify API tests for success, 422 cases (empty, too long, extra field, no provider call), and each upstream error mapping (429/503/502)
 
 ## 7. Evaluation
 Depends on: 6

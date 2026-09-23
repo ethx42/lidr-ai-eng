@@ -3,6 +3,7 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
 
+from app.config import Provider
 from app.schemas.estimation import Usage
 
 T = TypeVar("T", bound=BaseModel)
@@ -16,7 +17,7 @@ class LLMResult[M: BaseModel]:
 
 
 class LLMProvider(Protocol):
-    name: str
+    name: Provider
     model: str
 
     async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]: ...

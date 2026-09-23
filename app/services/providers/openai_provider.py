@@ -5,7 +5,7 @@ import openai
 import pydantic
 from openai import AsyncOpenAI
 
-from app.config import ReasoningEffort
+from app.config import Provider, ReasoningEffort
 from app.schemas.estimation import Usage
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamUnavailable, from_status
 from app.services.providers.base import LLMResult, T
@@ -21,7 +21,7 @@ def map_error(exc: openai.APIError) -> LLMError:
 
 
 class OpenAIProvider:
-    name = "openai"
+    name: Provider = "openai"
 
     def __init__(
         self,
