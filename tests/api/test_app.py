@@ -1,7 +1,11 @@
+import json
+import logging
+
 import pytest
 from fastapi import APIRouter
 
 from app.main import create_app
+from app.observability import JsonFormatter
 from tests.api.conftest import ClientFactory
 from tests.fakes import FakeProvider
 
@@ -70,8 +74,10 @@ def test_provider_created_once_and_closed_on_shutdown(make_client: ClientFactory
     assert provider.closed
 
 
-def test_unhandled_error_returns_json_500_with_request_id(make_client: ClientFactory) -> None:
-    with make_client() as client:
+def test_unhandled_error_returns_json_500_with_request_id(
+    make_client: ClientFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    with make_client() as client, caplog.at_level(logging.ERROR, logger="app.main"):
         boom = APIRouter()
 
         @boom.get("/boom")
@@ -87,6 +93,12 @@ def test_unhandled_error_returns_json_500_with_request_id(make_client: ClientFac
             "request_id": "r-500",
         }
         assert "secret internals" not in response.text
+    [record] = [r for r in caplog.records if r.getMessage() == "unhandled_error"]
+    payload = json.loads(JsonFormatter().format(record))
+    assert payload["exc_type"] == "RuntimeError"
+    assert payload["request_id"] == "r-500"
+    assert any(frame.endswith(" in explode") for frame in payload["stack"])
+    assert "secret internals" not in json.dumps(payload)
 
 
 def test_startup_fails_without_key(monkeypatch: pytest.MonkeyPatch) -> None:

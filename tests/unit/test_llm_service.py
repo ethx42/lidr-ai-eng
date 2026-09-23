@@ -78,6 +78,7 @@ async def test_llm_call_logged_without_transcript(caplog: pytest.LogCaptureFixtu
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "ok"  # type: ignore[attr-defined]
     assert record.fields["input_tokens"] == 1200  # type: ignore[attr-defined]
+    assert {"cause", "upstream_status"}.isdisjoint(record.fields)  # type: ignore[attr-defined]
     for r in caplog.records:
         assert "yoga studio" not in str(r.__dict__)
 

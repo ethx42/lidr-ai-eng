@@ -1,5 +1,6 @@
 """Real SDK clients on a mock transport: retries and what goes on the wire."""
 
+import copy
 import json
 import logging
 from collections.abc import Callable, Iterator
@@ -11,8 +12,10 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
 from app.observability import CLIENT_LOGGERS, configure_logging
-from app.schemas.estimation import EstimationBreakdown
-from app.services.errors import UpstreamError, UpstreamRateLimited
+from app.prompts.loader import load_prompt
+from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, UpstreamRateLimited
+from app.services.llm_service import EstimationService
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
@@ -228,3 +231,98 @@ async def test_debug_logging_leaks_no_transcript(
     await provider.aclose()
     assert caplog.records, "expected library records at INFO and above"
     assert all(marker not in record.getMessage() for record in caplog.records)
+
+
+def test_llm_error_cause_prefers_reason_then_chained_class() -> None:
+    try:
+        try:
+            raise ValueError("secret")
+        except ValueError as inner:
+            raise UpstreamError() from inner
+    except LLMError as exc:
+        assert (exc.cause, exc.upstream_status) == ("ValueError", None)
+    assert InvalidModelOutput(reason="stop_reason:refusal").cause == "stop_reason:refusal"
+    assert UpstreamError().cause is None
+
+
+TRUNCATED = '{"project_name": "Yoga", "summ'
+ANTHROPIC_TRUNCATED = copy.deepcopy(ANTHROPIC_BODY) | {"stop_reason": "max_tokens"}
+ANTHROPIC_TRUNCATED["content"] = [{"type": "text", "text": TRUNCATED}]
+OPENAI_TRUNCATED = copy.deepcopy(OPENAI_BODY) | {
+    "status": "incomplete",
+    "incomplete_details": {"reason": "max_output_tokens"},
+}
+OPENAI_TRUNCATED["output"][0]["content"][0]["text"] = TRUNCATED
+ANTHROPIC_400 = {
+    "type": "error",
+    "error": {"type": "invalid_request_error", "message": "secret upstream detail"},
+}
+
+
+@pytest.mark.parametrize(
+    "build,status,body,outcome,cause,upstream_status",
+    [
+        (anthropic_provider, 400, ANTHROPIC_400, "upstream_error", "BadRequestError", 400),
+        (
+            anthropic_provider,
+            200,
+            ANTHROPIC_TRUNCATED,
+            "invalid_model_output",
+            "stop_reason:max_tokens",
+            None,
+        ),
+        (
+            openai_provider,
+            200,
+            OPENAI_TRUNCATED,
+            "invalid_model_output",
+            "incomplete:max_output_tokens",
+            None,
+        ),
+    ],
+    ids=["anthropic-400", "anthropic-truncated", "openai-truncated"],
+)
+async def test_failed_call_logs_cause_without_upstream_detail(
+    build: Callable[[Handler], OpenAIProvider | AnthropicProvider],
+    status: int,
+    body: dict[str, Any],
+    outcome: str,
+    cause: str,
+    upstream_status: int | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    provider = build(lambda _: httpx.Response(status, json=body))
+    service = EstimationService(
+        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+    )
+    with caplog.at_level(logging.INFO), pytest.raises(LLMError):
+        await service.estimate(EstimateRequest(transcription="Client: we need a booking app."))
+    await provider.aclose()
+    [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
+    fields = record.fields  # type: ignore[attr-defined]
+    assert (fields["outcome"], fields["cause"], fields["upstream_status"]) == (
+        outcome,
+        cause,
+        upstream_status,
+    )
+    assert all("secret upstream detail" not in str(r.__dict__) for r in caplog.records)
+
+
+async def test_anthropic_output_format_matches_sdk_parse() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=ANTHROPIC_BODY)
+
+    provider = anthropic_provider(capture)
+    await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    await provider.client.messages.parse(
+        model="claude-haiku-4-5",
+        max_tokens=10,
+        messages=[{"role": "user", "content": "u"}],
+        output_format=EstimationBreakdown,
+    )
+    await provider.aclose()
+    ours, sdk = bodies
+    assert ours["output_config"]["format"] == sdk["output_config"]["format"]

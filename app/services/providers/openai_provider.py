@@ -70,7 +70,8 @@ class OpenAIProvider:
     ) -> LLMResult[T]:
         start = time.perf_counter()
         try:
-            response = await self.client.responses.parse(
+            # Raw first: `parse` fails on truncated JSON before the stop condition can be read.
+            raw = await self.client.responses.with_raw_response.parse(
                 model=self.model,
                 instructions=system,
                 input=user,
@@ -79,14 +80,27 @@ class OpenAIProvider:
                 prompt_cache_key=cache_key,
                 **self.params,
             )
-        except pydantic.ValidationError as exc:
-            raise InvalidModelOutput() from exc
         except openai.APIError as exc:
             raise map_error(exc) from exc
 
+        envelope = raw.http_response.json()
+        if envelope.get("status") == "incomplete":
+            details = envelope.get("incomplete_details") or {}
+            raise InvalidModelOutput(reason=f"incomplete:{details.get('reason')}")
+        try:
+            response = raw.parse()
+        except pydantic.ValidationError as exc:
+            raise InvalidModelOutput() from exc
+
         parsed = response.output_parsed
-        if response.status == "incomplete" or parsed is None:
-            raise InvalidModelOutput()
+        if parsed is None:
+            refused = any(
+                part.type == "refusal"
+                for item in response.output
+                if item.type == "message"
+                for part in item.content
+            )
+            raise InvalidModelOutput(reason="refusal" if refused else "no_parsed_output")
         usage = response.usage
         details = usage.input_tokens_details if usage else None
         return LLMResult(

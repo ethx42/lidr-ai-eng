@@ -5,8 +5,19 @@ class LLMError(Exception):
     code = "upstream_error"
     message = "The LLM provider rejected the request."
 
-    def __init__(self, message: str | None = None) -> None:
+    def __init__(self, message: str | None = None, *, reason: str | None = None) -> None:
         super().__init__(message or self.message)
+        self.reason = reason
+
+    @property
+    def cause(self) -> str | None:
+        """What failed, for logs only: an explicit stop condition or the chained error's class."""
+        return self.reason or (type(self.__cause__).__name__ if self.__cause__ else None)
+
+    @property
+    def upstream_status(self) -> int | None:
+        status = getattr(self.__cause__, "status_code", None)
+        return status if isinstance(status, int) else None
 
 
 class UpstreamRateLimited(LLMError):

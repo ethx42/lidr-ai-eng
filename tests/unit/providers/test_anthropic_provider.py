@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock
 import anthropic
 import httpx2 as httpx
 import pytest
-from pydantic import ValidationError
 
 from app.schemas.estimation import EstimationBreakdown
 from app.services.errors import (
@@ -14,7 +13,7 @@ from app.services.errors import (
     UpstreamRateLimited,
     UpstreamUnavailable,
 )
-from app.services.providers.anthropic_provider import AnthropicProvider
+from app.services.providers.anthropic_provider import AnthropicProvider, output_format
 from app.services.providers.profiles import get_profile
 from tests.factories import breakdown
 
@@ -26,6 +25,7 @@ def message(
     stop_reason: str = "end_turn",
     cache_read: int | None = 4000,
     cache_write: int | None = 0,
+    text: str | None = None,
 ) -> Any:
     usage = SimpleNamespace(
         input_tokens=300,
@@ -33,14 +33,16 @@ def message(
         cache_read_input_tokens=cache_read,
         cache_creation_input_tokens=cache_write,
     )
-    return SimpleNamespace(parsed_output=parsed, stop_reason=stop_reason, usage=usage)
+    body = text if text is not None else (parsed.model_dump_json() if parsed else "")
+    content = [SimpleNamespace(type="text", text=body)] if body else []
+    return SimpleNamespace(content=content, stop_reason=stop_reason, usage=usage)
 
 
 def make(
     model: str = "claude-haiku-4-5", effort: Any = None, **parse_kwargs: Any
 ) -> tuple[AnthropicProvider, AsyncMock]:
     parse = AsyncMock(**parse_kwargs)
-    client = SimpleNamespace(messages=SimpleNamespace(parse=parse), close=AsyncMock())
+    client = SimpleNamespace(messages=SimpleNamespace(create=parse), close=AsyncMock())
     provider = AnthropicProvider(
         client=client,  # type: ignore[arg-type]
         model=model,
@@ -66,7 +68,7 @@ async def test_success_with_cached_system_block() -> None:
         {"type": "text", "text": "SYS", "cache_control": {"type": "ephemeral"}}
     ]
     assert kwargs["messages"] == [{"role": "user", "content": "USER"}]
-    assert kwargs["output_format"] is EstimationBreakdown
+    assert kwargs["output_config"] == {"format": output_format(EstimationBreakdown)}
     assert kwargs["extra_body"] == {"temperature": 0.2}
     assert "temperature" not in kwargs
     assert kwargs["max_tokens"] == 4096
@@ -92,29 +94,31 @@ async def test_cache_write_reported_and_no_routing_key_sent() -> None:
 
 
 @pytest.mark.parametrize(
-    "msg",
+    "msg,reason",
     [
-        message(breakdown(), stop_reason="refusal"),
-        message(breakdown(), stop_reason="max_tokens"),
-        message(breakdown(), stop_reason="model_context_window_exceeded"),
-        message(None),
+        (message(breakdown(), stop_reason="refusal"), "stop_reason:refusal"),
+        (message(text='{"project_na', stop_reason="max_tokens"), "stop_reason:max_tokens"),
+        (
+            message(breakdown(), stop_reason="model_context_window_exceeded"),
+            "stop_reason:model_context_window_exceeded",
+        ),
+        (message(None), "no_parsed_output"),
     ],
-    ids=["refusal", "max_tokens", "context_window", "no-parse"],
+    ids=["refusal", "max_tokens", "context_window", "no-text"],
 )
-async def test_invalid_output(msg: Any) -> None:
+async def test_invalid_output(msg: Any, reason: str) -> None:
     provider, _ = make(return_value=msg)
-    with pytest.raises(InvalidModelOutput):
+    with pytest.raises(InvalidModelOutput) as info:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert info.value.cause == reason
 
 
-async def test_schema_validation_error_is_invalid_output() -> None:
-    try:
-        EstimationBreakdown.model_validate({})
-    except ValidationError as exc:
-        error = exc
-    provider, _ = make(side_effect=error)
-    with pytest.raises(InvalidModelOutput):
+@pytest.mark.parametrize("text", ["{}", '{"project_na'], ids=["schema", "json"])
+async def test_schema_validation_error_is_invalid_output(text: str) -> None:
+    provider, _ = make(return_value=message(text=text))
+    with pytest.raises(InvalidModelOutput) as info:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert info.value.cause == "ValidationError"
 
 
 def status_error(cls: type[anthropic.APIStatusError], code: int) -> anthropic.APIStatusError:
@@ -146,4 +150,7 @@ async def test_opus_adaptive_thinking_without_temperature() -> None:
     assert "temperature" not in kwargs
     assert "extra_body" not in kwargs
     assert kwargs["thinking"] == {"type": "adaptive"}
-    assert kwargs["output_config"] == {"effort": "high"}
+    assert kwargs["output_config"] == {
+        "effort": "high",
+        "format": output_format(EstimationBreakdown),
+    }

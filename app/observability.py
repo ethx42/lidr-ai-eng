@@ -1,5 +1,6 @@
 import json
 import logging
+import traceback
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
@@ -24,7 +25,12 @@ class JsonFormatter(logging.Formatter):
             **getattr(record, "fields", {}),
         }
         if record.exc_info:
-            payload["exc_type"] = record.exc_info[0].__name__ if record.exc_info[0] else None
+            exc_type, _, tb = record.exc_info
+            payload["exc_type"] = exc_type.__name__ if exc_type else None
+            # Locations only: exception messages can echo request data.
+            payload["stack"] = [
+                f"{f.filename}:{f.lineno} in {f.name}" for f in traceback.extract_tb(tb)
+            ]
         return json.dumps(payload, default=str)
 
 
@@ -49,6 +55,8 @@ def log_llm_call(
     usage: Usage | None,
     latency_ms: int,
     outcome: str,
+    cause: str | None = None,
+    upstream_status: int | None = None,
 ) -> None:
     fields = {
         "provider": provider,
@@ -58,4 +66,6 @@ def log_llm_call(
         "latency_ms": latency_ms,
         "outcome": outcome,
     }
+    if outcome != "ok":
+        fields |= {"cause": cause, "upstream_status": upstream_status}
     llm_logger.info("llm_call", extra={"fields": fields, "request_id": request_id_var.get()})

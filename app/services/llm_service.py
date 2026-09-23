@@ -34,14 +34,18 @@ class EstimationService:
         self.weekly_capacity_hours = weekly_capacity_hours
         self.hourly_rate = hourly_rate
 
-    def _log_call(self, usage: Usage | None, latency_ms: int, outcome: str) -> None:
+    def _log_call(
+        self, usage: Usage | None, latency_ms: int, error: LLMError | None = None
+    ) -> None:
         log_llm_call(
             provider=self.provider.name,
             model=self.provider.model,
             prompt_version=self.prompt.version,
             usage=usage,
             latency_ms=latency_ms,
-            outcome=outcome,
+            outcome=error.code if error else "ok",
+            cause=error.cause if error else None,
+            upstream_status=error.upstream_status if error else None,
         )
 
     async def estimate(self, request: EstimateRequest) -> EstimateResponse:
@@ -55,9 +59,9 @@ class EstimationService:
             )
         except LLMError as exc:
             latency_ms = round((time.perf_counter() - start) * 1000)
-            self._log_call(None, latency_ms, exc.code)
+            self._log_call(None, latency_ms, exc)
             raise
-        self._log_call(result.usage, result.latency_ms, "ok")
+        self._log_call(result.usage, result.latency_ms)
 
         breakdown = enrich(
             result.parsed,

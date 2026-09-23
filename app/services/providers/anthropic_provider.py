@@ -1,9 +1,11 @@
 import time
+from functools import cache
 from typing import Any
 
 import anthropic
 import pydantic
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, transform_schema
+from pydantic import BaseModel, TypeAdapter
 
 from app.config import Provider, ReasoningEffort
 from app.schemas.estimation import Usage
@@ -12,6 +14,12 @@ from app.services.providers.base import LLMResult, T
 from app.services.providers.profiles import ModelProfile, request_params
 
 INVALID_STOP_REASONS = {"refusal", "max_tokens", "model_context_window_exceeded"}
+
+
+@cache
+def output_format(schema: type[BaseModel]) -> dict[str, Any]:
+    """The `output_config.format` that `messages.parse(output_format=schema)` would send."""
+    return {"type": "json_schema", "schema": transform_schema(TypeAdapter(schema).json_schema())}
 
 
 def map_error(exc: anthropic.APIError) -> LLMError:
@@ -51,23 +59,29 @@ class AnthropicProvider:
         self, *, system: str, user: str, schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         # Anthropic caches by content (the cache_control block); it takes no routing key.
+        # `create` + validation instead of `parse`, which fails on truncated JSON before the
+        # stop reason can be read.
         start = time.perf_counter()
+        output_config = {**self.params.get("output_config", {}), "format": output_format(schema)}
         try:
-            message = await self.client.messages.parse(
+            message = await self.client.messages.create(
                 model=self.model,
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user}],
-                output_format=schema,
-                **self.params,
+                **{**self.params, "output_config": output_config},
             )
-        except pydantic.ValidationError as exc:
-            raise InvalidModelOutput() from exc
         except anthropic.APIError as exc:
             raise map_error(exc) from exc
 
-        parsed = message.parsed_output
-        if message.stop_reason in INVALID_STOP_REASONS or parsed is None:
-            raise InvalidModelOutput()
+        if message.stop_reason in INVALID_STOP_REASONS:
+            raise InvalidModelOutput(reason=f"stop_reason:{message.stop_reason}")
+        text = "".join(block.text for block in message.content if block.type == "text")
+        if not text:
+            raise InvalidModelOutput(reason="no_parsed_output")
+        try:
+            parsed = schema.model_validate_json(text)
+        except pydantic.ValidationError as exc:
+            raise InvalidModelOutput() from exc
         usage = message.usage
         cache_read = usage.cache_read_input_tokens or 0
         cache_write = usage.cache_creation_input_tokens or 0

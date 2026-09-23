@@ -66,7 +66,7 @@ class RequestIdMiddleware:
         try:
             await self.app(scope, receive, send_with_id)
         except Exception:
-            logger.exception("unhandled_error")
+            logger.exception("unhandled_error", extra={"request_id": request_id})
             if started:
                 raise
             response = JSONResponse(error_body("internal_error", "Internal server error."), 500)

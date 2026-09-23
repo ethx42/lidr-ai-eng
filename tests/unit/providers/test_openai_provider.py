@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx2 as httpx
 import openai
@@ -22,19 +22,46 @@ REQUEST = httpx.Request("POST", "https://api.openai.com/v1/responses")
 
 
 def response(
-    parsed: Any = None, status: str = "completed", cached: int | None = 512, written: int = 1024
+    parsed: Any = None,
+    status: str = "completed",
+    cached: int | None = 512,
+    written: int = 1024,
+    refusal: bool = False,
 ) -> Any:
     usage = SimpleNamespace(
         input_tokens=2000,
         output_tokens=900,
         input_tokens_details=SimpleNamespace(cached_tokens=cached, cache_write_tokens=written),
     )
-    return SimpleNamespace(output_parsed=parsed, status=status, usage=usage)
+    content = [SimpleNamespace(type="refusal")] if refusal else []
+    output = [SimpleNamespace(type="message", content=content)]
+    return SimpleNamespace(output_parsed=parsed, status=status, usage=usage, output=output)
+
+
+def raw(resp: Any, incomplete: str | None = None, parse_error: Exception | None = None) -> Any:
+    """Stands in for the lazily parsed `with_raw_response` result."""
+    envelope = {
+        "status": resp.status,
+        "incomplete_details": {"reason": incomplete} if incomplete else None,
+    }
+    return SimpleNamespace(
+        http_response=SimpleNamespace(json=lambda: envelope),
+        parse=Mock(return_value=resp, side_effect=parse_error),
+    )
+
+
+def client_for(parse: AsyncMock) -> Any:
+    return SimpleNamespace(
+        responses=SimpleNamespace(with_raw_response=SimpleNamespace(parse=parse)),
+        close=AsyncMock(),
+    )
 
 
 def make(model: str = "gpt-4o-mini", **parse_kwargs: Any) -> tuple[OpenAIProvider, AsyncMock]:
+    if "return_value" in parse_kwargs and not hasattr(parse_kwargs["return_value"], "parse"):
+        parse_kwargs["return_value"] = raw(parse_kwargs["return_value"])
     parse = AsyncMock(**parse_kwargs)
-    client = SimpleNamespace(responses=SimpleNamespace(parse=parse), close=AsyncMock())
+    client = client_for(parse)
     provider = OpenAIProvider(
         client=client,  # type: ignore[arg-type]
         model=model,
@@ -76,14 +103,22 @@ async def test_missing_cached_tokens_is_zero() -> None:
 
 
 @pytest.mark.parametrize(
-    "resp",
-    [response(None), response(breakdown(), status="incomplete")],
-    ids=["refusal-or-no-parse", "incomplete"],
+    "resp,reason",
+    [
+        (raw(response(None)), "no_parsed_output"),
+        (raw(response(None, refusal=True)), "refusal"),
+        (
+            raw(response(None, status="incomplete"), "max_output_tokens"),
+            "incomplete:max_output_tokens",
+        ),
+    ],
+    ids=["no-parse", "refusal", "incomplete"],
 )
-async def test_invalid_output(resp: Any) -> None:
+async def test_invalid_output(resp: Any, reason: str) -> None:
     provider, _ = make(return_value=resp)
-    with pytest.raises(InvalidModelOutput):
+    with pytest.raises(InvalidModelOutput) as info:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert info.value.cause == reason
 
 
 async def test_schema_validation_error_is_invalid_output() -> None:
@@ -91,9 +126,10 @@ async def test_schema_validation_error_is_invalid_output() -> None:
         EstimationBreakdown.model_validate({})
     except ValidationError as exc:
         error = exc
-    provider, _ = make(side_effect=error)
-    with pytest.raises(InvalidModelOutput):
+    provider, _ = make(return_value=raw(response(), parse_error=error))
+    with pytest.raises(InvalidModelOutput) as info:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert info.value.cause == "ValidationError"
 
 
 def status_error(
@@ -128,10 +164,9 @@ async def test_sdk_error_mapping(exc: Exception, expected: type[Exception]) -> N
 
 
 async def test_reasoning_model_params() -> None:
-    parse = AsyncMock(return_value=response(breakdown()))
-    client = SimpleNamespace(responses=SimpleNamespace(parse=parse), close=AsyncMock())
+    parse = AsyncMock(return_value=raw(response(breakdown())))
     provider = OpenAIProvider(
-        client=client,  # type: ignore[arg-type]
+        client=client_for(parse),
         model="gpt-5-mini",
         profile=get_profile("gpt-5-mini", "openai"),
         temperature=0.2,
