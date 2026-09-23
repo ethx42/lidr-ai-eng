@@ -5,7 +5,8 @@ from app.schemas.estimation import EstimationBreakdown
 TRANSCRIPT = (
     "Client: We need a booking app for our “yoga studio”.\n"
     "Client: Customers must pay online with Stripe.\n"
-    "PM: Mobile first, launch before summer."
+    "PM: Mobile first, launch before summer.\n"
+    "Client: The staff should see the bookings for each class and the payments of the day."
 )
 
 
