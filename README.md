@@ -73,7 +73,7 @@ curl -s http://127.0.0.1:8000/api/v1/estimate \
   | jq -r .estimation
 ```
 
-Response fields: `estimation` (markdown), `breakdown` (structured, with computed `totals`), `grounding`, `model`, `provider`, `prompt_version`, `usage`. Optional request field: `output_language` (defaults to the transcription's language). Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error`, `503 upstream_unavailable`. Every response carries `X-Request-ID`.
+Response fields: `estimation` (markdown), `breakdown` (structured, with computed `totals`), `grounding`, `model`, `provider`, `prompt_version`, `usage`. Optional request field: `output_language` (defaults to the transcription's language). Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. Every response carries `X-Request-ID`.
 
 ## Quality gates
 
@@ -91,29 +91,35 @@ make eval REPORT=path/to/report.json    # write the report to an explicit path
 make eval-baseline [REPORT=...]         # copy a report (default: latest) to evals/baseline.json
 ```
 
-The golden set has four transcriptions: the course meeting, a well-specified medium project, a vague idea, and a Spanish one with an injected instruction. Each case records schema validity, three-point ordering, hours within 4–80, coverage of QA/devops/project management, grounding (evidence verbatim in the transcript, valid task basis), open questions and confidence for the vague case, latency, and token usage including cached tokens. `score` = checks passed ÷ checks run.
+The golden set (`evals/golden/`) has five transcriptions: the course meeting, a well-specified medium project, a vague idea, a Spanish one with an injected instruction, and an English one evaluated with `output_language: Spanish` (declared in front matter). Each case records schema validity, three-point ordering, hours within 4–80, coverage of QA/devops/project management, grounding (evidence verbatim in the transcript, valid task basis), narrative language (the declared `output_language`, otherwise the transcript's language), open questions and confidence for the vague case, latency, and token usage including cached tokens. `score` = checks passed ÷ checks run.
 
-| Run (prompt v1) | Score | Case pass rate | Notes |
+| Run | Score | Case pass rate | Notes |
 |---|---|---|---|
-| `openai/gpt-4o-mini` ([baseline](evals/baseline.json)) | 0.9118 (31/34) | 0.50 | paraphrased evidence in 2 cases, flagged by grounding; no devops task in the vague case |
-| `anthropic/claude-haiku-4-5` ([report](evals/reports/v1-20260923T131013Z.json)) | 0.9706 (33/34) | 0.75 | grounding 1.0 on all cases; ~8k of ~8.3k input tokens served from prompt cache |
+| **v4** `openai/gpt-4o-mini` ([baseline](evals/baseline.json)) | 0.9787 (46/47) | 0.80 | grounding 1.0 and correct language on all cases; vague case missed a devops task |
+| v3 `openai/gpt-4o-mini` ([report](evals/reports/v3-20260923T134157Z.json)) | 0.9362 (44/47) | 0.40 | evidence fixed, but English transcripts got Spanish narrative |
+| v2 `openai/gpt-4o-mini` ([report](evals/reports/v2-20260923T133936Z.json)) | 0.9787 (46/47) | 0.80 | evidence translated under an explicit Spanish output |
+| v1 `openai/gpt-4o-mini` ([report](evals/reports/v1-20260923T131705Z.json)) | 0.9118 (31/34) | 0.50 | paraphrased evidence; no language check yet |
+| v1 `anthropic/claude-haiku-4-5` ([report](evals/reports/v1-20260923T131013Z.json)) | 0.9706 (33/34) | 0.75 | grounding 1.0; ~8k of ~8.3k input tokens served from prompt cache |
+
+Prompt versions live in `app/prompts/<version>/`; the rationale and expected eval impact of each version are in the change's `design.md` (D4).
 
 The eval is never part of `make check` or CI.
 
 ## Verification checklist
 
-Run manually on 2026-09-23 against `openai/gpt-4o-mini`, prompt v1.
+Run manually on 2026-09-23 against `openai/gpt-4o-mini`, prompt v4.
 
 | Check | How | Result |
 |---|---|---|
 | Server starts | `uv run uvicorn app.main:app --reload` | ✅ starts; settings validated at startup |
 | Health | `GET /health` | ✅ `200`, `status: ok`, provider/model reported, `X-Request-ID` set |
 | Interactive docs | `GET /docs`, `GET /openapi.json` | ✅ `200` |
-| Estimation from the course transcript | `POST /api/v1/estimate` (curl above) | ✅ `200` in 15.5 s; 8/8 requirements grounded; 168.5 h expected (106–253 h); one `llm_call` log record without transcript text |
+| Estimation from the course transcript | `POST /api/v1/estimate` (curl above) | ✅ `200` in 14 s; English narrative; 10/10 requirements grounded; 268.5 h expected (168–415 h); no transcript text in logs |
 | Invalid request | `POST` with blank transcription | ✅ `422 invalid_request`, no LLM call |
 | Secrets | `.env` ignored by git; keys masked in settings | ✅ `tests/test_structure.py`, `tests/unit/test_config.py` |
 
-Known quality issues seen in that run (prompt work for a later version):
-- The narrative came back in Spanish for an English transcript with no `output_language` (the transcript mentions Madrid and Spanish users); the eval does not check narrative language yet.
-- No `frontend` tasks were produced for the mobile app and staff web panel, so the total is low.
-- Duration (1–1.5 weeks for a team of 6) is total hours ÷ team capacity, which ignores sequencing.
+Known limitations (candidates for the next prompt version or milestone):
+- The course estimate still has no `frontend` tasks for the member app and staff panel, despite v4's per-surface rule; the eval does not check surface coverage yet.
+- Duration (1–2 weeks for a team of 7) is total hours ÷ team capacity, a bound that ignores sequencing.
+- `gpt-4o-mini` occasionally drops the devops task on vague input (v2 included it, v4 did not).
+- OpenAI reported `cached_input_tokens: 0` on every call despite the byte-stable prefix; Anthropic caching engages.
