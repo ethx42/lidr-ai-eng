@@ -26,9 +26,9 @@ Paths: app/schemas/**, app/services/estimation_math.py, app/services/grounding.p
 Depends on: 3
 Paths: app/context/examples.py, app/prompts/**, tests/unit/test_examples.py, tests/unit/test_prompts.py
 
-- [ ] 4.1 Write three typed reference estimations in `context/examples.py` (small/medium/large, different domains); verify each validates against `EstimationBreakdown` and scores 1.0 grounding against its own meeting summary
-- [ ] 4.2 Write `prompts/v1/system.md` and `prompts/loader.py` (version, deterministic rendering of references); verify tests: all references present in system text, system text identical across requests, pinned hash of rendered prompt
-- [ ] 4.3 Implement user-message builder (delimited transcript + output-language directive); verify tests for explicit language and mirror-transcript default
+- [x] 4.1 Write three typed reference estimations in `context/examples.py` (small/medium/large, different domains); verify each validates against `EstimationBreakdown` and scores 1.0 grounding against its own meeting summary
+- [x] 4.2 Write `prompts/v1/system.md` and `prompts/loader.py` (version, deterministic rendering of references); verify tests: all references present in system text, system text identical across requests, pinned hash of rendered prompt
+- [x] 4.3 Implement user-message builder (delimited transcript + output-language directive); verify tests for explicit language and mirror-transcript default
 
 ## 5. LLM providers
 Depends on: 2, 3
