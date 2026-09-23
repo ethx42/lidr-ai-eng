@@ -1,9 +1,9 @@
 ## 1. Toolchain and dependencies (`build:` commit)
 
-- [ ] 1.1 Add a failing test that every third-party import in `app/` is in the `uv.lock` runtime closure (D5). Verify it fails naming `httpx2`
-- [ ] 1.2 Move `httpx2` from the dev group to `[project].dependencies` and re-lock. Verify the 1.1 test passes
-- [ ] 1.3 Add a failing structure test asserting `[tool.uv] required-version` in `pyproject.toml` and `UV_LOCKED: "1"` in the CI job env (D6). Then add both, upgrade local uv with `uv self update`, and re-lock with the pinned uv. Verify `uv --version` is within the range, `uv sync --locked` succeeds, and the test passes
-- [ ] 1.4 `make check` exits 0
+- [x] 1.1 Add a failing test that every third-party import in `app/` is a direct `[project].dependencies` entry (D5). Verify it fails naming `httpx2`, `pydantic`, and `starlette`
+- [x] 1.2 Move `httpx2` from the dev group to `[project].dependencies`, declare `pydantic` and `starlette` directly, and re-lock. Verify the 1.1 test passes and `uv.lock` versions are unchanged
+- [x] 1.3 Add a failing structure test asserting `[tool.uv] required-version` in `pyproject.toml` and `UV_LOCKED: "1"` in the CI job env (D6). Then add both, upgrade local uv with `uv self update`, and re-lock with the pinned uv. Verify `uv --version` is within the range, `uv sync --locked` succeeds, and the test passes
+- [x] 1.4 `make check` exits 0
 
 ## 2. Gate strictness (`chore:` commit)
 

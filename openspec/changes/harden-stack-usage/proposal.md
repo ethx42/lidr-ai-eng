@@ -6,7 +6,7 @@ Grounding the project against its installed stack (`.claude/stack.md`, 2026-09-2
 
 - **OpenAI prompt caching**: every OpenAI request carries a stable cache routing key derived from the prompt version. Provider usage gains `cache_write_tokens` (OpenAI `cache_write_tokens`, Anthropic `cache_creation_input_tokens`), reported in the API `usage`, the per-call log record, and eval reports. OpenAI caching is re-measured with a live eval.
 - **Anthropic truncation**: `stop_reason == "model_context_window_exceeded"` is treated as invalid (truncated) output, like `max_tokens`.
-- **Runtime dependency**: `httpx2` (imported by the OpenAI adapter) moves from dev to runtime dependencies. A test guards that every third-party import in `app/` resolves to a runtime dependency.
+- **Runtime dependency**: `httpx2` (imported by the OpenAI adapter) moves from dev to runtime dependencies. `pydantic` and `starlette`, which the app also imports but only gets transitively, are declared directly as well. A test guards that every third-party import in `app/` is a direct runtime dependency.
 - **uv pinning**: `[tool.uv] required-version` pins the uv range used locally and in CI, CI sets `UV_LOCKED=1`, and the local uv is upgraded to match.
 - **pytest**: move to the native `[tool.pytest]` table with `strict = true` and an explicit `asyncio_default_fixture_loop_scope`.
 - **ruff**: `select` becomes `extend-select` so the new default rule set applies (new findings are fixed), and the duplicate `target-version` is dropped (it is read from `requires-python`).

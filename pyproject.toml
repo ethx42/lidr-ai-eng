@@ -7,14 +7,18 @@ requires-python = ">=3.12"
 dependencies = [
     "anthropic>=1.8.0",
     "fastapi>=0.141.1",
+    "httpx2>=2.13.0",
     "openai>=3.19.0",
+    "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.3",
+    "starlette>=1.6.0",
     "uvicorn[standard]>=0.53.0",
 ]
 
 [tool.uv]
 package = false
+required-version = ">=0.12.18,<0.13"
 
 [tool.ruff]
 line-length = 100
@@ -41,7 +45,6 @@ asyncio_mode = "auto"
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.13.0",
     "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
