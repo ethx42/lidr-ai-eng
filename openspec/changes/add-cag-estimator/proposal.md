@@ -9,11 +9,15 @@ Milestone 1 of the LIDR AI Engineering program asks for a FastAPI service that t
 - Add `GET /health` and OpenAPI docs at `/docs`.
 - Support both OpenAI (Responses API) and Anthropic (Messages API) behind one provider interface, selected by `LLM_PROVIDER`, each using native structured outputs.
 - Add a versioned system prompt with typed few-shot reference estimations (the CAG context), laid out so the stable prefix can be prompt-cached.
+- Verify grounding in code: every requirement carries a verbatim evidence quote checked against the transcript, every task cites the requirements/assumptions it rests on, and a grounding report flags anything unsupported.
+- Shape each provider request by a per-model capability profile (sampling vs. reasoning parameters) so any configured model gets the parameters it supports.
 - Compute all totals (PERT expected hours, ranges, optional cost) deterministically in code; the model never does arithmetic.
 - Add environment-driven configuration with secrets that are never logged or committed.
 - Add an opt-in live evaluation harness over a small golden set of transcripts, producing a JSON report per prompt version.
 - Add quality gates: ruff, mypy, pytest (unit, API, project-structure checks) with a fake provider, `openspec validate`, and a single concise GitHub Actions workflow.
 - Add the course meeting transcription used as the exercise input, README, and agent guidance (English-only, spec-first).
+
+Deferred to a later change: an interactive clarification round-trip where the API asks blocking questions before estimating.
 
 ## Capabilities
 

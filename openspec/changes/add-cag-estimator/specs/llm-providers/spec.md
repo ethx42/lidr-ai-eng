@@ -11,6 +11,31 @@ The system SHALL support `openai` and `anthropic` as providers, selected by the 
 - **WHEN** `LLM_PROVIDER=anthropic` and `LLM_MODEL=claude-haiku-4-5`
 - **THEN** estimation requests are served by Anthropic with that model and the response reports `provider: "anthropic"`
 
+### Requirement: Model request profiles
+The system SHALL shape every provider request according to a profile of the configured model's capabilities, so each model receives only parameters it supports:
+- sampling parameters (temperature) SHALL be sent only to models that accept them
+- reasoning or thinking effort SHALL be sent, in the provider's native form, only to models that support it and only when configured
+- the output token budget SHALL leave room for reasoning tokens on reasoning models
+
+A model without a known profile SHALL use a conservative profile (no sampling and no reasoning parameters), and the system SHALL log a warning at startup naming the model.
+
+#### Scenario: Non-reasoning OpenAI model
+- **WHEN** the model is `gpt-4o-mini` and a temperature is configured
+- **THEN** the request includes the temperature and no reasoning parameters
+
+#### Scenario: OpenAI reasoning model
+- **WHEN** the model belongs to the gpt-5 family and a reasoning effort is configured
+- **THEN** the request includes the reasoning effort and no temperature
+
+#### Scenario: Claude model without sampling parameters
+- **WHEN** the model is `claude-opus-5` and a temperature is configured
+- **THEN** the request includes no temperature
+
+#### Scenario: Unknown model
+- **WHEN** the model is `acme-llm-1`
+- **THEN** the request includes neither temperature nor reasoning parameters
+- **AND** a startup warning names `acme-llm-1`
+
 ### Requirement: Structured output enforcement
 The system SHALL request output constrained to the estimation schema using each provider's native structured-output mechanism and SHALL validate the result against the schema before use. Free-text parsing of model output SHALL NOT be used.
 

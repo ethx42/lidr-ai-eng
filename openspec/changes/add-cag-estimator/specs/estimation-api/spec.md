@@ -9,13 +9,14 @@ The system SHALL expose `POST /api/v1/estimate` accepting a JSON body with a req
 - `estimation`: the estimation rendered as markdown
 - `breakdown`: the structured estimation (see `prompt-context`) enriched with computed totals
 - `model` and `provider`: the model identifier and provider that produced it
+- `grounding`: the grounding report (see `prompt-context`)
 - `prompt_version`: the version of the prompt used
 - `usage`: input, output, and cached input token counts reported by the provider
 
 #### Scenario: Successful estimation
 - **WHEN** a client posts `{"transcription": "<meeting text>"}` to `/api/v1/estimate`
 - **THEN** the response status is `200`
-- **AND** the body contains non-empty `estimation`, a `breakdown` with at least one task, and the `model`, `provider`, `prompt_version`, and `usage` fields
+- **AND** the body contains non-empty `estimation`, a `breakdown` with at least one task, and the `grounding`, `model`, `provider`, `prompt_version`, and `usage` fields
 
 #### Scenario: Brief-compatible fields
 - **WHEN** an estimation succeeds

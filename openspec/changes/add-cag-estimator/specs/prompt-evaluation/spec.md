@@ -19,7 +19,11 @@ The evaluation SHALL run only when explicitly invoked by a developer, SHALL use 
 - **THEN** no live evaluation is executed and no provider credentials are required
 
 ### Requirement: Automated checks
-For each golden transcription the evaluation SHALL record: schema validity, three-point ordering, task hours within bounds, coverage of non-build phases (QA, deployment, project management), presence of open questions for the vague transcription, latency, and token usage (including cached tokens).
+For each golden transcription the evaluation SHALL record: schema validity, three-point ordering, task hours within bounds, coverage of non-build phases (QA, deployment, project management), presence of open questions for the vague transcription, grounding score, ungrounded requirements, tasks without a valid basis, latency, and token usage (including cached tokens). A case SHALL pass grounding only when every requirement is grounded and every task has a valid basis.
+
+#### Scenario: Fabricated requirement in eval
+- **WHEN** a golden case produces a requirement whose evidence is not in the transcription
+- **THEN** the case is reported as failing grounding with that requirement's identifier
 
 #### Scenario: Vague transcription
 - **WHEN** the vague transcription is evaluated
