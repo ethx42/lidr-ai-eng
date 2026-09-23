@@ -86,6 +86,10 @@ The narrative fields of the estimation SHALL be written in `output_language` whe
 - **WHEN** a request sets `output_language` to `"Spanish"`
 - **THEN** the narrative fields of the estimation are written in Spanish
 
+#### Scenario: Default mirrors the transcription language
+- **WHEN** an English transcription that mentions Spanish-speaking places and users is sent without `output_language`
+- **THEN** the narrative fields of the estimation are written in English
+
 ### Requirement: Prompt versioning
 Each prompt SHALL carry a version identifier that is returned in every estimation response and recorded in evaluation reports. Changing prompt text SHALL require a new version.
 

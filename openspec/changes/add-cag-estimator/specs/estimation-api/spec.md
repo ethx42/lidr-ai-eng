@@ -42,11 +42,15 @@ The system SHALL translate LLM provider failures into stable HTTP errors with a 
 | Provider rate limit | 429 | `upstream_rate_limited` |
 | Provider timeout, connection failure, or 5xx | 503 | `upstream_unavailable` |
 | Provider refusal, truncated or schema-invalid output | 502 | `invalid_model_output` |
-| Provider rejects credentials or request | 502 | `upstream_error` |
+| Provider rejects credentials or request, or the account's quota or credits are exhausted | 502 | `upstream_error` |
 
 #### Scenario: Provider times out
 - **WHEN** the provider call times out after retries are exhausted
 - **THEN** the response status is `503` with `error.code` equal to `upstream_unavailable`
+
+#### Scenario: Provider quota exhausted
+- **WHEN** the provider reports that the account's quota or credits are exhausted
+- **THEN** the response status is `502` with `error.code` equal to `upstream_error`
 
 #### Scenario: Model output cannot be parsed
 - **WHEN** the provider returns output that does not satisfy the estimation schema

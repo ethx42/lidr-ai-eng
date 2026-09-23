@@ -48,11 +48,15 @@ The system SHALL request output constrained to the estimation schema using each 
 - **THEN** the system raises an invalid-output failure (mapped to `502` by `estimation-api`)
 
 ### Requirement: Bounded latency and retries
-Every provider call SHALL use the configured request timeout and a bounded number of retries for transient failures (rate limits, timeouts, connection errors, 5xx). Non-transient failures SHALL NOT be retried.
+Every provider call SHALL use the configured request timeout and a bounded number of retries for transient failures (rate limits, timeouts, connection errors, 5xx). Non-transient failures SHALL NOT be retried, including rejected credentials or requests and exhausted quota or credits, even when the provider signals them with a rate-limit status.
 
 #### Scenario: Transient failure then success
 - **WHEN** the first provider attempt fails with a transient error and a retry succeeds
 - **THEN** the estimation is returned successfully
+
+#### Scenario: Quota exhausted is not retried
+- **WHEN** the provider reports exhausted quota or credits
+- **THEN** exactly one attempt is made and an upstream-error failure is raised
 
 ### Requirement: Usage and telemetry
 Each provider call SHALL report input tokens, output tokens, cached input tokens (0 when unavailable), and latency, and SHALL emit one structured log record per call containing provider, model, prompt version, token counts, latency, outcome, and request id, but never the transcription text or API keys.

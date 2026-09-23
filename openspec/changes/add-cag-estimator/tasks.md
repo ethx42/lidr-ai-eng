@@ -65,4 +65,13 @@ Paths: .github/workflows/ci.yml, README.md, AGENTS.md, openspec/**
 - [x] 8.2 Update `AGENTS.md` step 5 and `openspec/config.yaml` archive guidance to archive-before-merge (archive on the change branch before hand-off); verify `make specs` passes
 - [x] 8.3 Rewrite README (overview, architecture, brief-step → file map, setup, run, curl example, evals, verification checklist mapping); verify all commands in it run as written
 - [x] 8.4 Run the brief's verification checklist manually against a real provider (`uv run uvicorn app.main:app --reload`, curl, `/docs`) and record results in the README
-- [ ] 8.5 Hand off: `openspec validate add-cag-estimator --strict` → `/opsx:verify` (no gaps) → `openspec archive add-cag-estimator --yes` → `make check` (incl. `make specs`: main specs valid, archived change has no open tasks) → push `feat/m1-cag-estimator` and share the branch URL
+
+## 9. Verification follow-ups and hand-off
+Depends on: 8
+Paths: app/services/providers/**, app/prompts/**, evals/**, tests/**, README.md, openspec/**
+
+- [ ] 9.1 Stop retrying OpenAI `insufficient_quota` 429s and map them to `upstream_error` (502); verify a real-SDK mock-transport test makes exactly one attempt and API tests keep the existing mappings
+- [ ] 9.2 Add the narrative-language eval check (stopword detector, optional `output_language` front matter, golden case `05-explicit-language`); verify detector unit tests, a failing check for wrong-language narrative, and that the course transcript file still matches its golden copy
+- [ ] 9.3 Write prompt `v2` (language rule, evidence self-check, per-surface frontend tasks) and bump `PROMPT_VERSION`; verify the pinned hash and prompt tests, then a live `make eval` on `openai/gpt-4o-mini` and a new baseline
+- [ ] 9.4 Re-run the manual course-transcript check against the API with v2 and update README results; verify every README command still runs as written
+- [ ] 9.5 Hand off: `openspec validate add-cag-estimator --strict` → `/opsx:verify` (no gaps) → `openspec archive add-cag-estimator --yes` → `make check` (incl. `make specs`: main specs valid, archived change has no open tasks) → push `feat/m1-cag-estimator` and share the branch URL
