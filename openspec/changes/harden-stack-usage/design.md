@@ -80,7 +80,7 @@ A test walks `app/**/*.py` with `ast` and collects top-level third-party module 
 
 ## Risks / Trade-offs
 
-- [`prompt_cache_key` may still not produce hits on gpt-4o-mini, for example because of prefix length or routing] → the live eval decides. If cached tokens stay 0, report it, keep the key (harmless and recommended), and record the finding in `.claude/stack.md`. No spec depends on a hit, only on the key and the reporting.
+- [`prompt_cache_key` may still not produce hits on gpt-4o-mini, for example because of prefix length or routing] → the live eval decides. If cached tokens stay 0, report it, keep the key (harmless and recommended), and record the finding in `.claude/stack.md`. No spec depends on a hit, only on the key and the reporting. Outcome (2026-09-23, `evals/reports/v4-20260923T145152Z.json`): cases 2–5 read 6016 of ~6400 input tokens from cache (baseline 0). gpt-4o-mini reports `cache_write_tokens: 0` even on the first call, so the field is informative only on providers or models that expose writes (Anthropic).
 - [The live effort probe costs a few cents and depends on account model access] → it runs once, with minimal tokens. A family the account cannot reach keeps the SDK-documented set and is marked "unverified" in the profile comment.
 - [The stricter ruff/mypy sets may surface many findings] → the grounding run measured 3 ruff findings and 0 mypy findings on `app/`. If the real count is much larger, stop and update this design before fixing.
 - [uv 0.8 → 0.12 changes the lockfile format] → re-lock in the tooling commit and check that `uv sync --locked` and the full `make check` pass with the new uv.

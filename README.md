@@ -102,11 +102,14 @@ The golden set (`evals/golden/`) has five transcriptions: the course meeting, a 
 
 | Run | Score | Case pass rate | Notes |
 |---|---|---|---|
+| v4 `openai/gpt-4o-mini` + `prompt_cache_key` ([report](evals/reports/v4-20260923T145152Z.json)) | 1.0 (47/47) | 1.00 | same prompt as the baseline (score gain is sampling variance); prompt cache now hits: cases 2–5 read 6016 of ~6400 input tokens from cache (baseline: 0) |
 | **v4** `openai/gpt-4o-mini` ([baseline](evals/baseline.json)) | 0.9787 (46/47) | 0.80 | grounding 1.0 and correct language on all cases; vague case missed a devops task |
 | v3 `openai/gpt-4o-mini` ([report](evals/reports/v3-20260923T134157Z.json)) | 0.9362 (44/47) | 0.40 | evidence fixed, but English transcripts got Spanish narrative |
 | v2 `openai/gpt-4o-mini` ([report](evals/reports/v2-20260923T133936Z.json)) | 0.9787 (46/47) | 0.80 | evidence translated under an explicit Spanish output |
 | v1 `openai/gpt-4o-mini` ([report](evals/reports/v1-20260923T131705Z.json)) | 0.9118 (31/34) | 0.50 | paraphrased evidence; no language check yet |
 | v1 `anthropic/claude-haiku-4-5` ([report](evals/reports/v1-20260923T131013Z.json)) | 0.9706 (33/34) | 0.75 | grounding 1.0; ~8k of ~8.3k input tokens served from prompt cache |
+
+OpenAI requests carry `prompt_cache_key=estimator-<prompt version>` so calls sharing the system prompt are routed to the same cache; `usage.cache_write_tokens` reports cache writes where the provider exposes them (Anthropic always, OpenAI gpt-4o-mini reports 0).
 
 Prompt versions live in `app/prompts/<version>/`; the rationale and expected eval impact of each version are in the archived [design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md) (D4).
 

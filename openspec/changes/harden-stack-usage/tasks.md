@@ -39,5 +39,5 @@
 
 ## 7. Live verification and docs (`docs:` commit)
 
-- [ ] 7.1 Run `make eval` on `openai/gpt-4o-mini` (`env -u ANTHROPIC_API_KEY`). Verify cases after the first report `cached_input_tokens > 0`, or record why not. Verify `score` is not below the v4 baseline (0.9787)
-- [ ] 7.2 Commit the report, add an eval-history row and caching note to the README, and update `.claude/stack.md` (resolved findings, probe results, caching outcome). Verify `make check` exits 0
+- [x] 7.1 Run `make eval` on `openai/gpt-4o-mini` (`env -u ANTHROPIC_API_KEY`). Verify cases after the first report `cached_input_tokens > 0`, or record why not. Verify `score` is not below the v4 baseline (0.9787)
+- [x] 7.2 Commit the report, add an eval-history row and caching note to the README, and update `.claude/stack.md` (resolved findings, probe results, caching outcome). Verify `make check` exits 0
