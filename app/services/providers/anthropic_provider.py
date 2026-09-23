@@ -5,7 +5,7 @@ import anthropic
 import pydantic
 from anthropic import AsyncAnthropic
 
-from app.config import ReasoningEffort
+from app.config import Provider, ReasoningEffort
 from app.schemas.estimation import Usage
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamUnavailable, from_status
 from app.services.providers.base import LLMResult, T
@@ -23,7 +23,7 @@ def map_error(exc: anthropic.APIError) -> LLMError:
 
 
 class AnthropicProvider:
-    name = "anthropic"
+    name: Provider = "anthropic"
 
     def __init__(
         self,
@@ -37,12 +37,15 @@ class AnthropicProvider:
     ) -> None:
         self.client = client
         self.model = model
-        self.params: dict[str, Any] = request_params(
+        params = request_params(
             profile,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
             max_output_tokens=max_output_tokens,
         )
+        # SDK 1.x dropped sampling args from its signature; older models still honour them.
+        sampling = {k: params.pop(k) for k in ("temperature",) if k in params}
+        self.params: dict[str, Any] = params | ({"extra_body": sampling} if sampling else {})
 
     async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]:
         start = time.perf_counter()

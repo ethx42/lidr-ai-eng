@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2 as httpx
 import openai
 import pytest
 from pydantic import ValidationError

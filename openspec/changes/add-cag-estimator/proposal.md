@@ -35,6 +35,6 @@ Deferred to a later change: an interactive clarification round-trip where the AP
 ## Impact
 
 - New code under `app/`, `tests/`, `evals/`, `data/transcripts/`; new `pyproject.toml`, `uv.lock`, `Makefile`, `.env.example`, `.gitignore`, `.github/workflows/ci.yml`, `CLAUDE.md`/`AGENTS.md`, README rewrite.
-- New runtime dependencies: `fastapi`, `uvicorn[standard]`, `pydantic-settings`, `openai`, `anthropic`, `python-dotenv`. Dev: `pytest`, `pytest-asyncio`, `httpx`, `ruff`, `mypy`.
+- New runtime dependencies: `fastapi`, `uvicorn[standard]`, `pydantic-settings`, `openai`, `anthropic`, `python-dotenv`. Dev: `pytest`, `pytest-asyncio`, `httpx2`, `ruff`, `mypy`.
 - External systems: OpenAI and Anthropic APIs (only at runtime and in `make eval`; never in CI).
 - Delivered on branch `feat/m1-cag-estimator`; merged to `main` and tagged `m1` after review.

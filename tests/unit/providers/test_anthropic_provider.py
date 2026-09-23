@@ -3,7 +3,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import anthropic
-import httpx
+import httpx2 as httpx
 import pytest
 from pydantic import ValidationError
 
@@ -62,7 +62,8 @@ async def test_success_with_cached_system_block() -> None:
     ]
     assert kwargs["messages"] == [{"role": "user", "content": "USER"}]
     assert kwargs["output_format"] is EstimationBreakdown
-    assert kwargs["temperature"] == 0.2
+    assert kwargs["extra_body"] == {"temperature": 0.2}
+    assert "temperature" not in kwargs
     assert kwargs["max_tokens"] == 4096
 
 
@@ -124,5 +125,6 @@ async def test_opus_adaptive_thinking_without_temperature() -> None:
     await provider.generate(system="s", user="u", schema=EstimationBreakdown)
     kwargs = parse.call_args.kwargs
     assert "temperature" not in kwargs
+    assert "extra_body" not in kwargs
     assert kwargs["thinking"] == {"type": "adaptive"}
     assert kwargs["output_config"] == {"effort": "high"}
