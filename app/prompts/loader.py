@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -6,6 +7,8 @@ from app.context.examples import REFERENCE_ESTIMATIONS, ReferenceEstimation
 
 PROMPT_VERSION = "v1"
 PROMPTS_DIR = Path(__file__).parent
+# Our delimiter tags, in any case or spacing, so request data cannot close or open them.
+DELIMITER_TAG = re.compile(r"<\s*(/?)\s*(transcript|output_language)\b[^>]*>", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -36,8 +39,8 @@ def load_prompt() -> PromptBundle:
 
 
 def build_user_message(transcription: str, output_language: str | None) -> str:
-    transcript = transcription.replace("</transcript>", "</ transcript>")
-    language = output_language or "Same language as the transcript"
+    transcript = DELIMITER_TAG.sub(r"[\1\2]", transcription)
+    language = re.sub(r"[<>]", "", output_language or "") or "Same language as the transcript"
     return (
         "Estimate the project discussed in this meeting transcript.\n"
         f"<transcript>\n{transcript}\n</transcript>\n"
