@@ -78,9 +78,10 @@ async def test_missing_cache_usage_is_zero() -> None:
     [
         message(breakdown(), stop_reason="refusal"),
         message(breakdown(), stop_reason="max_tokens"),
+        message(breakdown(), stop_reason="model_context_window_exceeded"),
         message(None),
     ],
-    ids=["refusal", "max_tokens", "no-parse"],
+    ids=["refusal", "max_tokens", "context_window", "no-parse"],
 )
 async def test_invalid_output(msg: Any) -> None:
     provider, _ = make(return_value=msg)

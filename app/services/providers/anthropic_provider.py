@@ -11,7 +11,7 @@ from app.services.errors import InvalidModelOutput, LLMError, UpstreamUnavailabl
 from app.services.providers.base import LLMResult, T
 from app.services.providers.profiles import ModelProfile, request_params
 
-INVALID_STOP_REASONS = {"refusal", "max_tokens"}
+INVALID_STOP_REASONS = {"refusal", "max_tokens", "model_context_window_exceeded"}
 
 
 def map_error(exc: anthropic.APIError) -> LLMError:

@@ -14,8 +14,8 @@
 
 ## 3. Anthropic context-window truncation (`fix:` commit)
 
-- [ ] 3.1 Add a failing provider test (mock transport) where the Anthropic response has `stop_reason: "model_context_window_exceeded"` with a parseable body. Verify it expects `InvalidModelOutput`
-- [ ] 3.2 Add the stop reason to `INVALID_STOP_REASONS`. Verify the test passes and `make check` exits 0
+- [x] 3.1 Add a failing provider test (stubbed client, like the existing Anthropic tests) where the Anthropic response has `stop_reason: "model_context_window_exceeded"` with a parseable body. Verify it expects `InvalidModelOutput`
+- [x] 3.2 Add the stop reason to `INVALID_STOP_REASONS`. Verify the test passes and `make check` exits 0
 
 ## 4. Prompt cache routing and cache write tokens (`feat:` commit)
 
