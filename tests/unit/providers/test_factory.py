@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from app.config import Settings
@@ -32,4 +34,22 @@ async def test_anthropic_selected() -> None:
     )
     assert isinstance(provider, AnthropicProvider)
     assert (provider.name, provider.model) == ("anthropic", "claude-haiku-4-5")
+    await provider.aclose()
+
+
+async def test_unsupported_effort_warned_at_startup_and_not_sent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        provider = build_provider(
+            settings(
+                llm_provider="anthropic",
+                llm_model="claude-opus-5",
+                llm_reasoning_effort="minimal",
+                anthropic_api_key="k",
+            )
+        )
+    assert "claude-opus-5" in caplog.text
+    assert isinstance(provider, AnthropicProvider)
+    assert not {"thinking", "output_config"} & provider.params.keys()
     await provider.aclose()

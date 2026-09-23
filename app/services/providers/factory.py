@@ -11,7 +11,9 @@ from app.services.providers.profiles import get_profile
 def build_provider(settings: Settings) -> LLMProvider:
     common = {
         "model": settings.llm_model,
-        "profile": get_profile(settings.llm_model, settings.llm_provider),
+        "profile": get_profile(
+            settings.llm_model, settings.llm_provider, settings.llm_reasoning_effort
+        ),
         "temperature": settings.llm_temperature,
         "reasoning_effort": settings.llm_reasoning_effort,
         "max_output_tokens": settings.llm_max_output_tokens,

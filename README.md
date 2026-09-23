@@ -50,7 +50,7 @@ cp .env.example .env    # then set LLM_PROVIDER, LLM_MODEL, and the matching API
 | `LLM_MODEL` | `gpt-4o-mini` | e.g. `claude-haiku-4-5`; server-side only |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | — | required for the selected provider; startup fails naming the missing one |
 | `LLM_TEMPERATURE` | `0.2` | sent only to models that support it |
-| `LLM_REASONING_EFFORT` | unset | `low`/`medium`/`high`, sent only to reasoning models |
+| `LLM_REASONING_EFFORT` | unset | `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`; sent only to reasoning models that accept that level (others get no effort and a startup warning listing the supported levels) |
 | `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS` | `30`, `2`, `4096` | |
 | `MAX_TRANSCRIPTION_CHARS` | `50000` | longer requests get `422` |
 | `BLENDED_HOURLY_RATE`, `WEEKLY_CAPACITY_HOURS` | unset, `30` | cost and duration estimates |

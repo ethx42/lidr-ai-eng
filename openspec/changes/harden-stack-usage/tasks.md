@@ -25,9 +25,9 @@
 
 ## 5. Reasoning effort levels (`feat:` commit)
 
-- [ ] 5.1 Run a live one-token probe per profiled reasoning family and effort level (scratchpad script, `env -u ANTHROPIC_API_KEY`, keys from `.env`). Record accepted levels per family and the date. Verify each family has a level set (or is marked unverified)
-- [ ] 5.2 Add failing tests: settings accept all seven levels and reject `extreme` naming `LLM_REASONING_EFFORT`. `max` on `claude-opus-5` is sent as `output_config.effort`. `minimal` on `claude-opus-5` sends no effort or thinking and logs a warning naming the model, level, and supported levels. Haiku maps `xhigh`/`max` to budgets. gpt-5 family levels follow the probe
-- [ ] 5.3 Implement D4 (`ReasoningEffort` union, `ModelProfile.efforts`, budget map, warning in `get_profile`). Update the README and `.env.example` effort docs. Verify the tests pass and `make check` exits 0
+- [x] 5.1 Run a live one-token probe per profiled reasoning family and effort level (scratchpad script, `env -u ANTHROPIC_API_KEY`, keys from `.env`). Record accepted levels per family and the date. Verify each family has a level set (or is marked unverified)
+- [x] 5.2 Add failing tests: settings accept all seven levels and reject `extreme` naming `LLM_REASONING_EFFORT`. `max` on `claude-opus-5` is sent as `output_config.effort`. `minimal` on `claude-opus-5` sends no effort or thinking and logs a warning naming the model, level, and supported levels. Haiku maps `xhigh`/`max` to budgets. gpt-5 family levels follow the probe
+- [x] 5.3 Implement D4 (`ReasoningEffort` union, `ModelProfile.efforts`, budget map, warning in `get_profile`). Update the README effort docs. Verify the tests pass and `make check` exits 0. (`.env.example` left unchanged: the agent's permissions deny reading `.env*` files. It already lists the variable, so only its comment could be stale. Flagged for the user.)
 
 ## 6. Schema and API polish (`refactor:` commit)
 

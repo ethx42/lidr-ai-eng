@@ -40,6 +40,19 @@ One additive field with default `0`. OpenAI maps `input_tokens_details.cache_wri
 - `ModelProfile` gains `efforts: frozenset[ReasoningEffort]`, the levels verified for that family. `request_params` sends effort only when `effort in profile.efforts`. `get_profile` (already called once at startup by the factory) logs one warning when a configured level is unsupported.
 - Haiku 4.5 (budget thinking) maps the levels to budgets: `low` 2048, `medium` 4096, `high` 8192, `xhigh` 16384, `max` 32768. That is within its 64k output limit, and `max_tokens` still adds the budget.
 - The per-family level sets are confirmed with a live probe: a one-token request per family and level, recording 200 vs 400. Levels the API rejects are left out of the profile. The probe script lives in the scratchpad, and its results and date go into the profile comment and `.claude/stack.md`.
+- Probe results (2026-09-23, every model the account lists):
+
+  | Family | Accepted levels |
+  |---|---|
+  | `gpt-5`, `-mini`, `-nano` | minimal, low, medium, high |
+  | `gpt-5.1` | none, low, medium, high |
+  | `gpt-5.2`, `gpt-5.4*`, `gpt-5.5` | none, low, medium, high, xhigh |
+  | `gpt-5.6-*` | none, low, medium, high, xhigh, max |
+  | `o3`, `o3-mini`, `o4-mini` | low, medium, high |
+  | `claude-sonnet-5`, `claude-opus-5*`, `claude-fable-5*` | low, medium, high, xhigh, max |
+
+  Profiles gain a `gpt-5.` prefix (the 5.x default, xhigh without max) with `gpt-5.1` and `gpt-5.6` overrides. The bare `gpt-5` prefix keeps the original set. `gpt-5.3` was not listed and falls to the `gpt-5.` default, and an unknown later 5.x does the same (conservative: it omits `max` with a warning). Haiku 4.5 was not probed: it takes a thinking budget, not an effort level.
+- The warning is emitted by `get_profile(model, provider, effort)`, which the factory calls once at startup with the configured effort. `request_params` stays pure: it sends effort only when `effort in profile.efforts`, so non-reasoning profiles (empty set) still ignore it silently, as before.
 - *Why omit-and-warn rather than fail fast:* the finding says "sent only where the model allows", and M1 already treats unsupported parameters this way (temperature, unknown models). A misconfiguration shows up in the startup log, not as a crash loop.
 - *Rejected:* fail at startup for an unsupported level. It is safer for typos, but the `Literal` already catches typos. Also rejected: silently clamping to the nearest level, which would send something the operator did not ask for.
 

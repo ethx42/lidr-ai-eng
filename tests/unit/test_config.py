@@ -81,3 +81,17 @@ def test_keys_masked_in_repr_and_str(monkeypatch: pytest.MonkeyPatch) -> None:
     assert secret not in settings.model_dump_json()
     assert settings.openai_api_key is not None
     assert settings.openai_api_key.get_secret_value() == secret
+
+
+@pytest.mark.parametrize("level", ["none", "minimal", "low", "medium", "high", "xhigh", "max"])
+def test_all_sdk_effort_levels_accepted(monkeypatch: pytest.MonkeyPatch, level: str) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", level)
+    assert load().llm_reasoning_effort == level
+
+
+def test_invalid_effort_names_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "extreme")
+    with pytest.raises(ValidationError, match="llm_reasoning_effort"):
+        load()
