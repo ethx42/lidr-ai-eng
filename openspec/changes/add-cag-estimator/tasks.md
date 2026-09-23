@@ -62,7 +62,7 @@ Depends on: 7
 Paths: .github/workflows/ci.yml, README.md, AGENTS.md, openspec/**
 
 - [ ] 8.1 Add `.github/workflows/ci.yml` (single job: setup-uv → `uv sync --locked` → `make check`); verify `make check` passes locally and the workflow passes on push
-- [ ] 8.2 Update `AGENTS.md` step 5 and `openspec/config.yaml` archive guidance to archive-before-merge (archive on the change branch before hand-off); verify `make specs` passes
-- [ ] 8.3 Rewrite README (overview, architecture, brief-step → file map, setup, run, curl example, evals, verification checklist mapping); verify all commands in it run as written
-- [ ] 8.4 Run the brief's verification checklist manually against a real provider (`uv run uvicorn app.main:app --reload`, curl, `/docs`) and record results in the README
+- [x] 8.2 Update `AGENTS.md` step 5 and `openspec/config.yaml` archive guidance to archive-before-merge (archive on the change branch before hand-off); verify `make specs` passes
+- [x] 8.3 Rewrite README (overview, architecture, brief-step → file map, setup, run, curl example, evals, verification checklist mapping); verify all commands in it run as written
+- [x] 8.4 Run the brief's verification checklist manually against a real provider (`uv run uvicorn app.main:app --reload`, curl, `/docs`) and record results in the README
 - [ ] 8.5 Hand off: `openspec validate add-cag-estimator --strict` → `/opsx:verify` (no gaps) → `openspec archive add-cag-estimator --yes` → `make check` (incl. `make specs`: main specs valid, archived change has no open tasks) → push `feat/m1-cag-estimator` and share the branch URL

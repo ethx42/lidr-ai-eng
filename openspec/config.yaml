@@ -38,4 +38,4 @@ operations:
       - If implementation shows the plan is wrong, update the change artifacts first, then the code
   archive:
     guidance:
-      - Archive only after `make check` passes and /opsx:verify reports no gaps
+      - Archive on the change branch before hand-off (archive-before-merge), only after `make check` passes and /opsx:verify reports no gaps

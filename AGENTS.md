@@ -14,7 +14,7 @@ Spec-driven FastAPI project for the LIDR AI Engineering course. Each course brie
 2. `/opsx:propose` (or `/opsx:new` + `/opsx:continue`, or `/opsx:ff`) - create the change artifacts.
 3. `/opsx:apply` - implement `tasks.md` test-first; one conventional commit per task group; `make check` green before each commit.
 4. `/opsx:verify` - check implementation against specs and scenarios.
-5. `/opsx:archive` - fold spec deltas into `openspec/specs/` after review.
+5. `/opsx:archive` - fold spec deltas into `openspec/specs/` on the change branch before hand-off (archive-before-merge), once `make check` passes and `/opsx:verify` reports no gaps; `main` is only written through the reviewed merge.
 
 ## Commands
 | Command | Purpose |
