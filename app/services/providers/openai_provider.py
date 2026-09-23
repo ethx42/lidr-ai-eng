@@ -65,7 +65,9 @@ class OpenAIProvider:
             max_output_tokens=max_output_tokens,
         )
 
-    async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]:
+    async def generate(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> LLMResult[T]:
         start = time.perf_counter()
         try:
             response = await self.client.responses.parse(
@@ -74,6 +76,7 @@ class OpenAIProvider:
                 input=user,
                 text_format=schema,
                 store=False,
+                prompt_cache_key=cache_key,
                 **self.params,
             )
         except pydantic.ValidationError as exc:
@@ -85,12 +88,14 @@ class OpenAIProvider:
         if response.status == "incomplete" or parsed is None:
             raise InvalidModelOutput()
         usage = response.usage
+        details = usage.input_tokens_details if usage else None
         return LLMResult(
             parsed=parsed,
             usage=Usage(
                 input_tokens=usage.input_tokens if usage else 0,
                 output_tokens=usage.output_tokens if usage else 0,
-                cached_input_tokens=(usage.input_tokens_details.cached_tokens or 0) if usage else 0,
+                cached_input_tokens=(details.cached_tokens or 0) if details else 0,
+                cache_write_tokens=(details.cache_write_tokens or 0) if details else 0,
             ),
             latency_ms=round((time.perf_counter() - start) * 1000),
         )

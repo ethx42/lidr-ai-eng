@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 
 import pytest
 
@@ -41,6 +42,20 @@ async def test_system_prompt_identical_across_requests() -> None:
     await svc.estimate(EstimateRequest(transcription="Client: two"))
     assert provider.calls[0]["system"] == provider.calls[1]["system"]
     assert "Client: one" not in provider.calls[0]["system"]
+
+
+async def test_cache_key_follows_prompt_version() -> None:
+    provider = FakeProvider()
+    request = EstimateRequest(transcription="Client: one")
+    await service(provider).estimate(request)
+    await service(provider).estimate(request)
+    bumped = replace(load_prompt(), version="v99")
+    await EstimationService(
+        provider=provider, prompt=bumped, weekly_capacity_hours=30, hourly_rate=None
+    ).estimate(request)
+    keys = [call["cache_key"] for call in provider.calls]
+    assert keys[0] == keys[1] == f"estimator-{load_prompt().version}"
+    assert keys[2] == "estimator-v99"
 
 
 async def test_grounding_flags_fabricated_requirement() -> None:

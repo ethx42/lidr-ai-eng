@@ -47,7 +47,10 @@ class AnthropicProvider:
         sampling = {k: params.pop(k) for k in ("temperature",) if k in params}
         self.params: dict[str, Any] = params | ({"extra_body": sampling} if sampling else {})
 
-    async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]:
+    async def generate(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> LLMResult[T]:
+        # Anthropic caches by content (the cache_control block); it takes no routing key.
         start = time.perf_counter()
         try:
             message = await self.client.messages.parse(
@@ -67,14 +70,16 @@ class AnthropicProvider:
             raise InvalidModelOutput()
         usage = message.usage
         cache_read = usage.cache_read_input_tokens or 0
+        cache_write = usage.cache_creation_input_tokens or 0
         # Anthropic reports uncached input separately; report the total like OpenAI does.
-        input_tokens = usage.input_tokens + cache_read + (usage.cache_creation_input_tokens or 0)
+        input_tokens = usage.input_tokens + cache_read + cache_write
         return LLMResult(
             parsed=parsed,
             usage=Usage(
                 input_tokens=input_tokens,
                 output_tokens=usage.output_tokens,
                 cached_input_tokens=cache_read,
+                cache_write_tokens=cache_write,
             ),
             latency_ms=round((time.perf_counter() - start) * 1000),
         )

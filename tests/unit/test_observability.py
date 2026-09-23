@@ -15,7 +15,9 @@ def test_llm_call_record_fields_and_no_content(caplog: pytest.LogCaptureFixture)
                 provider="openai",
                 model="gpt-4o-mini",
                 prompt_version="v1",
-                usage=Usage(input_tokens=10, output_tokens=5, cached_input_tokens=2),
+                usage=Usage(
+                    input_tokens=10, output_tokens=5, cached_input_tokens=2, cache_write_tokens=3
+                ),
                 latency_ms=123,
                 outcome="ok",
             )
@@ -27,6 +29,7 @@ def test_llm_call_record_fields_and_no_content(caplog: pytest.LogCaptureFixture)
     assert payload["request_id"] == "req-1"
     assert payload["input_tokens"] == 10
     assert payload["cached_input_tokens"] == 2
+    assert payload["cache_write_tokens"] == 3
     assert payload["latency_ms"] == 123
     assert payload["outcome"] == "ok"
     assert set(payload) >= {"provider", "model", "prompt_version", "output_tokens", "level", "ts"}

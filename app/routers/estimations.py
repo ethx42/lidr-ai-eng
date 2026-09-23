@@ -38,7 +38,9 @@ def example_response() -> dict[str, Any]:
         model="gpt-4o-mini",
         provider="openai",
         prompt_version=PROMPT_VERSION,
-        usage=Usage(input_tokens=5600, output_tokens=1400, cached_input_tokens=5120),
+        usage=Usage(
+            input_tokens=5600, output_tokens=1400, cached_input_tokens=5120, cache_write_tokens=0
+        ),
     ).model_dump(mode="json")
 
 

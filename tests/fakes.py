@@ -26,13 +26,22 @@ class FakeProvider:
         self.calls: list[dict[str, Any]] = []
         self.closed = False
 
-    async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]:
-        self.calls.append({"system": system, "user": user, "schema": schema})
+    async def generate(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> LLMResult[T]:
+        self.calls.append(
+            {"system": system, "user": user, "schema": schema, "cache_key": cache_key}
+        )
         if self.error:
             raise self.error
         return LLMResult(
             parsed=schema.model_validate(self.result.model_dump()),
-            usage=Usage(input_tokens=1200, output_tokens=800, cached_input_tokens=1024),
+            usage=Usage(
+                input_tokens=1200,
+                output_tokens=800,
+                cached_input_tokens=1024,
+                cache_write_tokens=176,
+            ),
             latency_ms=42,
         )
 

@@ -19,9 +19,9 @@
 
 ## 4. Prompt cache routing and cache write tokens (`feat:` commit)
 
-- [ ] 4.1 Add failing tests: the OpenAI request body carries `prompt_cache_key == "estimator-<version>"` and is identical across two calls. The service passes a key that changes with the prompt version. The Anthropic request body carries no routing key
-- [ ] 4.2 Add failing tests: `Usage.cache_write_tokens` is mapped from OpenAI `input_tokens_details.cache_write_tokens` and Anthropic `cache_creation_input_tokens` (0 when absent), and appears in the `llm_call` log record, the API `usage`, and the eval case usage
-- [ ] 4.3 Implement D1/D2: the `cache_key` keyword on `LLMProvider.generate` (fake provider included), the `Usage` field, provider mappings, and the OpenAPI example. Verify the 4.1/4.2 tests pass and `make check` exits 0
+- [x] 4.1 Add failing tests: the OpenAI request body carries `prompt_cache_key == "estimator-<version>"` and is identical across two calls. The service passes a key that changes with the prompt version. The Anthropic request body carries no routing key
+- [x] 4.2 Add failing tests: `Usage.cache_write_tokens` is mapped from OpenAI `input_tokens_details.cache_write_tokens` and Anthropic `cache_creation_input_tokens` (0 when absent), and appears in the `llm_call` log record, the API `usage`, and the eval case usage
+- [x] 4.3 Implement D1/D2: the `cache_key` keyword on `LLMProvider.generate` (fake provider included), the `Usage` field, provider mappings, and the OpenAPI example. Verify the 4.1/4.2 tests pass and `make check` exits 0
 
 ## 5. Reasoning effort levels (`feat:` commit)
 

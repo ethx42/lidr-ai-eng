@@ -20,6 +20,8 @@ class LLMProvider(Protocol):
     name: Provider
     model: str
 
-    async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]: ...
+    async def generate(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> LLMResult[T]: ...
 
     async def aclose(self) -> None: ...

@@ -59,12 +59,14 @@ class ScriptedProvider(FakeProvider):
         super().__init__()
         self.outcomes = outcomes
 
-    async def generate(self, *, system: str, user: str, schema: type[T]) -> LLMResult[T]:
+    async def generate(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> LLMResult[T]:
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
         self.result = outcome
-        return await super().generate(system=system, user=user, schema=schema)
+        return await super().generate(system=system, user=user, schema=schema, cache_key=cache_key)
 
 
 async def run(outcomes: list[EstimationBreakdown | Exception], names: list[str]) -> dict[str, Any]:
@@ -81,6 +83,7 @@ async def test_all_checks_pass() -> None:
     assert report["score"] == 1.0
     assert report["case_pass_rate"] == 1.0
     assert report["checks_run"] == 27
+    assert {"cached_input_tokens", "cache_write_tokens"} <= report["cases"][0]["usage"].keys()
 
 
 async def test_score_granularity() -> None:

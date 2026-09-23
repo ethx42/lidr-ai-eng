@@ -51,6 +51,7 @@ class EstimationService:
                 system=self.prompt.system_text,
                 user=build_user_message(request.transcription, request.output_language),
                 schema=EstimationBreakdown,
+                cache_key=f"estimator-{self.prompt.version}",
             )
         except LLMError as exc:
             latency_ms = round((time.perf_counter() - start) * 1000)

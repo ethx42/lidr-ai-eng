@@ -1,5 +1,6 @@
-"""Real SDK clients on a mock transport: a transient failure is retried, then succeeds."""
+"""Real SDK clients on a mock transport: retries and what goes on the wire."""
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -37,7 +38,7 @@ OPENAI_BODY = {
     "tools": [],
     "usage": {
         "input_tokens": 10,
-        "input_tokens_details": {"cached_tokens": 0},
+        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
         "output_tokens": 5,
         "output_tokens_details": {"reasoning_tokens": 0},
         "total_tokens": 15,
@@ -56,9 +57,11 @@ ANTHROPIC_BODY = {
 }
 
 
-def flaky(body: dict[str, Any], calls: list[int]) -> Callable[[httpx.Request], httpx.Response]:
-    def handler(_: httpx.Request) -> httpx.Response:
-        calls.append(1)
+def flaky(
+    body: dict[str, Any], calls: list[httpx.Request]
+) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
         if len(calls) == 1:
             return httpx.Response(429, headers={"retry-after-ms": "1"}, json={"error": {}})
         return httpx.Response(200, json=body)
@@ -70,20 +73,22 @@ COMMON = {"temperature": 0.2, "reasoning_effort": None, "max_output_tokens": 409
 
 
 async def test_openai_retries_transient_failure() -> None:
-    calls: list[int] = []
+    calls: list[httpx.Request] = []
     http = openai_http_client(transport=httpx.MockTransport(flaky(OPENAI_BODY, calls)))
     client = AsyncOpenAI(api_key="k", max_retries=2, http_client=http)
     provider = OpenAIProvider(
         client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
     )
-    result = await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+    result = await provider.generate(
+        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+    )
     assert result.parsed == breakdown()
     assert len(calls) == 2
     await provider.aclose()
 
 
 async def test_anthropic_retries_transient_failure() -> None:
-    calls: list[int] = []
+    calls: list[httpx.Request] = []
     http = httpx.AsyncClient(transport=httpx.MockTransport(flaky(ANTHROPIC_BODY, calls)))
     client = AsyncAnthropic(api_key="k", max_retries=2, http_client=http)
     provider = AnthropicProvider(
@@ -92,7 +97,9 @@ async def test_anthropic_retries_transient_failure() -> None:
         profile=get_profile("claude-haiku-4-5", "anthropic"),
         **COMMON,
     )
-    result = await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+    result = await provider.generate(
+        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+    )
     assert result.parsed == breakdown()
     assert len(calls) == 2
     await provider.aclose()
@@ -120,13 +127,46 @@ def always_429(body: dict[str, Any], calls: list[int]) -> Callable[[httpx.Reques
 async def test_openai_quota_is_not_retried(
     body: dict[str, Any], expected: type[Exception], attempts: int
 ) -> None:
-    calls: list[int] = []
+    calls: list[httpx.Request] = []
     http = openai_http_client(transport=httpx.MockTransport(always_429(body, calls)))
     client = AsyncOpenAI(api_key="k", max_retries=2, http_client=http)
     provider = OpenAIProvider(
         client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
     )
     with pytest.raises(expected):
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
     assert len(calls) == attempts
+    await provider.aclose()
+
+
+async def test_openai_sends_same_cache_key_on_the_wire() -> None:
+    calls: list[httpx.Request] = []
+    http = openai_http_client(transport=httpx.MockTransport(flaky(OPENAI_BODY, calls)))
+    client = AsyncOpenAI(api_key="k", max_retries=2, http_client=http)
+    provider = OpenAIProvider(
+        client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
+    )
+    for _ in range(2):
+        await provider.generate(
+            system="s", user="u", schema=EstimationBreakdown, cache_key="estimator-v4"
+        )
+    keys = {json.loads(r.content)["prompt_cache_key"] for r in calls}
+    assert keys == {"estimator-v4"}
+    await provider.aclose()
+
+
+async def test_anthropic_sends_no_routing_key_on_the_wire() -> None:
+    calls: list[httpx.Request] = []
+    http = httpx.AsyncClient(transport=httpx.MockTransport(flaky(ANTHROPIC_BODY, calls)))
+    client = AsyncAnthropic(api_key="k", max_retries=2, http_client=http)
+    provider = AnthropicProvider(
+        client=client,
+        model="claude-haiku-4-5",
+        profile=get_profile("claude-haiku-4-5", "anthropic"),
+        **COMMON,
+    )
+    await provider.generate(
+        system="s", user="u", schema=EstimationBreakdown, cache_key="estimator-v4"
+    )
+    assert all("estimator-v4" not in r.content.decode() for r in calls)
     await provider.aclose()

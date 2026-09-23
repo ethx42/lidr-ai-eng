@@ -33,6 +33,7 @@ def test_success(make_client: ClientFactory) -> None:
             "input_tokens": 1200,
             "output_tokens": 800,
             "cached_input_tokens": 1024,
+            "cache_write_tokens": 176,
         }
 
 

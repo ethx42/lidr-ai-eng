@@ -21,11 +21,13 @@ from tests.factories import breakdown
 REQUEST = httpx.Request("POST", "https://api.openai.com/v1/responses")
 
 
-def response(parsed: Any = None, status: str = "completed", cached: int | None = 512) -> Any:
+def response(
+    parsed: Any = None, status: str = "completed", cached: int | None = 512, written: int = 1024
+) -> Any:
     usage = SimpleNamespace(
         input_tokens=2000,
         output_tokens=900,
-        input_tokens_details=SimpleNamespace(cached_tokens=cached),
+        input_tokens_details=SimpleNamespace(cached_tokens=cached, cache_write_tokens=written),
     )
     return SimpleNamespace(output_parsed=parsed, status=status, usage=usage)
 
@@ -46,11 +48,14 @@ def make(model: str = "gpt-4o-mini", **parse_kwargs: Any) -> tuple[OpenAIProvide
 
 async def test_success_maps_parsed_and_usage() -> None:
     provider, parse = make(return_value=response(breakdown()))
-    result = await provider.generate(system="SYS", user="USER", schema=EstimationBreakdown)
+    result = await provider.generate(
+        system="SYS", user="USER", schema=EstimationBreakdown, cache_key="estimator-v9"
+    )
     assert result.parsed == breakdown()
     assert result.usage.input_tokens == 2000
     assert result.usage.output_tokens == 900
     assert result.usage.cached_input_tokens == 512
+    assert result.usage.cache_write_tokens == 1024
     kwargs = parse.call_args.kwargs
     assert kwargs["model"] == "gpt-4o-mini"
     assert kwargs["instructions"] == "SYS"
@@ -58,12 +63,15 @@ async def test_success_maps_parsed_and_usage() -> None:
     assert kwargs["text_format"] is EstimationBreakdown
     assert kwargs["temperature"] == 0.2
     assert kwargs["max_output_tokens"] == 4096
+    assert kwargs["prompt_cache_key"] == "estimator-v9"
     assert "reasoning" not in kwargs
 
 
 async def test_missing_cached_tokens_is_zero() -> None:
     provider, _ = make(return_value=response(breakdown(), cached=None))
-    result = await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+    result = await provider.generate(
+        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+    )
     assert result.usage.cached_input_tokens == 0
 
 
@@ -75,7 +83,7 @@ async def test_missing_cached_tokens_is_zero() -> None:
 async def test_invalid_output(resp: Any) -> None:
     provider, _ = make(return_value=resp)
     with pytest.raises(InvalidModelOutput):
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
 
 
 async def test_schema_validation_error_is_invalid_output() -> None:
@@ -85,7 +93,7 @@ async def test_schema_validation_error_is_invalid_output() -> None:
         error = exc
     provider, _ = make(side_effect=error)
     with pytest.raises(InvalidModelOutput):
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
 
 
 def status_error(
@@ -116,7 +124,7 @@ QUOTA_BODY = {"type": "insufficient_quota", "code": "credit_balance_exhausted"}
 async def test_sdk_error_mapping(exc: Exception, expected: type[Exception]) -> None:
     provider, _ = make(side_effect=exc)
     with pytest.raises(expected):
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
 
 
 async def test_reasoning_model_params() -> None:
@@ -130,7 +138,7 @@ async def test_reasoning_model_params() -> None:
         reasoning_effort="low",
         max_output_tokens=4096,
     )
-    await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+    await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
     kwargs = parse.call_args.kwargs
     assert kwargs["reasoning"] == {"effort": "low"}
     assert "temperature" not in kwargs
