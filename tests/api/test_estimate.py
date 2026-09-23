@@ -1,3 +1,4 @@
+import json
 import logging
 
 import pytest
@@ -67,6 +68,18 @@ def test_validation_422_without_provider_call(
         body = response.json()
         assert body["error"]["code"] == "invalid_request"
         assert body["request_id"] == "v-1"
+        assert client.fake.calls == []
+
+
+def test_json_content_type_required(make_client: ClientFactory) -> None:
+    with make_client() as client:
+        response = client.post(
+            URL,
+            content=json.dumps({"transcription": TRANSCRIPT}),
+            headers={"Content-Type": "text/plain"},
+        )
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_request"
         assert client.fake.calls == []
 
 

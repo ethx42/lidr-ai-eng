@@ -26,6 +26,10 @@ def get_app_settings(request: Request) -> Settings:
     return settings
 
 
+ServiceDep = Annotated[EstimationService, Depends(get_service)]
+SettingsDep = Annotated[Settings, Depends(get_app_settings)]
+
+
 @cache
 def example_response() -> dict[str, Any]:
     ref = DENTAL_CLINIC
@@ -50,8 +54,11 @@ def error_response(description: str) -> dict[str, Any]:
 
 @router.post(
     "/estimate",
-    response_model=EstimateResponse,
     summary="Estimate a project from a meeting transcription",
+    description=(
+        "Send the body as JSON with `Content-Type: application/json`; other content types "
+        "are rejected with `422 invalid_request`."
+    ),
     responses={
         200: {"content": {"application/json": {"example": example_response()}}},
         422: error_response("Invalid request (empty, too long, or unknown fields)."),
@@ -62,8 +69,8 @@ def error_response(description: str) -> dict[str, Any]:
 )
 async def estimate(
     body: EstimateRequest,
-    service: Annotated[EstimationService, Depends(get_service)],
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    service: ServiceDep,
+    settings: SettingsDep,
 ) -> EstimateResponse:
     limit = settings.max_transcription_chars
     if len(body.transcription) > limit:

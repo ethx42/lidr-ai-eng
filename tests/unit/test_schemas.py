@@ -1,3 +1,5 @@
+import hashlib
+import json
 from typing import Any
 
 import pytest
@@ -120,3 +122,38 @@ def test_request_forbids_extra_fields() -> None:
 def test_breakdown_data_round_trips() -> None:
     data = breakdown_data()
     assert breakdown().model_dump() == EstimationBreakdown.model_validate(data).model_dump()
+
+
+# The LLM-facing contract: a refactor of validators must not change what providers receive.
+SCHEMA_SHA256 = "1e5dd56a894d1e91ade0e7882cdf5fb5720900414365bedf40ebcfaacabd94fc"
+
+
+def test_json_schema_unchanged() -> None:
+    schema = json.dumps(EstimationBreakdown.model_json_schema(), sort_keys=True)
+    assert hashlib.sha256(schema.encode()).hexdigest() == SCHEMA_SHA256
+
+
+def error_locs(overrides: dict[str, Any]) -> list[tuple[int | str, ...]]:
+    with pytest.raises(ValidationError) as info:
+        breakdown(**overrides)
+    return [tuple(e["loc"]) for e in info.value.errors()]
+
+
+@pytest.mark.parametrize(
+    "overrides,loc",
+    [
+        (
+            {"requirements": [{"id": "R1", "statement": "s", "evidence": " "}]},
+            ("requirements", 0, "evidence"),
+        ),
+        ({"tasks": [task(basis=[])]}, ("tasks", 0, "basis")),
+        ({"team": [{"role": "Dev", "count": 0}]}, ("team", 0, "count")),
+        ({"requirements": [{"id": "X1", "statement": "s", "evidence": "e"}]}, ("requirements",)),
+        ({"tasks": []}, ("tasks",)),
+    ],
+    ids=["blank-evidence", "empty-basis", "zero-count", "bad-id", "no-tasks"],
+)
+def test_single_field_rules_report_the_field(
+    overrides: dict[str, Any], loc: tuple[int | str, ...]
+) -> None:
+    assert error_locs(overrides) == [loc]

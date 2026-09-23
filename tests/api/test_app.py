@@ -28,6 +28,7 @@ def test_docs_and_openapi(make_client: ClientFactory) -> None:
         assert spec["info"]["description"]
         operation = spec["paths"]["/api/v1/estimate"]["post"]
         assert "example" in operation["responses"]["200"]["content"]["application/json"]
+        assert "Content-Type: application/json" in operation["description"]
         assert spec["components"]["schemas"]["EstimateRequest"]["examples"]
 
 

@@ -6,10 +6,17 @@ outputs support. Field order matters: understanding fields precede numbers.
 """
 
 import re
-from collections.abc import Sequence
-from typing import Annotated, Literal, Self
+from collections.abc import Callable, Sequence
+from typing import Annotated, Literal, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 Phase = Literal[
     "discovery",
@@ -27,29 +34,51 @@ MIN_TASK_HOURS = 0.5
 MAX_TASK_HOURS = 400
 
 
-def _check_ids(prefix: str, ids: list[str]) -> None:
-    bad = [i for i in ids if not re.fullmatch(rf"{prefix}[1-9]\d*", i)]
-    if bad:
-        raise ValueError(f"identifiers must look like {prefix}1, {prefix}2, ...: {bad}")
-    if len(set(ids)) != len(ids):
-        raise ValueError(f"duplicate {prefix} identifiers: {ids}")
+class Identified(Protocol):
+    @property
+    def id(self) -> str: ...
+
+
+def _ids[S: Sequence[Identified]](prefix: str) -> Callable[[S], S]:
+    def check(items: S) -> S:
+        ids = [item.id for item in items]
+        bad = [i for i in ids if not re.fullmatch(rf"{prefix}[1-9]\d*", i)]
+        if bad:
+            raise ValueError(f"identifiers must look like {prefix}1, {prefix}2, ...: {bad}")
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"duplicate {prefix} identifiers: {ids}")
+        return items
+
+    return check
+
+
+def _not_blank(value: str) -> str:
+    if not value.strip():
+        raise ValueError("must not be empty")
+    return value
+
+
+def _not_empty[S: Sequence[object]](value: S) -> S:
+    if not value:
+        raise ValueError("must contain at least one item")
+    return value
+
+
+def _at_least_one(value: int) -> int:
+    if value < 1:
+        raise ValueError("must be at least 1")
+    return value
 
 
 class Requirement(BaseModel):
     id: str = Field(description="Identifier R1, R2, ... in order of appearance.")
     statement: str = Field(description="What the client needs, in the output language.")
-    evidence: str = Field(
+    evidence: Annotated[str, AfterValidator(_not_blank)] = Field(
         description=(
             "Exact verbatim quote from the transcript that states this requirement, "
             "copied character for character in the transcript's original language."
         )
     )
-
-    @model_validator(mode="after")
-    def evidence_not_blank(self) -> Self:
-        if not self.evidence.strip():
-            raise ValueError(f"{self.id}: evidence must not be empty")
-        return self
 
 
 class Assumption(BaseModel):
@@ -63,7 +92,7 @@ class Task(BaseModel):
     phase: Phase = Field(description="Delivery phase this task belongs to.")
     name: str = Field(description="Short task name.")
     rationale: str = Field(description="Why this task is needed and what drives its size.")
-    basis: list[str] = Field(
+    basis: Annotated[list[str], AfterValidator(_not_empty)] = Field(
         description="Requirement and/or assumption identifiers (R*, A*) this task rests on."
     )
     optimistic_hours: float = Field(description="Best-case effort in hours.")
@@ -71,9 +100,7 @@ class Task(BaseModel):
     pessimistic_hours: float = Field(description="Worst-case effort in hours.")
 
     @model_validator(mode="after")
-    def check_task(self) -> Self:
-        if not self.basis:
-            raise ValueError(f"{self.id}: basis must cite at least one requirement or assumption")
+    def check_hours(self) -> Self:
         o, m, p = self.optimistic_hours, self.likely_hours, self.pessimistic_hours
         if not o <= m <= p:
             raise ValueError(f"{self.id}: hours must satisfy optimistic <= likely <= pessimistic")
@@ -84,13 +111,9 @@ class Task(BaseModel):
 
 class TeamMember(BaseModel):
     role: str = Field(description="Role name, e.g. Backend developer.")
-    count: int = Field(description="Number of people in this role.")
-
-    @model_validator(mode="after")
-    def positive_count(self) -> Self:
-        if self.count < 1:
-            raise ValueError(f"{self.role}: count must be at least 1")
-        return self
+    count: Annotated[int, AfterValidator(_at_least_one)] = Field(
+        description="Number of people in this role."
+    )
 
 
 class Risk(BaseModel):
@@ -102,14 +125,14 @@ class Risk(BaseModel):
 class EstimationBreakdown(BaseModel):
     project_name: str = Field(description="Short project name.")
     summary: str = Field(description="Two to four sentences describing the project scope.")
-    requirements: list[Requirement] = Field(
+    requirements: Annotated[list[Requirement], AfterValidator(_ids("R"))] = Field(
         description="Requirements explicitly stated in the transcript, each with verbatim evidence."
     )
-    assumptions: list[Assumption] = Field(
+    assumptions: Annotated[list[Assumption], AfterValidator(_ids("A"))] = Field(
         description="Gaps filled with explicit assumptions instead of invented scope."
     )
     open_questions: list[str] = Field(description="Questions to ask the client before committing.")
-    tasks: Sequence[Task] = Field(
+    tasks: Annotated[Sequence[Task], AfterValidator(_not_empty), AfterValidator(_ids("T"))] = Field(
         description=(
             "Work breakdown across phases, including QA, deployment (devops) and project "
             "management. Do not compute totals."
@@ -119,15 +142,6 @@ class EstimationBreakdown(BaseModel):
     risks: list[Risk] = Field(description="Main delivery risks.")
     confidence: Level = Field(description="Confidence in this estimate; low for vague input.")
     confidence_rationale: str = Field(description="Why this confidence level.")
-
-    @model_validator(mode="after")
-    def check_identifiers(self) -> Self:
-        if not self.tasks:
-            raise ValueError("at least one task is required")
-        _check_ids("R", [r.id for r in self.requirements])
-        _check_ids("A", [a.id for a in self.assumptions])
-        _check_ids("T", [t.id for t in self.tasks])
-        return self
 
 
 class EstimatedTask(Task):
@@ -147,7 +161,7 @@ class Totals(BaseModel):
 
 
 class EnrichedBreakdown(EstimationBreakdown):
-    tasks: Sequence[EstimatedTask]
+    tasks: Annotated[Sequence[EstimatedTask], AfterValidator(_not_empty), AfterValidator(_ids("T"))]
     totals: Totals
 
 

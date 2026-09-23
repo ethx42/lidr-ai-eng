@@ -63,6 +63,13 @@ Environment variables override `.env`. If your shell exports an `ANTHROPIC_API_K
 make run                # uv run uvicorn app.main:app --reload
 ```
 
+Production (no `--reload`; the app factory reads settings from the environment):
+
+```bash
+uv run uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 \
+  --workers 4 --forwarded-allow-ips <proxy CIDR> --timeout-graceful-shutdown 30
+```
+
 - API docs: http://127.0.0.1:8000/docs
 - Health: `curl http://127.0.0.1:8000/health`
 
@@ -73,7 +80,7 @@ curl -s http://127.0.0.1:8000/api/v1/estimate \
   | jq -r .estimation
 ```
 
-Response fields: `estimation` (markdown), `breakdown` (structured, with computed `totals`), `grounding`, `model`, `provider`, `prompt_version`, `usage`. Optional request field: `output_language` (defaults to the transcription's language). Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. Every response carries `X-Request-ID`.
+Requests must be sent with `Content-Type: application/json`; other content types get `422 invalid_request`. Response fields: `estimation` (markdown), `breakdown` (structured, with computed `totals`), `grounding`, `model`, `provider`, `prompt_version`, `usage` (`input_tokens`, `output_tokens`, `cached_input_tokens`, `cache_write_tokens`). Optional request field: `output_language` (defaults to the transcription's language). Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. Every response carries `X-Request-ID`.
 
 ## Quality gates
 

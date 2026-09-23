@@ -31,11 +31,11 @@
 
 ## 6. Schema and API polish (`refactor:` commit)
 
-- [ ] 6.1 Add a test pinning the hash of `EstimationBreakdown.model_json_schema()` to its current value. Verify it passes before refactoring
-- [ ] 6.2 Move single-field rules to `AfterValidator` (D8). Update the schema tests for the new messages and `loc`. Verify the schema-hash test still passes
-- [ ] 6.3 Router: drop `response_model=`, add the `ServiceDep`/`SettingsDep` aliases, and state the JSON content type in the endpoint description. Add a test that a `text/plain` post returns `422 invalid_request` with no provider call. Verify the OpenAPI response schema for `/api/v1/estimate` is unchanged
-- [ ] 6.4 README: Content-Type note and production `uvicorn app.main:create_app --factory ...` command. Verify the factory starts with `uv run uvicorn app.main:create_app --factory` and `/health` returns 200
-- [ ] 6.5 `make check` exits 0
+- [x] 6.1 Add a test pinning the hash of `EstimationBreakdown.model_json_schema()` to its current value. Verify it passes before refactoring
+- [x] 6.2 Move single-field rules to `AfterValidator` (D8). Update the schema tests for the new messages and `loc`. Verify the schema-hash test still passes
+- [x] 6.3 Router: drop `response_model=`, add the `ServiceDep`/`SettingsDep` aliases, and state the JSON content type in the endpoint description. Add a test that a `text/plain` post returns `422 invalid_request` with no provider call. Verify the OpenAPI response schema for `/api/v1/estimate` is unchanged
+- [x] 6.4 README: Content-Type note and production `uvicorn app.main:create_app --factory ...` command. Verify the factory starts with `uv run uvicorn app.main:create_app --factory` and `/health` returns 200
+- [x] 6.5 `make check` exits 0
 
 ## 7. Live verification and docs (`docs:` commit)
 

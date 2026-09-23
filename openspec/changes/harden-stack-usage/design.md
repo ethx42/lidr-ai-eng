@@ -72,6 +72,7 @@ A test walks `app/**/*.py` with `ast` and collects top-level third-party module 
 ### D8. Schema and API polish without contract change
 - Single-field rules become `Annotated[..., AfterValidator(fn)]`: non-blank evidence, `count >= 1`, non-empty basis, non-empty tasks, and the per-list identifier format. Cross-field rules (hour ordering and bounds) stay in `@model_validator`.
 - **Contract:** `EstimationBreakdown.model_json_schema()` must be byte-identical before and after. A test pins it to a committed hash, so the LLM-facing schema cannot drift silently.
+- `EnrichedBreakdown` redeclares `tasks` with the same validators, so the subclass keeps the checks it used to inherit from the model validator. The identifier check is typed through a small `Identified` protocol.
 - Error messages lose the `T1:`/`R1:` prefix, because the `loc` carries the index. These errors are internal (mapped to `502`), so no API contract changes.
 - The router drops `response_model=`, since the return annotation already defines the response. It uses `ServiceDep`/`SettingsDep` `Annotated` aliases.
 - The `Content-Type: application/json` requirement goes in the endpoint `description` (OpenAPI) and the README. A test covers the `422`.
