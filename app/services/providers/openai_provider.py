@@ -1,18 +1,41 @@
 import time
 from typing import Any
 
+import httpx2
 import openai
 import pydantic
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from app.config import Provider, ReasoningEffort
 from app.schemas.estimation import Usage
-from app.services.errors import InvalidModelOutput, LLMError, UpstreamUnavailable, from_status
+from app.services.errors import (
+    InvalidModelOutput,
+    LLMError,
+    UpstreamError,
+    UpstreamUnavailable,
+    from_status,
+)
 from app.services.providers.base import LLMResult, T
 from app.services.providers.profiles import ModelProfile, request_params
 
+QUOTA = "insufficient_quota"
+
+
+async def _no_retry_on_quota(response: httpx2.Response) -> None:
+    # OpenAI signals exhausted credits as 429, which the SDK would retry like a rate limit.
+    if response.status_code == 429:
+        await response.aread()
+        if QUOTA in response.text:
+            response.headers["x-should-retry"] = "false"
+
+
+def openai_http_client(**kwargs: Any) -> DefaultAsyncHttpxClient:
+    return DefaultAsyncHttpxClient(event_hooks={"response": [_no_retry_on_quota]}, **kwargs)
+
 
 def map_error(exc: openai.APIError) -> LLMError:
+    if QUOTA in (exc.code, exc.type):
+        return UpstreamError()
     if isinstance(exc, openai.APIConnectionError):
         return UpstreamUnavailable()
     if isinstance(exc, openai.APIStatusError):

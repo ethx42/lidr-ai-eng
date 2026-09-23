@@ -4,12 +4,14 @@ from collections.abc import Callable
 from typing import Any
 
 import httpx2 as httpx
+import pytest
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
 from app.schemas.estimation import EstimationBreakdown
+from app.services.errors import UpstreamError, UpstreamRateLimited
 from app.services.providers.anthropic_provider import AnthropicProvider
-from app.services.providers.openai_provider import OpenAIProvider
+from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
 from tests.factories import breakdown
 
@@ -69,7 +71,7 @@ COMMON = {"temperature": 0.2, "reasoning_effort": None, "max_output_tokens": 409
 
 async def test_openai_retries_transient_failure() -> None:
     calls: list[int] = []
-    http = httpx.AsyncClient(transport=httpx.MockTransport(flaky(OPENAI_BODY, calls)))
+    http = openai_http_client(transport=httpx.MockTransport(flaky(OPENAI_BODY, calls)))
     client = AsyncOpenAI(api_key="k", max_retries=2, http_client=http)
     provider = OpenAIProvider(
         client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
@@ -93,4 +95,38 @@ async def test_anthropic_retries_transient_failure() -> None:
     result = await provider.generate(system="s", user="u", schema=EstimationBreakdown)
     assert result.parsed == breakdown()
     assert len(calls) == 2
+    await provider.aclose()
+
+
+QUOTA_ERROR = {
+    "error": {"message": "quota", "type": "insufficient_quota", "code": "credit_balance_exhausted"}
+}
+RATE_ERROR = {"error": {"message": "slow down", "type": "requests", "code": "rate_limit_exceeded"}}
+
+
+def always_429(body: dict[str, Any], calls: list[int]) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(_: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(429, headers={"retry-after-ms": "1"}, json=body)
+
+    return handler
+
+
+@pytest.mark.parametrize(
+    "body,expected,attempts",
+    [(QUOTA_ERROR, UpstreamError, 1), (RATE_ERROR, UpstreamRateLimited, 3)],
+    ids=["quota-not-retried", "rate-limit-retried"],
+)
+async def test_openai_quota_is_not_retried(
+    body: dict[str, Any], expected: type[Exception], attempts: int
+) -> None:
+    calls: list[int] = []
+    http = openai_http_client(transport=httpx.MockTransport(always_429(body, calls)))
+    client = AsyncOpenAI(api_key="k", max_retries=2, http_client=http)
+    provider = OpenAIProvider(
+        client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
+    )
+    with pytest.raises(expected):
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown)
+    assert len(calls) == attempts
     await provider.aclose()

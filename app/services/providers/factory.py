@@ -4,7 +4,7 @@ from openai import AsyncOpenAI
 from app.config import Settings
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.base import LLMProvider
-from app.services.providers.openai_provider import OpenAIProvider
+from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
 
 
@@ -23,4 +23,5 @@ def build_provider(settings: Settings) -> LLMProvider:
     }
     if settings.llm_provider == "anthropic":
         return AnthropicProvider(client=AsyncAnthropic(**client_options), **common)  # type: ignore[arg-type]
-    return OpenAIProvider(client=AsyncOpenAI(**client_options), **common)  # type: ignore[arg-type]
+    client = AsyncOpenAI(**client_options, http_client=openai_http_client())  # type: ignore[arg-type]
+    return OpenAIProvider(client=client, **common)  # type: ignore[arg-type]

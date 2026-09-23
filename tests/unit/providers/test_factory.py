@@ -3,7 +3,7 @@ import pytest
 from app.config import Settings
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.factory import build_provider
-from app.services.providers.openai_provider import OpenAIProvider
+from app.services.providers.openai_provider import OpenAIProvider, _no_retry_on_quota
 
 
 def settings(**values: object) -> Settings:
@@ -22,6 +22,7 @@ async def test_openai_selected() -> None:
     assert (provider.name, provider.model) == ("openai", "gpt-4o-mini")
     assert provider.client.max_retries == 2
     assert provider.client.timeout == 30
+    assert _no_retry_on_quota in provider.client._client.event_hooks["response"]
     await provider.aclose()
 
 

@@ -88,14 +88,24 @@ async def test_schema_validation_error_is_invalid_output() -> None:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown)
 
 
-def status_error(cls: type[openai.APIStatusError], code: int) -> openai.APIStatusError:
-    return cls("boom", response=httpx.Response(code, request=REQUEST), body=None)
+def status_error(
+    cls: type[openai.APIStatusError], code: int, body: object = None
+) -> openai.APIStatusError:
+    return cls("boom", response=httpx.Response(code, request=REQUEST), body=body)
+
+
+QUOTA_BODY = {"type": "insufficient_quota", "code": "credit_balance_exhausted"}
 
 
 @pytest.mark.parametrize(
     "exc,expected",
     [
         (status_error(openai.RateLimitError, 429), UpstreamRateLimited),
+        (status_error(openai.RateLimitError, 429, QUOTA_BODY), UpstreamError),
+        (
+            status_error(openai.RateLimitError, 429, {"code": "insufficient_quota"}),
+            UpstreamError,
+        ),
         (openai.APITimeoutError(request=REQUEST), UpstreamUnavailable),
         (openai.APIConnectionError(request=REQUEST), UpstreamUnavailable),
         (status_error(openai.InternalServerError, 500), UpstreamUnavailable),

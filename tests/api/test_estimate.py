@@ -83,6 +83,7 @@ def test_422_does_not_echo_transcription(make_client: ClientFactory) -> None:
         (UpstreamUnavailable(), 503, "upstream_unavailable"),
         (InvalidModelOutput(), 502, "invalid_model_output"),
         (UpstreamError(), 502, "upstream_error"),
+        (UpstreamError("quota"), 502, "upstream_error"),
     ],
 )
 def test_upstream_error_mapping(
