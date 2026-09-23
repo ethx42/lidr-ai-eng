@@ -2,8 +2,8 @@
 
 ## 1. No request content in logs (`fix(observability):` commit)
 
-- [ ] 1.1 Add a failing test in `tests/unit/providers/test_retries.py` (real SDK clients, `httpx2.MockTransport`), parametrized over both providers: after `configure_logging("DEBUG")`, a `generate` call with a unique transcript marker leaves no captured record from any logger containing the marker. Verify it fails for Anthropic
-- [ ] 1.2 Implement D1 (`CLIENT_LOGGERS` capped at `max(level, INFO)` in `configure_logging`). Verify the 1.1 test passes for both providers, an `app.*` DEBUG record is still emitted at `LOG_LEVEL=DEBUG`, and `make check` exits 0
+- [x] 1.1 Add a failing test in `tests/unit/providers/test_retries.py` (real SDK clients, `httpx2.MockTransport`), parametrized over both providers: after `configure_logging("DEBUG")`, a `generate` call with a unique transcript marker leaves no captured record from any logger containing the marker. Verify it fails for Anthropic
+- [x] 1.2 Implement D1 (`CLIENT_LOGGERS` capped at `max(level, INFO)` in `configure_logging`). Verify the 1.1 test passes for both providers, an `app.*` DEBUG record is still emitted at `LOG_LEVEL=DEBUG`, and `make check` exits 0
 
 ## 2. Failure causes and unhandled-error stacks (`feat(observability):` commit)
 

@@ -1,7 +1,8 @@
 """Real SDK clients on a mock transport: retries and what goes on the wire."""
 
 import json
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx2 as httpx
@@ -9,6 +10,7 @@ import pytest
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
+from app.observability import CLIENT_LOGGERS, configure_logging
 from app.schemas.estimation import EstimationBreakdown
 from app.services.errors import UpstreamError, UpstreamRateLimited
 from app.services.providers.anthropic_provider import AnthropicProvider
@@ -170,3 +172,59 @@ async def test_anthropic_sends_no_routing_key_on_the_wire() -> None:
     )
     assert all("estimator-v4" not in r.content.decode() for r in calls)
     await provider.aclose()
+
+
+@pytest.fixture
+def debug_logging() -> Iterator[None]:
+    root = logging.getLogger()
+    saved = root.level, list(root.handlers)
+    levels = {name: logging.getLogger(name).level for name in CLIENT_LOGGERS}
+    configure_logging("DEBUG")
+    yield
+    root.setLevel(saved[0])
+    root.handlers = saved[1]
+    for name, level in levels.items():
+        logging.getLogger(name).setLevel(level)
+
+
+Handler = Callable[[httpx.Request], httpx.Response]
+
+
+def openai_provider(handler: Callable[[httpx.Request], httpx.Response]) -> OpenAIProvider:
+    http = openai_http_client(transport=httpx.MockTransport(handler))
+    client = AsyncOpenAI(api_key="k", max_retries=0, http_client=http)
+    return OpenAIProvider(
+        client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
+    )
+
+
+def anthropic_provider(handler: Callable[[httpx.Request], httpx.Response]) -> AnthropicProvider:
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = AsyncAnthropic(api_key="k", max_retries=0, http_client=http)
+    return AnthropicProvider(
+        client=client,
+        model="claude-haiku-4-5",
+        profile=get_profile("claude-haiku-4-5", "anthropic"),
+        **COMMON,
+    )
+
+
+@pytest.mark.parametrize(
+    "build,body",
+    [(openai_provider, OPENAI_BODY), (anthropic_provider, ANTHROPIC_BODY)],
+    ids=["openai", "anthropic"],
+)
+@pytest.mark.usefixtures("debug_logging")
+async def test_debug_logging_leaks_no_transcript(
+    build: Callable[[Handler], OpenAIProvider | AnthropicProvider],
+    body: dict[str, Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    marker = "TRANSCRIPT-MARKER-7f3a"
+    provider = build(lambda _: httpx.Response(200, json=body))
+    await provider.generate(
+        system="s", user=f"Client: {marker}", schema=EstimationBreakdown, cache_key="k"
+    )
+    await provider.aclose()
+    assert caplog.records, "expected library records at INFO and above"
+    assert all(marker not in record.getMessage() for record in caplog.records)

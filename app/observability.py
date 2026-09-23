@@ -9,6 +9,8 @@ from app.schemas.estimation import Usage
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 
 llm_logger = logging.getLogger("app.llm")
+# Client libraries log request bodies (the transcription) at DEBUG; keep them at INFO or above.
+CLIENT_LOGGERS = ("anthropic", "openai", "httpx2", "httpcore2")
 
 
 class JsonFormatter(logging.Formatter):
@@ -35,6 +37,8 @@ def configure_logging(level: str) -> None:
         handler,
     ]
     root.setLevel(level.upper())
+    for name in CLIENT_LOGGERS:
+        logging.getLogger(name).setLevel(max(root.level, logging.INFO))
 
 
 def log_llm_call(

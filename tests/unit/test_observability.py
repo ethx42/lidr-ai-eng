@@ -3,7 +3,13 @@ import logging
 
 import pytest
 
-from app.observability import JsonFormatter, log_llm_call, request_id_var
+from app.observability import (
+    CLIENT_LOGGERS,
+    JsonFormatter,
+    configure_logging,
+    log_llm_call,
+    request_id_var,
+)
 from app.schemas.estimation import Usage
 
 
@@ -33,3 +39,21 @@ def test_llm_call_record_fields_and_no_content(caplog: pytest.LogCaptureFixture)
     assert payload["latency_ms"] == 123
     assert payload["outcome"] == "ok"
     assert set(payload) >= {"provider", "model", "prompt_version", "output_tokens", "level", "ts"}
+
+
+def test_debug_level_keeps_app_debug_and_caps_client_loggers() -> None:
+    root = logging.getLogger()
+    saved = root.level, list(root.handlers)
+    try:
+        configure_logging("DEBUG")
+        assert logging.getLogger("app.llm").isEnabledFor(logging.DEBUG)
+        assert all(
+            not logging.getLogger(name).isEnabledFor(logging.DEBUG) for name in CLIENT_LOGGERS
+        )
+        configure_logging("WARNING")
+        assert logging.getLogger("anthropic").getEffectiveLevel() == logging.WARNING
+    finally:
+        root.setLevel(saved[0])
+        root.handlers = saved[1]
+        for name in CLIENT_LOGGERS:
+            logging.getLogger(name).setLevel(logging.NOTSET)
