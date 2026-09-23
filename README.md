@@ -51,9 +51,12 @@ cp .env.example .env    # then set LLM_PROVIDER, LLM_MODEL, and the matching API
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | — | required for the selected provider; startup fails naming the missing one |
 | `LLM_TEMPERATURE` | `0.2` | sent only to models that support it |
 | `LLM_REASONING_EFFORT` | unset | `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`; sent only to reasoning models that accept that level (others get no effort and a startup warning listing the supported levels) |
-| `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS` | `30`, `2`, `4096` | |
+| `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS` | `60`, `2`, `4096` | timeout is per attempt; reasoning models may need more |
 | `MAX_TRANSCRIPTION_CHARS` | `50000` | longer requests get `422` |
 | `BLENDED_HOURLY_RATE`, `WEEKLY_CAPACITY_HOURS` | unset, `30` | cost and duration estimates |
+| `APP_ENV`, `LOG_LEVEL` | `development`, `DEBUG` | JSON logs on stderr; see Logging below |
+
+**Logging.** `LOG_LEVEL` applies to the app's own loggers. The client libraries (`anthropic`, `openai`, `httpx2`, `httpcore2`) are kept at `INFO` or above whatever the level, because at `DEBUG` the Anthropic SDK logs request bodies, which contain the transcription. No log record contains the transcription or API keys. Each LLM call writes one `llm_call` record (provider, model, prompt version, token counts, latency, outcome). A failed call also carries `cause` (the stop condition, e.g. `stop_reason:max_tokens`, or the upstream error class) and `upstream_status`, never the provider's message. Unhandled errors log the exception type and stack locations, not the message.
 
 Environment variables override `.env`. If your shell exports an `ANTHROPIC_API_KEY` (for example inside Claude Code), it wins over the one in `.env`.
 

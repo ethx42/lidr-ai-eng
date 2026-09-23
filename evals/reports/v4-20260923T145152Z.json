@@ -1,0 +1,209 @@
+{
+  "prompt_version": "v4",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "timestamp": "2026-09-23T14:51:52+00:00",
+  "score": 1.0,
+  "checks_passed": 47,
+  "checks_run": 47,
+  "case_pass_rate": 1.0,
+  "cases": [
+    {
+      "name": "01-course-meeting",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true,
+        "narrative_language": true
+      },
+      "error": null,
+      "latency_ms": 15756,
+      "narrative_language": {
+        "expected": "english",
+        "detected": "english"
+      },
+      "grounding": {
+        "requirements_total": 8,
+        "requirements_grounded": 8,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6624,
+        "output_tokens": 1281,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 4,
+      "tasks": 8,
+      "expected_hours": 199.0
+    },
+    {
+      "name": "02-medium-clinic-portal",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true,
+        "narrative_language": true
+      },
+      "error": null,
+      "latency_ms": 17060,
+      "narrative_language": {
+        "expected": "english",
+        "detected": "english"
+      },
+      "grounding": {
+        "requirements_total": 6,
+        "requirements_grounded": 6,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6449,
+        "output_tokens": 1206,
+        "cached_input_tokens": 6016,
+        "cache_write_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 3,
+      "tasks": 9,
+      "expected_hours": 170.5
+    },
+    {
+      "name": "03-vague-marketplace",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true,
+        "narrative_language": true,
+        "has_open_questions": true,
+        "confidence_below_high": true
+      },
+      "error": null,
+      "latency_ms": 10541,
+      "narrative_language": {
+        "expected": "english",
+        "detected": "english"
+      },
+      "grounding": {
+        "requirements_total": 4,
+        "requirements_grounded": 4,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6370,
+        "output_tokens": 995,
+        "cached_input_tokens": 6016,
+        "cache_write_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 4,
+      "tasks": 7,
+      "expected_hours": 87.5
+    },
+    {
+      "name": "04-injection-es",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true,
+        "narrative_language": true
+      },
+      "error": null,
+      "latency_ms": 11249,
+      "narrative_language": {
+        "expected": "spanish",
+        "detected": "spanish"
+      },
+      "grounding": {
+        "requirements_total": 4,
+        "requirements_grounded": 4,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6389,
+        "output_tokens": 1156,
+        "cached_input_tokens": 6016,
+        "cache_write_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 3,
+      "tasks": 8,
+      "expected_hours": 167.5
+    },
+    {
+      "name": "05-explicit-language",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true,
+        "narrative_language": true
+      },
+      "error": null,
+      "latency_ms": 16212,
+      "narrative_language": {
+        "expected": "spanish",
+        "detected": "spanish"
+      },
+      "grounding": {
+        "requirements_total": 6,
+        "requirements_grounded": 6,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6413,
+        "output_tokens": 1242,
+        "cached_input_tokens": 6016,
+        "cache_write_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 3,
+      "tasks": 8,
+      "expected_hours": 111.5
+    }
+  ]
+}
