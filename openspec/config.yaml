@@ -1,28 +1,41 @@
 schema: spec-driven
 
+# Facts about the project. Update "Current stack" and "Current milestone" as the project evolves.
 context: |
-  Language: English
-  All artifacts must be written in English.
-  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  All artifacts, code, and commits in English. Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Product: LIDR AI Engineering course project, grown one milestone per course brief; each milestone ships as a reviewable branch.
+  Current milestone: M1 - FastAPI CAG estimator (meeting transcript -> LLM software estimation).
+  Current stack: Python 3.12, uv, FastAPI, Pydantic v2, OpenAI Responses API, Anthropic Messages API, pytest, ruff, mypy strict.
+  Paths mandated by a course brief are external contracts: keep them unless the brief changes.
+  Quality gate: `make check` (lint, types, tests, spec validation). Prompt quality gate: `make eval`.
+  Library and SDK usage is verified against current docs via Context7, not memory.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+# Principles, not prescriptions. Any rule may be broken when the deviation is recorded
+# in design.md as a decision with its rationale and a rejected alternative.
+rules:
+  proposal:
+    - State what is explicitly deferred and why
+  specs:
+    - Specify observable behavior and contracts (inputs, outputs, errors); leave technology choices to design
+    - Every scenario is verifiable by an automated test or the eval harness
+    - LLM-dependent behavior is verified in code or by evals, never assumed from instructions to the model
+  design:
+    - Comply or explain - any deviation from these rules or from existing patterns is recorded as a decision with its rationale and a rejected alternative
+    - Prefer the simplest design that keeps clean seams for the next milestone; no speculative abstractions
+    - Depend on interfaces at boundaries (HTTP, LLM providers, context sources) so implementations can be swapped
+    - External APIs are used through their current recommended surface, verified via Context7 with the date noted
+    - Prompt changes bump the prompt version and state the expected eval impact
+  tasks:
+    - Each task states its verification
+    - Order for test-first delivery; each task group is one conventional commit
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - Work test-first; run `make check` before completing each task group
+      - Re-verify library and SDK usage via Context7 before writing integration code
+      - Tests never call real LLM APIs
+      - If implementation shows the plan is wrong, update the change artifacts first, then the code
+  archive:
+    guidance:
+      - Archive only after `make check` passes and /opsx:verify reports no gaps

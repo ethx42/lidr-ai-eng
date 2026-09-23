@@ -5,7 +5,7 @@ Guarantees on every push and pull request that the project builds, is lint- and 
 ## ADDED Requirements
 
 ### Requirement: Continuous integration pipeline
-A single CI workflow SHALL run on every push and pull request and SHALL fail if any of these fail: dependency install from the lockfile, lint and format check, static type check, test suite, and OpenSpec validation in strict mode. It SHALL require no LLM credentials.
+A single CI workflow SHALL run on every push and pull request and SHALL fail if any of these fail: dependency install from the lockfile, lint and format check, static type check, test suite, OpenSpec validation in strict mode, and the check that archived changes have no open tasks. It SHALL require no LLM credentials.
 
 #### Scenario: Lint violation
 - **WHEN** a commit introduces a lint violation

@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Initialize uv project (`pyproject.toml`, Python 3.12, runtime + dev deps, ruff/mypy/pytest config) and verify `uv sync` succeeds and `uv.lock` is created
 - [ ] 1.2 Create brief-required skeleton (`app/`, `routers/`, `services/`, `context/` with `__init__.py`), `.gitignore` (incl. `.env`), `.env.example` with every variable, and verify `git check-ignore .env` succeeds
-- [ ] 1.3 Add `Makefile` (`install, run, test, lint, typecheck, specs, check, eval`) and `CLAUDE.md`/`AGENTS.md` (English-only, spec-first, commands); verify `make lint` runs clean on the empty skeleton
+- [ ] 1.3 Extend the existing `Makefile` (`specs`, `openspec-sync` already present) with `install, run, test, lint, typecheck, check, eval`; verify `make lint` runs clean on the empty skeleton and the `.claude/settings.json` ruff hook formats an edited `.py` file
 - [ ] 1.4 Add structure and secret-hygiene tests (`tests/test_structure.py`) and verify they pass and fail when a required file is temporarily removed
 
 ## 2. Configuration
