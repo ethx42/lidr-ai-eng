@@ -5,8 +5,12 @@ from pathlib import Path
 
 from app.context.examples import REFERENCE_ESTIMATIONS, ReferenceEstimation
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 PROMPTS_DIR = Path(__file__).parent
+EVIDENCE_REMINDER = (
+    "Keep every evidence quote verbatim in the transcript's original language, "
+    "whatever the output language."
+)
 DEFAULT_LANGUAGE = (
     "The language the transcript is written in, not languages or places mentioned in it"
 )
@@ -47,5 +51,6 @@ def build_user_message(transcription: str, output_language: str | None) -> str:
     return (
         "Estimate the project discussed in this meeting transcript.\n"
         f"<transcript>\n{transcript}\n</transcript>\n"
-        f"<output_language>{language}</output_language>"
+        f"<output_language>{language}</output_language>\n"
+        f"{EVIDENCE_REMINDER}"
     )

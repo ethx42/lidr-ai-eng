@@ -24,7 +24,7 @@ def test_success(make_client: ClientFactory) -> None:
         assert body["estimation"].startswith("## Estimation:")
         assert isinstance(body["model"], str)
         assert body["provider"] == "openai"
-        assert body["prompt_version"] == "v2"
+        assert body["prompt_version"] == "v3"
         assert len(body["breakdown"]["tasks"]) >= 1
         assert body["breakdown"]["totals"]["expected_hours"] == 41.0
         assert [t["expected_hours"] for t in body["breakdown"]["tasks"]] == [11.0, 30.0]

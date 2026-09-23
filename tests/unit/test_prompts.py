@@ -6,6 +6,7 @@ import pytest
 from app.context.examples import REFERENCE_ESTIMATIONS
 from app.prompts.loader import (
     DEFAULT_LANGUAGE,
+    EVIDENCE_REMINDER,
     PROMPT_VERSION,
     PROMPTS_DIR,
     build_user_message,
@@ -13,11 +14,11 @@ from app.prompts.loader import (
 )
 
 # Changing the rendered system prompt requires bumping PROMPT_VERSION and this hash.
-PINNED_SHA256 = "f041e8c1585fc306f40d28e282300b57296ec96a372db4cd9c6a1d2296945245"
+PINNED_SHA256 = "3d54ba3931816b70a53dfd152afa0b17a3bcd7a6e18fbb3e2c46142312fa7772"
 
 
 def test_version() -> None:
-    assert load_prompt().version == PROMPT_VERSION == "v2"
+    assert load_prompt().version == PROMPT_VERSION == "v3"
 
 
 def test_v2_rules_present() -> None:
@@ -28,7 +29,15 @@ def test_v2_rules_present() -> None:
 
 
 def test_previous_versions_kept() -> None:
-    assert (PROMPTS_DIR / "v1" / "system.md").is_file()
+    assert all((PROMPTS_DIR / v / "system.md").is_file() for v in ("v1", "v2"))
+
+
+def test_evidence_language_rule_in_system_and_user_message() -> None:
+    assert "English transcript with Spanish output" in load_prompt().system_text
+    for language in (None, "Spanish"):
+        user = build_user_message("Client: hi", language)
+        assert user.endswith(EVIDENCE_REMINDER)
+    assert "original language" in EVIDENCE_REMINDER
 
 
 def test_all_references_in_system_text() -> None:

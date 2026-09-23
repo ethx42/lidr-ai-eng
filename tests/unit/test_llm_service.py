@@ -25,7 +25,7 @@ async def test_estimate_pipeline() -> None:
     assert response.breakdown.totals.estimated_cost == 4100.0
     assert "**Total estimated: 41.0 hours**" in response.estimation
     assert response.grounding.score == 1.0
-    assert response.prompt_version == "v2"
+    assert response.prompt_version == "v3"
     assert (response.provider, response.model) == ("openai", "fake-model")
     assert response.usage.cached_input_tokens == 1024
     [call] = provider.calls
