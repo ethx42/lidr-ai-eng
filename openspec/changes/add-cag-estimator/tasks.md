@@ -34,12 +34,12 @@ Paths: app/context/examples.py, app/prompts/**, tests/unit/test_examples.py, tes
 Depends on: 2, 3
 Paths: app/services/providers/**, app/services/errors.py, app/observability.py, app/config.py, tests/fakes.py, tests/unit/providers/**, tests/unit/test_observability.py
 
-- [ ] 5.1 Re-verify current OpenAI Responses and Anthropic Messages `parse` signatures via Context7 and record any deviation from design D3
-- [ ] 5.2 Implement `providers/base.py` (Protocol, `LLMResult`, `Usage`) and `services/errors.py`; add `tests/fakes.py` `FakeProvider`; verify mypy strict passes
-- [ ] 5.3 Implement `providers/profiles.py` (registry, prefix matching, conservative fallback + warning) and settings `LLM_REASONING_EFFORT`; verify parametrized tests of request kwargs per profile (gpt-4o-mini, gpt-5 family, claude-haiku-4-5, claude-opus-5, unknown)
-- [ ] 5.4 Implement OpenAI adapter (`responses.parse`, profile-driven params, usage incl. cached tokens, incomplete/None → `InvalidModelOutput`, SDK error mapping); verify unit tests with mocked SDK client
-- [ ] 5.5 Implement Anthropic adapter (`messages.parse`, profile-driven params, cached system block, refusal/max_tokens → `InvalidModelOutput`, SDK error mapping); verify unit tests with mocked SDK client
-- [ ] 5.6 Implement provider factory and structured `llm_call` logging without transcript content; verify tests for selection and a log record that excludes transcript text
+- [x] 5.1 Re-verify current OpenAI Responses and Anthropic Messages `parse` signatures via Context7 and record any deviation from design D3
+- [x] 5.2 Implement `providers/base.py` (Protocol, `LLMResult`, `Usage`) and `services/errors.py`; add `tests/fakes.py` `FakeProvider`; verify mypy strict passes
+- [x] 5.3 Implement `providers/profiles.py` (registry, prefix matching, conservative fallback + warning) and settings `LLM_REASONING_EFFORT`; verify parametrized tests of request kwargs per profile (gpt-4o-mini, gpt-5 family, claude-haiku-4-5, claude-opus-5, unknown)
+- [x] 5.4 Implement OpenAI adapter (`responses.parse`, profile-driven params, usage incl. cached tokens, incomplete/None → `InvalidModelOutput`, SDK error mapping); verify unit tests with mocked SDK client
+- [x] 5.5 Implement Anthropic adapter (`messages.parse`, profile-driven params, cached system block, refusal/max_tokens → `InvalidModelOutput`, SDK error mapping); verify unit tests with mocked SDK client
+- [x] 5.6 Implement provider factory and structured `llm_call` logging without transcript content; verify tests for selection and a log record that excludes transcript text
 
 ## 6. Service and HTTP API
 Depends on: 4, 5
