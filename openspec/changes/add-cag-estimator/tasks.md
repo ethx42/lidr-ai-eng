@@ -11,7 +11,7 @@ Paths: pyproject.toml, uv.lock, Makefile, .gitignore, .env.example, app/__init__
 Depends on: 1
 Paths: app/config.py, tests/unit/test_config.py
 
-- [ ] 2.1 Implement `Settings` with defaults, `SecretStr` keys, provider-key validator, and extra tunables; verify unit tests for defaults, missing-key failure naming the variable, and masked repr
+- [x] 2.1 Implement `Settings` with defaults, `SecretStr` keys, provider-key validator, and extra tunables; verify unit tests for defaults, missing-key failure naming the variable, and masked repr
 
 ## 3. Estimation contract and math
 Depends on: 1, 2
