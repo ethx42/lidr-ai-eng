@@ -19,7 +19,7 @@ POST /api/v1/estimate
           └─ rendering.py          markdown with ⚠ marks and a grounding warnings section
 ```
 
-Behavior is specified in [`openspec/specs/`](openspec/specs/) (archived from [`openspec/changes/`](openspec/changes/)); the design rationale is in the change's `design.md`.
+Behavior is specified in [`openspec/specs/`](openspec/specs/); the change that introduced it, with its design rationale, is archived in [`openspec/changes/archive/2026-09-23-add-cag-estimator/`](openspec/changes/archive/2026-09-23-add-cag-estimator/) ([design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md)).
 
 ### Brief step → files
 
@@ -101,7 +101,7 @@ The golden set (`evals/golden/`) has five transcriptions: the course meeting, a 
 | v1 `openai/gpt-4o-mini` ([report](evals/reports/v1-20260923T131705Z.json)) | 0.9118 (31/34) | 0.50 | paraphrased evidence; no language check yet |
 | v1 `anthropic/claude-haiku-4-5` ([report](evals/reports/v1-20260923T131013Z.json)) | 0.9706 (33/34) | 0.75 | grounding 1.0; ~8k of ~8.3k input tokens served from prompt cache |
 
-Prompt versions live in `app/prompts/<version>/`; the rationale and expected eval impact of each version are in the change's `design.md` (D4).
+Prompt versions live in `app/prompts/<version>/`; the rationale and expected eval impact of each version are in the archived [design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md) (D4).
 
 The eval is never part of `make check` or CI.
 
