@@ -17,10 +17,10 @@ Paths: app/config.py, tests/unit/test_config.py
 Depends on: 1, 2
 Paths: app/schemas/**, app/services/estimation_math.py, app/services/grounding.py, app/services/rendering.py, tests/unit/test_schemas.py, tests/unit/test_estimation_math.py, tests/unit/test_grounding.py, tests/unit/test_rendering.py
 
-- [ ] 3.1 Implement `schemas/estimation.py` (`EstimateRequest`, `EstimationBreakdown` with field descriptions and three-point validators, enriched response models); verify unit tests for validation rules and that the JSON schema has no recursion/unsupported keywords
-- [ ] 3.2 Implement `services/estimation_math.py` (PERT, totals, range, duration, cost); verify unit tests including the (8,10,18)+(20,30,40) → 41.0 scenario
-- [ ] 3.3 Implement `services/grounding.py` (normalization, evidence check, basis check, report); verify unit tests for fabricated requirement, formatting-only differences, dangling basis, and empty requirements (score 1.0)
-- [ ] 3.4 Implement `services/rendering.py` (markdown from enriched breakdown, ⚠ marks and grounding warnings section); verify tests that rendered total equals computed total and ungrounded items are marked
+- [x] 3.1 Implement `schemas/estimation.py` (`EstimateRequest`, `EstimationBreakdown` with field descriptions and three-point validators, enriched response models); verify unit tests for validation rules and that the JSON schema has no recursion/unsupported keywords
+- [x] 3.2 Implement `services/estimation_math.py` (PERT, totals, range, duration, cost); verify unit tests including the (8,10,18)+(20,30,40) → 41.0 scenario
+- [x] 3.3 Implement `services/grounding.py` (normalization, evidence check, basis check, report); verify unit tests for fabricated requirement, formatting-only differences, dangling basis, and empty requirements (score 1.0)
+- [x] 3.4 Implement `services/rendering.py` (markdown from enriched breakdown, ⚠ marks and grounding warnings section); verify tests that rendered total equals computed total and ungrounded items are marked
 
 ## 4. CAG prompt and context
 Depends on: 3
