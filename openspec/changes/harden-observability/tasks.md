@@ -13,8 +13,8 @@
 
 ## 3. Reliability defaults (`fix:` commit)
 
-- [ ] 3.1 Add failing tests: the default `llm_timeout_seconds` is `60`. `gpt-5-chat-latest` with effort `low` and temperature `0.2` gets no `reasoning`, no `temperature`, and `max_output_tokens` without reasoning headroom. A task whose `basis` contains `|` renders as one table row with the pipe escaped
-- [ ] 3.2 Implement D4–D6 (config default, `gpt-5-chat` profile, `_cell` on the basis cell). Verify the 3.1 tests pass and `make check` exits 0
+- [x] 3.1 Add failing tests: the default `llm_timeout_seconds` is `60`. `gpt-5-chat-latest` with effort `low` and temperature `0.2` gets no `reasoning`, no `temperature`, and `max_output_tokens` without reasoning headroom. A task whose `basis` contains `|` renders as one table row with the pipe escaped
+- [x] 3.2 Implement D4–D6 (config default, `gpt-5-chat` profile, `_cell` on the basis cell). Verify the 3.1 tests pass and `make check` exits 0
 
 ## 4. Docs (`docs:` commit)
 

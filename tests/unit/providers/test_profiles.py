@@ -11,6 +11,8 @@ from app.services.providers.profiles import get_profile, request_params
         ("gpt-4o-mini", None, {"max_output_tokens": 4096, "temperature": 0.2}),
         ("gpt-4o-mini", "high", {"max_output_tokens": 4096, "temperature": 0.2}),
         ("gpt-4.1", None, {"max_output_tokens": 4096, "temperature": 0.2}),
+        # Non-reasoning chat variant: no reasoning, no headroom, no unprobed temperature
+        ("gpt-5-chat-latest", "low", {"max_output_tokens": 4096}),
         ("gpt-5-mini", None, {"max_output_tokens": 4096 + 16384}),
         (
             "gpt-5.2",

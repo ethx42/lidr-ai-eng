@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "DEBUG"
 
-    llm_timeout_seconds: float = Field(default=30, gt=0)
+    llm_timeout_seconds: float = Field(default=60, gt=0)
     llm_max_retries: int = Field(default=2, ge=0)
     llm_max_output_tokens: int = Field(default=4096, gt=0)
     llm_temperature: float = Field(default=0.2, ge=0, le=2)

@@ -41,7 +41,7 @@ def render_markdown(b: EnrichedBreakdown, grounding: GroundingReport) -> str:
             f"| {mark(task.id in bad_basis)}{task.id} | {task.phase} | {_cell(task.name)} "
             f"| {_hours(task.optimistic_hours)} | {_hours(task.likely_hours)} "
             f"| {_hours(task.pessimistic_hours)} | {_hours(task.expected_hours)} "
-            f"| {', '.join(task.basis)} |"
+            f"| {_cell(', '.join(task.basis))} |"
             for task in b.tasks
         ),
         "",

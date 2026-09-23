@@ -33,7 +33,7 @@ def test_defaults_with_only_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.llm_model == "gpt-4o-mini"
     assert settings.app_env == "development"
     assert settings.log_level == "DEBUG"
-    assert settings.llm_timeout_seconds == 30
+    assert settings.llm_timeout_seconds == 60
     assert settings.llm_max_retries == 2
     assert settings.llm_max_output_tokens == 4096
     assert settings.llm_temperature == 0.2

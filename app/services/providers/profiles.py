@@ -46,6 +46,8 @@ PROFILES: dict[str, ModelProfile] = {
     "gpt-4o": ModelProfile("openai", True, "none"),
     "gpt-4.1": ModelProfile("openai", True, "none"),
     "gpt-5": ModelProfile("openai", False, "openai_effort", 16384, GPT5_ORIGINAL),
+    # Non-reasoning chat variant; temperature support not probed, so none is sent.
+    "gpt-5-chat": ModelProfile("openai", False, "none"),
     "gpt-5.": ModelProfile("openai", False, "openai_effort", 16384, GPT5_X),
     "gpt-5.1": ModelProfile("openai", False, "openai_effort", 16384, GPT5_1),
     "gpt-5.6": ModelProfile("openai", False, "openai_effort", 16384, GPT5_6),

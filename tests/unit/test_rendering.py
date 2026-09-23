@@ -1,3 +1,5 @@
+import re
+
 from app.schemas.estimation import GroundingReport
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
@@ -67,3 +69,10 @@ def test_ungrounded_items_marked() -> None:
     assert "| ⚠ T2 |" in md
     warnings = md.split("### Grounding warnings", 1)[1]
     assert "R3" in warnings and "T2" in warnings
+
+
+def test_table_cells_escape_pipes() -> None:
+    md = render(tasks=[task(basis=["R1", "R|2"])])
+    [row] = [line for line in md.splitlines() if line.startswith("| ") and "T1" in line]
+    assert row.endswith("| R1, R\\|2 |")
+    assert len(re.findall(r"(?<!\\)\|", row)) == 9  # 8 cells
