@@ -127,7 +127,7 @@ async def test_explicit_report_path(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert path == target
     report = json.loads(target.read_text())
     assert 0 <= report["score"] <= 1
-    assert report["prompt_version"] == "v3"
+    assert report["prompt_version"] == "v4"
     assert len(report["cases"]) == len(load_golden_cases(GOLDEN_DIR))
     assert fake.closed
     assert "score=" in capsys.readouterr().out
@@ -142,7 +142,7 @@ async def test_default_report_name_includes_version(
     settings = Settings(_env_file=None, openai_api_key="test-key")
     path = await main([], settings=settings, provider_factory=lambda _: FakeProvider(result=FULL))
     assert path.parent == tmp_path
-    assert path.name.startswith("v3-")
+    assert path.name.startswith("v4-")
 
 
 def test_detect_language() -> None:
