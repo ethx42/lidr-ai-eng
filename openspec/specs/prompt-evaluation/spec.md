@@ -24,7 +24,7 @@ The evaluation SHALL use the configured provider and model and SHALL run only wh
 - **THEN** it runs over the golden set with the configured provider and model
 
 ### Requirement: Automated checks
-For each golden transcription the evaluation SHALL record: schema validity, three-point ordering, task hours within bounds, coverage of non-build phases (QA, deployment, project management), presence of open questions for the vague transcription, whether the narrative is written in the expected language (the case's `output_language` when declared, otherwise the transcription's language), grounding score, ungrounded requirements, tasks without a valid basis, latency, and token usage (including cached tokens). A case SHALL pass grounding only when every requirement is grounded and every task has a valid basis.
+For each golden transcription the evaluation SHALL record: schema validity, three-point ordering, task hours within bounds, coverage of non-build phases (QA, deployment, project management), presence of open questions for the vague transcription, whether the narrative is written in the expected language (the case's `output_language` when declared, otherwise the transcription's language), grounding score, ungrounded requirements, tasks without a valid basis, latency, and token usage (including cached input and cache write tokens). A case SHALL pass grounding only when every requirement is grounded and every task has a valid basis.
 
 #### Scenario: Fabricated requirement in eval
 - **WHEN** a golden case produces a requirement whose evidence is not in the transcription
@@ -37,6 +37,10 @@ For each golden transcription the evaluation SHALL record: schema validity, thre
 #### Scenario: Vague transcription
 - **WHEN** the vague transcription is evaluated
 - **THEN** the report records whether at least one open question and a confidence below `high` were produced
+
+#### Scenario: Cache usage recorded
+- **WHEN** a case completes
+- **THEN** its usage in the report contains `cached_input_tokens` and `cache_write_tokens`
 
 ### Requirement: Versioned report with an aggregate score
 Each evaluation run SHALL write a JSON report containing the prompt version, provider, model, timestamp, per-case results, the case pass rate, and a top-level `score` between 0 and 1 defined as the fraction of individual checks passed across all cases. By default the report SHALL be written to a file named with the prompt version and a timestamp; when an explicit output path is given, the report SHALL be written to exactly that path.

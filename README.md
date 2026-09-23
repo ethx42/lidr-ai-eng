@@ -19,7 +19,7 @@ POST /api/v1/estimate
           └─ rendering.py          markdown with ⚠ marks and a grounding warnings section
 ```
 
-Behavior is specified in [`openspec/specs/`](openspec/specs/); the change that introduced it, with its design rationale, is archived in [`openspec/changes/archive/2026-09-23-add-cag-estimator/`](openspec/changes/archive/2026-09-23-add-cag-estimator/) ([design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md)).
+Behavior is specified in [`openspec/specs/`](openspec/specs/); the change that introduced it, with its design rationale, is archived in [`openspec/changes/archive/2026-09-23-add-cag-estimator/`](openspec/changes/archive/2026-09-23-add-cag-estimator/) ([design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md)). Stack hardening after M1 (prompt-cache routing, effort levels per model, stricter gates) is archived in [`2026-09-23-harden-stack-usage/`](openspec/changes/archive/2026-09-23-harden-stack-usage/) ([design](openspec/changes/archive/2026-09-23-harden-stack-usage/design.md)).
 
 ### Brief step → files
 
