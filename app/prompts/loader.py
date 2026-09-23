@@ -5,8 +5,11 @@ from pathlib import Path
 
 from app.context.examples import REFERENCE_ESTIMATIONS, ReferenceEstimation
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 PROMPTS_DIR = Path(__file__).parent
+DEFAULT_LANGUAGE = (
+    "The language the transcript is written in, not languages or places mentioned in it"
+)
 # Our delimiter tags, in any case or spacing, so request data cannot close or open them.
 DELIMITER_TAG = re.compile(r"<\s*(/?)\s*(transcript|output_language)\b[^>]*>", re.IGNORECASE)
 
@@ -40,7 +43,7 @@ def load_prompt() -> PromptBundle:
 
 def build_user_message(transcription: str, output_language: str | None) -> str:
     transcript = DELIMITER_TAG.sub(r"[\1\2]", transcription)
-    language = re.sub(r"[<>]", "", output_language or "") or "Same language as the transcript"
+    language = re.sub(r"[<>]", "", output_language or "") or DEFAULT_LANGUAGE
     return (
         "Estimate the project discussed in this meeting transcript.\n"
         f"<transcript>\n{transcript}\n</transcript>\n"

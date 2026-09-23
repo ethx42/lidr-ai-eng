@@ -4,14 +4,31 @@ import re
 import pytest
 
 from app.context.examples import REFERENCE_ESTIMATIONS
-from app.prompts.loader import PROMPT_VERSION, build_user_message, load_prompt
+from app.prompts.loader import (
+    DEFAULT_LANGUAGE,
+    PROMPT_VERSION,
+    PROMPTS_DIR,
+    build_user_message,
+    load_prompt,
+)
 
 # Changing the rendered system prompt requires bumping PROMPT_VERSION and this hash.
-PINNED_SHA256 = "792e5f346008309ae8e57506c51b1877375a5be590722623b255a0660ece92b4"
+PINNED_SHA256 = "f041e8c1585fc306f40d28e282300b57296ec96a372db4cd9c6a1d2296945245"
 
 
 def test_version() -> None:
-    assert load_prompt().version == PROMPT_VERSION == "v1"
+    assert load_prompt().version == PROMPT_VERSION == "v2"
+
+
+def test_v2_rules_present() -> None:
+    system = load_prompt().system_text
+    assert "not a language, country, or city the speakers mention" in system
+    assert "Before you finish, check every quote" in system
+    assert "client-facing surface" in system
+
+
+def test_previous_versions_kept() -> None:
+    assert (PROMPTS_DIR / "v1" / "system.md").is_file()
 
 
 def test_all_references_in_system_text() -> None:
@@ -53,8 +70,9 @@ def test_explicit_output_language() -> None:
 
 
 def test_default_mirrors_transcript_language() -> None:
+    assert "not languages or places mentioned" in DEFAULT_LANGUAGE
     user = build_user_message("Cliente: queremos una app", None)
-    assert "<output_language>Same language as the transcript</output_language>" in user
+    assert f"<output_language>{DEFAULT_LANGUAGE}</output_language>" in user
 
 
 @pytest.mark.parametrize(
@@ -82,4 +100,4 @@ def test_output_language_cannot_inject_markup() -> None:
 
 def test_output_language_of_only_brackets_falls_back() -> None:
     user = build_user_message("hi", "<>")
-    assert "<output_language>Same language as the transcript</output_language>" in user
+    assert f"<output_language>{DEFAULT_LANGUAGE}</output_language>" in user
