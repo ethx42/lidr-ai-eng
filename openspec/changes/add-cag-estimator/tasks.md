@@ -2,10 +2,10 @@
 Depends on: none
 Paths: pyproject.toml, uv.lock, Makefile, .gitignore, .env.example, app/__init__.py, app/routers/__init__.py, app/services/__init__.py, app/context/__init__.py, tests/__init__.py, tests/test_structure.py
 
-- [ ] 1.1 Initialize uv project (`pyproject.toml`, Python 3.12, runtime + dev deps, ruff/mypy/pytest config) and verify `uv sync` succeeds and `uv.lock` is created
-- [ ] 1.2 Create brief-required skeleton (`app/`, `routers/`, `services/`, `context/` with `__init__.py`), `.gitignore` (incl. `.env`), `.env.example` with every variable, and verify `git check-ignore .env` succeeds
-- [ ] 1.3 Extend the existing `Makefile` (`specs`, `openspec-sync` already present) with `install, run, test, lint, typecheck, check, eval, eval-baseline`; verify `make lint` runs clean on the empty skeleton and the `.claude/settings.json` ruff hook formats an edited `.py` file
-- [ ] 1.4 Add structure and secret-hygiene tests (`tests/test_structure.py`) and verify they pass and fail when a required file is temporarily removed
+- [x] 1.1 Initialize uv project (`pyproject.toml`, Python 3.12, runtime + dev deps, ruff/mypy/pytest config) and verify `uv sync` succeeds and `uv.lock` is created
+- [x] 1.2 Create brief-required skeleton (`app/`, `routers/`, `services/`, `context/` with `__init__.py`), `.gitignore` (incl. `.env`), `.env.example` with every variable, and verify `git check-ignore .env` succeeds
+- [x] 1.3 Extend the existing `Makefile` (`specs`, `openspec-sync` already present) with `install, run, test, lint, typecheck, check, eval, eval-baseline`; verify `make lint` runs clean on the empty skeleton and the `.claude/settings.json` ruff hook formats an edited `.py` file
+- [x] 1.4 Add structure and secret-hygiene tests (`tests/test_structure.py`) and verify they pass and fail when a required file is temporarily removed
 
 ## 2. Configuration
 Depends on: 1
