@@ -53,9 +53,9 @@ Paths: app/services/llm_service.py, app/main.py, app/routers/estimations.py, tes
 Depends on: 6
 Paths: evals/**, data/transcripts/**, Makefile, tests/unit/test_eval.py
 
-- [ ] 7.1 Add golden transcripts (`evals/golden/`: course transcript, well-specified medium, vague) and `data/transcripts/course-meeting.md`; verify files load in a unit test
-- [ ] 7.2 Implement `evals/run_eval.py` (checks incl. grounding score/pass, summary table, versioned JSON report with top-level `score` = checks passed ÷ checks run, `--report <path>`); verify with `FakeProvider` tests for score granularity and explicit path, and one real `make eval` run producing a report
-- [ ] 7.3 Record the first baseline with `make eval-baseline` (report → `evals/baseline.json`, committed); verify the file contains `score`, prompt version, provider, and model
+- [x] 7.1 Add golden transcripts (`evals/golden/`: course transcript, well-specified medium, vague) and `data/transcripts/course-meeting.md`; verify files load in a unit test
+- [x] 7.2 Implement `evals/run_eval.py` (checks incl. grounding score/pass, summary table, versioned JSON report with top-level `score` = checks passed ÷ checks run, `--report <path>`); verify with `FakeProvider` tests for score granularity and explicit path, and one real `make eval` run producing a report
+- [x] 7.3 Record the first baseline with `make eval-baseline` (report → `evals/baseline.json`, committed); verify the file contains `score`, prompt version, provider, and model
 
 ## 8. CI, docs, and delivery
 Depends on: 7
