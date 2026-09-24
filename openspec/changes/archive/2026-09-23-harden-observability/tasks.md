@@ -25,4 +25,4 @@
 ## 5. Verify and archive (`chore(openspec):` commit)
 
 - [x] 5.1 Run `/opsx:verify` for `harden-observability`. Verify it reports no gaps
-- [ ] 5.2 Archive the change into `openspec/specs/`. Verify `make specs` passes and the main `llm-providers` and `estimation-api` specs contain the new scenarios
+- [x] 5.2 Archive the change into `openspec/specs/`. Verify `make specs` passes and the main `llm-providers` and `estimation-api` specs contain the new scenarios
