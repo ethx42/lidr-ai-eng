@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Eval reports (commit selectively with `git add -f`)
+evals/reports/*.json
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

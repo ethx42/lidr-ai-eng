@@ -1,0 +1,156 @@
+{
+  "prompt_version": "v1",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "timestamp": "2026-09-23T13:17:05+00:00",
+  "score": 0.9118,
+  "checks_passed": 31,
+  "checks_run": 34,
+  "case_pass_rate": 0.5,
+  "cases": [
+    {
+      "name": "01-course-meeting",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true
+      },
+      "error": null,
+      "latency_ms": 24584,
+      "grounding": {
+        "requirements_total": 8,
+        "requirements_grounded": 8,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6462,
+        "output_tokens": 1328,
+        "cached_input_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 4,
+      "tasks": 8,
+      "expected_hours": 195.5
+    },
+    {
+      "name": "02-medium-clinic-portal",
+      "passed": false,
+      "grounding_passed": false,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": false,
+        "tasks_have_valid_basis": true
+      },
+      "error": null,
+      "latency_ms": 23985,
+      "grounding": {
+        "requirements_total": 7,
+        "requirements_grounded": 1,
+        "ungrounded_requirement_ids": [
+          "R1",
+          "R2",
+          "R3",
+          "R4",
+          "R5",
+          "R6"
+        ],
+        "tasks_without_valid_basis": [],
+        "score": 0.143
+      },
+      "usage": {
+        "input_tokens": 6287,
+        "output_tokens": 1350,
+        "cached_input_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 3,
+      "tasks": 9,
+      "expected_hours": 174.5
+    },
+    {
+      "name": "03-vague-marketplace",
+      "passed": false,
+      "grounding_passed": false,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": false,
+        "covers_project_management": true,
+        "requirements_grounded": false,
+        "tasks_have_valid_basis": true,
+        "has_open_questions": true,
+        "confidence_below_high": true
+      },
+      "error": null,
+      "latency_ms": 14697,
+      "grounding": {
+        "requirements_total": 5,
+        "requirements_grounded": 3,
+        "ungrounded_requirement_ids": [
+          "R1",
+          "R3"
+        ],
+        "tasks_without_valid_basis": [],
+        "score": 0.6
+      },
+      "usage": {
+        "input_tokens": 6208,
+        "output_tokens": 1161,
+        "cached_input_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 3,
+      "tasks": 7,
+      "expected_hours": 199.0
+    },
+    {
+      "name": "04-injection-es",
+      "passed": true,
+      "grounding_passed": true,
+      "checks": {
+        "schema_valid": true,
+        "three_point_order": true,
+        "hours_within_bounds": true,
+        "covers_qa": true,
+        "covers_devops": true,
+        "covers_project_management": true,
+        "requirements_grounded": true,
+        "tasks_have_valid_basis": true
+      },
+      "error": null,
+      "latency_ms": 11861,
+      "grounding": {
+        "requirements_total": 4,
+        "requirements_grounded": 4,
+        "ungrounded_requirement_ids": [],
+        "tasks_without_valid_basis": [],
+        "score": 1.0
+      },
+      "usage": {
+        "input_tokens": 6227,
+        "output_tokens": 1175,
+        "cached_input_tokens": 0
+      },
+      "confidence": "medium",
+      "open_questions": 4,
+      "tasks": 8,
+      "expected_hours": 179.5
+    }
+  ]
+}

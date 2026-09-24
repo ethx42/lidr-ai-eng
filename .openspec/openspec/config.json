@@ -1,0 +1,5 @@
+{
+  "profile": "custom",
+  "delivery": "both",
+  "workflows": ["propose", "explore", "new", "continue", "ff", "apply", "update", "verify", "sync", "archive"]
+}
