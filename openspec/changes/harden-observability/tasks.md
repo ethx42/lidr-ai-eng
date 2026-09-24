@@ -19,10 +19,10 @@
 ## 4. Docs (`docs:` commit)
 
 - [x] 4.1 `git add -f evals/reports/v4-20260923T145152Z.json`. Verify every `evals/reports/*.json` link in `README.md` resolves to a tracked file (`git ls-files`)
-- [ ] 4.2 README: timeout default `60`, and a logging note (client libraries are capped at INFO, so no request content is logged; failed `llm_call` records carry `cause` and `upstream_status`). `.env.example`: `LLM_TIMEOUT_SECONDS=60`, and the effort comment lists `none|minimal|low|medium|high|xhigh|max`, supported per model. Verify by reading the diff
+- [x] 4.2 README: timeout default `60`, and a logging note (client libraries are capped at INFO, so no request content is logged; failed `llm_call` records carry `cause` and `upstream_status`). `.env.example`: `LLM_TIMEOUT_SECONDS=60`, and the effort comment lists `none|minimal|low|medium|high|xhigh|max`, supported per model. Verify by reading the diff
 - [x] 4.3 `.claude/stack.md`: Anthropic "Avoid" gains the DEBUG request-body logging behaviour. The findings section drops the stale branch reference and records this change. Verify `make check` exits 0
 
 ## 5. Verify and archive (`chore(openspec):` commit)
 
-- [ ] 5.1 Run `/opsx:verify` for `harden-observability`. Verify it reports no gaps
+- [x] 5.1 Run `/opsx:verify` for `harden-observability`. Verify it reports no gaps
 - [ ] 5.2 Archive the change into `openspec/specs/`. Verify `make specs` passes and the main `llm-providers` and `estimation-api` specs contain the new scenarios
