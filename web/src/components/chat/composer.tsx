@@ -17,11 +17,12 @@ type Props = {
   draft: Draft;
   onSend: () => void;
   samples: Sample[];
+  noteId?: string; // a note outside the composer that also describes the transcript field
 };
 
 const isApple = () => /Mac|iPhone|iPad/.test(navigator.userAgent);
 
-export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
+export const Composer = ({ inputRef, draft, onSend, samples, noteId }: Props) => {
   const id = useId();
   const keepRef = useRef<HTMLButtonElement>(null);
   const { value, pending } = draft;
@@ -30,7 +31,7 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
   const empty = length === 0;
   const over = length > limit;
   const apple = useHydrated() && isApple(); // the server cannot know the platform
-  const [inputId, counterId, emptyId, overId, overById, noteId, confirmId] = ["input", "counter", "empty", "over", "over-by", "note", "confirm"].map(
+  const [inputId, counterId, emptyId, overId, overById, confirmId] = ["input", "counter", "empty", "over", "over-by", "confirm"].map(
     (part) => `${id}-${part}`,
   );
 
@@ -96,7 +97,8 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
           placeholder="Paste a meeting transcript"
           aria-invalid={over || undefined}
           aria-describedby={[counterId, over && overId, over && overById, noteId].filter(Boolean).join(" ")}
-          className="max-h-40 min-h-20 resize-none bg-card sm:max-h-64"
+          // about one line to start, growing with the text; capped so a long draft still leaves the thread room
+          className="max-h-40 min-h-12 resize-none bg-card sm:max-h-[min(16rem,35dvh)]"
         />
         <div className="flex items-center gap-3">
           <SampleMenu
@@ -121,8 +123,9 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
             </kbd>
           </Button>
         </div>
+        {/* The placeholder says it on screen; this tells screen readers why Estimate is disabled. */}
         {empty && (
-          <p id={emptyId} className="text-xs text-muted-foreground">
+          <p id={emptyId} className="sr-only">
             Paste or type a transcript to estimate.
           </p>
         )}
@@ -133,9 +136,6 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
             {over ? "Shorten the transcript to send it." : ""}
           </span>{" "}
           {over && <span id={overById}>{`It is ${formatChars(length - limit)} over the limit.`}</span>}
-        </p>
-        <p id={noteId} className="text-xs text-muted-foreground">
-          Each message is estimated on its own. Conversation memory arrives in a later version.
         </p>
       </div>
     </form>

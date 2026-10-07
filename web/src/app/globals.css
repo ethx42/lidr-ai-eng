@@ -19,6 +19,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Short viewports (landscape phones, 400% zoom): the fixed header and composer would leave the thread no height. */
+@custom-variant short (@media (max-height: 30rem));
 
 @theme inline {
   --color-background: var(--background);

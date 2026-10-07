@@ -79,7 +79,7 @@ describe("Composer", () => {
     const { onSend, user, input, send } = setup();
     expect(send).toBeDisabled();
     expect(send).toHaveAccessibleDescription("Paste or type a transcript to estimate.");
-    expect(screen.getByText("Paste or type a transcript to estimate.")).toBeVisible();
+    expect(screen.getByText("Paste or type a transcript to estimate.")).toHaveClass("sr-only"); // the placeholder already shows it
 
     await user.type(input, "   ");
     expect(send).toBeDisabled();

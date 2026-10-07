@@ -118,6 +118,30 @@ describe("Chat", () => {
     expect(within(inspector).getByText("Physiotherapy patient portal")).toBeInTheDocument();
   });
 
+  // ui-1: a fixed 48 px header and a ~213 px composer left the thread 0 px at 320x256 (400% zoom) and ~95 px on a
+  // landscape phone. The composer is compact now, and below 480 px tall nothing is fixed: the whole page scrolls.
+  it("keeps the thread usable on short viewports: a compact composer, and a page that scrolls as a whole below 480 px", async () => {
+    const { user, input } = setup();
+    const main = screen.getByRole("main");
+    const shell = screen.getByRole("banner").parentElement;
+    expect(shell).toHaveClass("h-dvh", "short:h-auto", "short:min-h-dvh");
+    expect(main).toHaveClass("overflow-y-auto", "short:overflow-visible");
+    expect(input).toHaveClass("min-h-12");
+    expect(input).not.toHaveClass("min-h-20");
+    expect(screen.getByText("Paste or type a transcript to estimate.")).toHaveClass("sr-only"); // the placeholder says it
+
+    const form = screen.getByRole("form", { name: "New estimate" });
+    const note = "Each transcript is estimated on its own. Conversation memory arrives in a later version.";
+    expect(within(form).queryByText(/estimated on its own/)).not.toBeInTheDocument();
+    expect(within(main).getByText(note)).toBeInTheDocument(); // in the empty state
+    expect(input).toHaveAccessibleDescription(expect.stringContaining(note));
+
+    await user.type(input, "We need a booking portal.");
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    expect(within(main).getAllByText(note)).toHaveLength(1); // once, above the thread
+    expect(within(main).getByText(note).compareDocumentPosition(screen.getByRole("list", { name: "Estimates" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("renders a skeleton, not the stored thread, on the server", () => {
     sessionStorage.setItem("estimator.thread.v1", JSON.stringify([{ id: "a", transcription: "Stored transcript", state: { status: "done", result: fullResponse } }]));
     const html = renderToString(<Chat samples={SAMPLES} />);

@@ -288,3 +288,29 @@ test.describe("375 px wide", () => {
     await expect(trigger).toBeFocused();
   });
 });
+
+// A landscape phone, and 1280x1024 at 400% zoom (the WCAG 1.4.10 reference): the header and composer once took the
+// whole height there. Below 480 px tall the page scrolls as a whole, so the estimate keeps a usable height.
+for (const viewport of [{ width: 640, height: 360 }, { width: 320, height: 256 }]) {
+  test.describe(`${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("the estimate keeps a usable height and the composer stays reachable", async ({ page }) => {
+      await page.goto("/");
+      await sendSample(page);
+      await expectResult(page);
+      const inView = await page.evaluate(() => {
+        const article = document.querySelector("article");
+        const main = document.querySelector("main");
+        if (!article || !main) return 0;
+        article.scrollIntoView({ block: "start" });
+        const [box, region] = [article.getBoundingClientRect(), main.getBoundingClientRect()];
+        return Math.min(box.bottom, region.bottom, window.innerHeight) - Math.max(box.top, region.top, 0);
+      });
+      expect(inView, "px of the estimate in view").toBeGreaterThanOrEqual(120);
+      await composer(page).scrollIntoViewIfNeeded();
+      await expect(composer(page)).toBeInViewport();
+      await expectNoHorizontalScroll(page);
+    });
+  });
+}
