@@ -93,6 +93,8 @@ class ProjectMetadata(BaseModel):
 
 
 MAX_TECHNOLOGIES = 30
+# v3 re-renders the metadata into every system prompt, outside MAX_HISTORY_CHARS.
+MAX_TECHNOLOGY_CHARS = 80
 
 
 def merge_metadata(
@@ -101,12 +103,14 @@ def merge_metadata(
     """Fold one answer into the known facts, in code: a blank answer never erases a fact.
 
     Latest non-blank name and summary win; the team size is the sum of the latest team; the
-    technologies are a case-insensitive union that keeps the first spelling, capped. Returns the
-    merged metadata and the names of the fields that changed.
+    technologies are a case-insensitive union that keeps the first spelling and drops names over
+    `MAX_TECHNOLOGY_CHARS`. The union is capped at `MAX_TECHNOLOGIES`: once full, the known
+    entries stay and new names are dropped without being reported as a change. Returns the merged
+    metadata and the names of the fields that changed.
     """
     spellings: dict[str, str] = {}
     for name in (*current.mentioned_technologies, *(t.strip() for t in breakdown.technologies)):
-        if name:
+        if name and len(name) <= MAX_TECHNOLOGY_CHARS:
             spellings.setdefault(name.casefold(), name)
     merged = ProjectMetadata(
         project_name=breakdown.project_name.strip() or current.project_name,
