@@ -9,9 +9,10 @@ const MEDIA = process.env.MEDIA === "1";
 const MEDIA_DIR = path.join(__dirname, "..", "..", "docs", "media", "session-03");
 if (MEDIA) mkdirSync(MEDIA_DIR, { recursive: true });
 
-// Its replay cassette streams for about 12 s, long enough to act mid-stream.
+// Its replay cassette streams for about 13 s end to end, long enough to act mid-stream.
 const SAMPLE = "Clinic portal";
-const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+// WCAG 2.2 AA plus axe's best practices; only serious and critical findings fail the run.
+const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 
 const shot = async (page: Page, name: string) => {
   // "disabled" finishes transitions (a tab mid-switch) and stops the skeleton pulse
@@ -30,7 +31,7 @@ const saveGif = (webm: string) => {
 };
 
 const expectAccessible = async (page: Page, state: string) => {
-  const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+  const { violations } = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
   const blocking = violations
     .filter(({ impact }) => impact === "serious" || impact === "critical")
     .map(({ id, impact, nodes }) => ({ id, impact, targets: nodes.map(({ target }) => target.join(" ")) }));
@@ -83,8 +84,8 @@ const expectPartial = (page: Page) =>
     )
     .toBe(true);
 
-const expectResult = async (page: Page) => {
-  await expect(estimate(page).getByRole("status")).toHaveText("Estimate ready");
+const expectResult = async (page: Page, { timeout }: { timeout?: number } = {}) => {
+  await expect(estimate(page).getByRole("status")).toHaveText("Estimate ready", { timeout });
   await expect(estimate(page)).toHaveAttribute("aria-busy", "false");
   await expect(totals(page).locator("[data-slot=skeleton]")).toHaveCount(0);
   await expect(totals(page)).toContainText(/Expected\s*[\d,.]+ h/);
@@ -132,6 +133,8 @@ test.describe("chat", () => {
     await expect(valueOf(call, "Request ID").locator("code")).toHaveText(requestId);
     await expectOneLine(valueOf(call, "Request ID").locator("code"), "the request ID");
     await shot(page, "result-inspector");
+    await tasks.scrollIntoViewIfNeeded();
+    if (MEDIA) await page.waitForTimeout(1500); // the GIF holds on the tasks table
 
     await estimate(page).getByRole("button", { name: /^Evidence for / }).first().hover();
     const evidence = page.locator("[data-slot=hover-card-content]");
@@ -155,6 +158,7 @@ test.describe("chat", () => {
     expect(toast.fontSize).toBe("14px");
     expect(toast.fontFamily).toBe(toast.body);
     if (MEDIA) {
+      await page.waitForTimeout(1500); // the GIF holds on the toast
       await page.screencast.stop();
       saveGif(video);
     }
@@ -176,7 +180,7 @@ test.describe("chat", () => {
     await regenerate.click();
     await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
     await expect(stopped(page)).toHaveCount(0);
-    await expectResult(page);
+    await expectResult(page, { timeout: 45_000 }); // a whole replay (about 13 s), under parallel load
     await expect(page.getByRole("button", { name: "Copy as markdown" })).toBeVisible();
   });
 
@@ -270,7 +274,6 @@ test.describe("375 px wide", () => {
     await sendSample(page);
     await expectResult(page);
     await expectNoHorizontalScroll(page);
-    await shot(page, "mobile");
 
     const trigger = page.getByRole("button", { name: "Inspector" });
     await trigger.click();
@@ -282,6 +285,7 @@ test.describe("375 px wide", () => {
     await expectOneLine(valueOf(call, "Request ID").locator("code"), "the request ID");
     await expectNoHorizontalScroll(page);
     await expectAccessible(page, "inspector sheet");
+    await shot(page, "mobile");
 
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);

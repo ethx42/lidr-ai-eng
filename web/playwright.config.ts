@@ -6,7 +6,7 @@ export default defineConfig({
   testDir: "./e2e",
   // Every test has its own browser context (and so its own sessionStorage thread); the replay streams run concurrently.
   fullyParallel: true,
-  // A recorded stream replays in 8–12 s, so a test that waits for one or two results needs more than the default 30 s.
+  // A recorded stream replays in about 8–13 s end to end, so a test that waits for one or two results needs more than the default 30 s.
   timeout: 90_000,
   expect: { timeout: 20_000 },
   forbidOnly: Boolean(process.env.CI),

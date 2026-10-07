@@ -104,7 +104,7 @@ The AI service reads environment variables and `.env` (pydantic-settings; enviro
 | `REDIS_URL` | unset | exact-match response cache; unset disables it. Compose sets it to its own Redis |
 | `CACHE_TTL_SECONDS` | `86400` | cache entry lifetime |
 | `REPLAY_CASSETTE_DIR` | `tests/cassettes` | where `replay` looks for recorded streams |
-| `REPLAY_DELAY_SCALE` | `1` | `replay` pacing: `0` instant, `1` as recorded (a recorded estimate takes 8–12 s) |
+| `REPLAY_DELAY_SCALE` | `1` | `replay` pacing: `0` instant, `1` as recorded (a recorded estimate takes about 8–13 s end to end) |
 | `LLM_TEMPERATURE` | `0.2` | sent only to models that support it |
 | `LLM_REASONING_EFFORT` | unset | `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`; sent only to reasoning models that accept that level (others get no effort and a startup warning listing the supported levels) |
 | `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS` | `60`, `2`, `4096` | the timeout applies per read; SDK retries apply only to the last provider in the chain (the router is the retry for the others) |
@@ -320,9 +320,9 @@ Produced by `MEDIA=1 make e2e` against the offline stack. The inspector therefor
 
 | Dark theme | Mobile (375 px) |
 |---|---|
-| ![Completed estimate and the Last call tab in the dark theme](docs/media/session-03/dark-theme.png) | ![Completed estimate at 375 px, inspector behind a header button](docs/media/session-03/mobile.png) |
+| ![Completed estimate and the Last call tab in the dark theme](docs/media/session-03/dark-theme.png) | ![The inspector at 375 px: a sheet opened from a header button, on the Last call tab](docs/media/session-03/mobile.png) |
 
-![Pick a sample, stream the estimate, inspect the call, copy as markdown](docs/media/session-03/chat.gif)
+![Pick a sample, stream the estimate, inspect the call, read the tasks table, copy as markdown](docs/media/session-03/chat.gif)
 
 ### Known limitations
 
