@@ -2,7 +2,7 @@
 
 Source of truth for the overnight run. Tick a task only after its commit exists; put the short SHA after it. Blocked tasks: replace `[ ]` with `[!]` and add a line below with the command, the last error lines and what was tried.
 
-Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.048279 (S3)
+Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.088722 (S3 US$0.048279, S4 US$0.040443)
 
 ## pre-session-03
 
@@ -41,8 +41,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - [x] Task 6: Prompt v2 and the comparison eval (51f550b)
 - [x] Task 7: Web — typed form workspace with evidence-linked split view (25cf774)
 - [x] Task 8: E2E, accessibility and media (207e3d9, 8b79b92, 8e5b6e0, 31874f6, c7381f6)
-- [ ] Task 9: Branch close-out
-- [ ] Review panel findings resolved
+- [x] Task 9: Branch close-out (104e9a2, 4b00916, 7ab7829, 914c43a)
+- [x] Review panel findings resolved (12 found, 11 confirmed, 1 refuted; 9 fixed: AI 867fcca, 4a0280e, 914c43a; web 7dcc9a2..108ccc3 merged in a225dbe; 2 deferred into S5 Task 5: ai-1, ai-2)
 - Gate:
 
 ## pre-session-05
@@ -78,3 +78,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - S3 review panel (Workflow, 4 reviewers + 4 adversarial verifiers): 17 findings, 10 confirmed (1 important: short-viewport layout collapses the thread; 9 minor: failed-call logs drop billed tokens, Anthropic mid-stream upstream_status=200, BFF Host allowlist vs DNS rebinding, eval budget bound, stale "Estimate ready" after a stopped regenerate, touch keyboard over results, hover contrast, inspector polish, toast tokens), 7 refuted. Fixes run as two parallel waves (AI, web) with a failing test first; selected deferred minors from task reviews are folded in.
 - S3 paused twice on usage limits and resumed; a transient GitHub 500 on push (request E6FD:103FE5:1F85C7:24FFF0:6AC660F0) cleared after 4 retries. S4 was started in a worktree while the push retried.
 - S4 plan re-checked against the real S3 code before Task 1 (cassette re-record in Task 2, `.env.example` changes as owner proposals, caller lists, web workspace replacing `chat.tsx`). Rulings: slice in a worktree; OpenAPI example uses the code-default prompt version; `CACHE_SCHEMA` bump on the layout change.
+- S4 Task 8 ruling: the short-window threshold is 48.25rem (772 px), measured after a run; the 240 px bar covers the estimate pane's content. 1366x768 windows now use the page-scroll layout; e2e checks both sides of the threshold (1280x772, 1280x773).
+- S4 review panel (Workflow, 4 reviewers + 4 adversarial verifiers): 12 findings, 11 confirmed (all minor after verification), 1 refuted (inactive mark contrast). Fixed: published-version pin covers every project type x detail level x output format plus user.j2, and every version must have a pin; streaming highlights mark only complete quotes; Evidence pins grounded quotes below 768 px; segmented controls check on arrow (Radix RadioGroup); equal pane header heights; Context tab keeps contrast and the last good prompt with a polite inline error and Retry; Document table region named by its heading and focusable only when it scrolls. Deferred into S5 Task 5 (v3 is the next prompt version): ai-1 the summary level's "at most eight tasks" vs the 80 h task cap; ai-2 Anthropic system prompt cached as one block.
+- Known flake to watch: tests/unit/test_llm_service_cache.py first-event bound (0.25 s) exceeded once (0.259 s) while a Docker e2e ran in parallel; green on rerun, never in sequential runs.
+- Owner commit on pre-session-04: 4cf1577 `.env.example` (S3+S4 settings).
