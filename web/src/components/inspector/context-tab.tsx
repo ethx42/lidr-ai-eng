@@ -32,10 +32,13 @@ const Updating = () => (
   </span>
 );
 
-// Never "reload the page": the run on screen lives only in memory. Retry asks again for the same choices; focus moves to
-// the tab panel first, because the button goes away while it does.
-const ContextError = ({ title, description, onRetry }: { title: string; description?: string; onRetry: () => void }) => (
-  <Alert className="border-destructive/40 bg-danger-subtle">
+type ContextErrorProps = { title: string; description?: string; busy?: boolean; onRetry: () => void };
+
+// Never "reload the page": the run on screen lives only in memory. Retry asks again for the same choices, and shows it
+// is busy while it does; focus moves to the tab panel first, because the error may go away. No live region: an
+// assertive alert remounted with each failed refetch would interrupt every choice in the form (spec §8).
+const ContextError = ({ title, description, busy = false, onRetry }: ContextErrorProps) => (
+  <Alert role={undefined} aria-busy={busy} className="border-destructive/40 bg-danger-subtle">
     <CircleAlert className="text-destructive" />
     <AlertTitle className="text-foreground">{title}</AlertTitle>
     <AlertDescription className="flex flex-col items-start gap-2 text-foreground">
@@ -45,12 +48,19 @@ const ContextError = ({ title, description, onRetry }: { title: string; descript
         variant="outline"
         size="xs"
         onClick={(event) => {
+          if (busy) return;
           event.currentTarget.closest<HTMLElement>('[role="tabpanel"]')?.focus({ preventScroll: true });
           onRetry();
         }}
       >
-        <RotateCcw />
-        Retry
+        {busy ? (
+          <Updating />
+        ) : (
+          <>
+            <RotateCcw />
+            Retry
+          </>
+        )}
       </Button>
     </AlertDescription>
   </Alert>
@@ -93,7 +103,7 @@ export const ContextTab = ({ context: { context, loading, failed, retry } }: { c
   const referencesId = useId();
   if (context === undefined && !failed) return <ContextSkeleton />;
   const { promptVersion, systemPrompt, references } = readContext(context);
-  if (!systemPrompt) return <ContextError title={UNAVAILABLE} onRetry={retry} />;
+  if (!systemPrompt) return <ContextError title={UNAVAILABLE} busy={loading} onRetry={retry} />;
   return (
     <div aria-busy={loading} className="flex flex-col gap-8">
       {failed && <ContextError title="Could not load the prompt for these choices." description="The prompt below is for your previous choices." onRetry={retry} />}

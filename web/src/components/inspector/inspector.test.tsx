@@ -44,6 +44,8 @@ const valueOf = (label: string) => {
   if (!(value instanceof HTMLElement)) throw new Error(`no value for ${label}`);
   return value;
 };
+// The inline context error, found by its text: it is no live region (spec §8 allows only polite status announcements).
+const contextError = async (text: string) => closest(await screen.findByText(text), '[data-slot="alert"]');
 const closest = (element: Element, selector: string) => {
   const found = element.closest(selector);
   if (!(found instanceof HTMLElement)) throw new Error(`no ${selector} around ${element.textContent}`);
@@ -120,14 +122,15 @@ describe("Inspector, Context tab", () => {
     const answers = [Response.json({ error: { code: "upstream_unavailable" } }, { status: 503 }), Response.json(context)];
     serve(async () => answers.shift() ?? Response.error());
     const user = renderPanel();
-    const error = await screen.findByRole("alert");
-    expect(error).toHaveTextContent("The prompt and references could not be loaded from the AI service.");
+    const error = await contextError("The prompt and references could not be loaded from the AI service.");
+    expect(error).not.toHaveAttribute("role");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("tabpanel", { name: "Context" })).not.toHaveTextContent(/reload/i);
 
     await user.click(within(error).getByRole("button", { name: "Retry" }));
     expect(screen.getByRole("tabpanel", { name: "Context" })).toHaveFocus(); // the button is gone; focus stays in the panel
     expect(await screen.findByRole("region", { name: "System prompt" })).toHaveTextContent("You estimate software projects.");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
   });
 
   it("keeps the last good prompt when the prompt for new choices fails to load, with an inline error and Retry", async () => {
@@ -138,21 +141,34 @@ describe("Inspector, Context tab", () => {
     await screen.findByRole("region", { name: "System prompt" });
 
     rerender(<Panel params={{ ...PARAMS, detail_level: "detailed" }} />);
-    const error = await screen.findByRole("alert");
-    expect(error).toHaveTextContent("Could not load the prompt for these choices.");
+    const error = await contextError("Could not load the prompt for these choices.");
     expect(error).toHaveTextContent("The prompt below is for your previous choices.");
+    // not assertive: with the AI service down, each choice (arrow presses included) would interrupt from the inspector
+    expect(error).not.toHaveAttribute("role");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "System prompt" }).textContent).toBe(context.system_prompt); // the last good one
     expect(screen.getByRole("tabpanel", { name: "Context" })).not.toHaveTextContent(/reload/i);
 
     await user.click(within(error).getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(valueOf("Prompt version")).toHaveTextContent("v5"));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Could not load the prompt for these choices.")).not.toBeInTheDocument();
   });
 
-  it("treats a context without a readable system prompt as unavailable", async () => {
-    serve(async () => Response.json({ ...context, system_prompt: 42 }));
-    renderPanel();
-    expect(await screen.findByText(/could not be loaded from the AI service/)).toBeInTheDocument();
+  it("treats a context without a readable system prompt as unavailable, and shows a retry as busy until it answers", async () => {
+    const unreadable = () => Response.json({ ...context, system_prompt: 42 });
+    let answer!: (res: Response) => void;
+    const answers = [Promise.resolve(unreadable()), new Promise<Response>((resolve) => (answer = resolve))];
+    serve(() => answers.shift() ?? Promise.resolve(Response.error()));
+    const user = renderPanel();
+    const error = await contextError("The prompt and references could not be loaded from the AI service.");
+    expect(error).not.toHaveAttribute("aria-busy", "true");
+
+    await user.click(within(error).getByRole("button", { name: "Retry" }));
+    expect(error).toHaveAttribute("aria-busy", "true");
+    expect(within(error).getByRole("button", { name: "Updating…" })).toBeInTheDocument();
+    await act(async () => answer(unreadable()));
+    expect(error).toHaveAttribute("aria-busy", "false");
+    expect(within(error).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("skips malformed references and shows n/a for an unreadable prompt version", async () => {

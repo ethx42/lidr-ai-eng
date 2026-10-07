@@ -28,15 +28,15 @@ describe("usePromptContext", () => {
     );
     const { result, rerender } = renderHook((params: ContextParams) => usePromptContext(params), { initialProps: PARAMS });
     pending[0].resolve(Response.json(prompt("Medium")));
-    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false }));
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false, failed: false }));
 
     rerender({ ...PARAMS, detail_level: "summary" });
     rerender({ ...PARAMS, detail_level: "detailed" });
     expect(pending[1].signal?.aborted).toBe(true);
-    expect(result.current).toMatchObject({ context: prompt("Medium"), loading: true });
+    expect(result.current).toMatchObject({ context: prompt("Medium"), loading: true, failed: false });
 
     pending[2].resolve(Response.json(prompt("Detailed")));
-    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Detailed"), loading: false }));
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Detailed"), loading: false, failed: false }));
     pending[1].resolve(Response.json(prompt("Summary")));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.current.context).toEqual(prompt("Detailed"));
@@ -72,6 +72,18 @@ describe("usePromptContext", () => {
       "/api/context?project_type=web_saas&detail_level=detailed&output_format=phases_table",
       "/api/context?project_type=web_saas&detail_level=detailed&output_format=phases_table",
     ]);
+  });
+
+  it("shows a retry as loading until it answers, even when the choices already have an answer", async () => {
+    const pending: ((res: Response) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(() => new Promise((resolve) => pending.push(resolve))));
+    const { result } = renderHook(() => usePromptContext(PARAMS));
+    pending[0](Response.json({ system_prompt: 42 })); // answered, but unreadable: the tab offers Retry
+    await waitFor(() => expect(result.current).toMatchObject({ loading: false, failed: false }));
+    act(() => result.current.retry());
+    expect(result.current).toMatchObject({ loading: true, failed: false });
+    pending[1](Response.json(prompt("Medium")));
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false }));
   });
 
   it("shows the request for other choices as loading, not as the last choices' failure", async () => {
