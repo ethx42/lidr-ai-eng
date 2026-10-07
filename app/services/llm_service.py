@@ -1,5 +1,5 @@
-"""The LLM call: cache lookup -> CAG prompt -> provider -> computed totals -> grounding -> markdown
--> cache write."""
+"""The LLM call: rendered prompt -> cache lookup -> provider -> computed totals -> grounding ->
+markdown -> cache write."""
 
 import asyncio
 import logging
@@ -10,7 +10,7 @@ from contextlib import aclosing
 import anyio
 
 from app.observability import llm_logger, log_llm_call, prompt_version_var
-from app.prompts.loader import PromptBundle, build_user_message
+from app.prompts.loader import RenderedPrompt, render
 from app.schemas.estimation import (
     CallMetrics,
     EstimateRequest,
@@ -36,26 +36,35 @@ def _ms_since(start: float) -> int:
     return round((time.perf_counter() - start) * 1000)
 
 
+def routing_key(prompt: RenderedPrompt) -> str:
+    """Provider-side prompt-cache routing key (OpenAI `prompt_cache_key`), not a response cache."""
+    return f"estimator-{prompt.version}"
+
+
 class EstimationService:
     def __init__(
         self,
         *,
         provider: LLMProvider,
-        prompt: PromptBundle,
+        prompt_version: str,
         weekly_capacity_hours: float,
         hourly_rate: float | None,
         cache: ResponseCache,
         cache_scope: str,
     ) -> None:
         self.provider = provider
-        self.prompt = prompt
+        self.prompt_version = prompt_version
         self.weekly_capacity_hours = weekly_capacity_hours
         self.hourly_rate = hourly_rate
         self.cache = cache
         self.cache_scope = cache_scope
-        # Provider-side prompt-cache routing key (OpenAI `prompt_cache_key`), not a response cache.
-        self.prompt_cache_key = f"estimator-{prompt.version}"
         self.primary_attempt = Attempt(provider.name, provider.model)
+
+    def _render(self, request: EstimateRequest) -> RenderedPrompt:
+        prompt = render(request, self.prompt_version)
+        # Before any provider call: the router's llm_fallback records read it.
+        prompt_version_var.set(prompt.version)
+        return prompt
 
     def _log_call(
         self,
@@ -63,6 +72,7 @@ class EstimationService:
         latency_ms: int,
         error: LLMError | None = None,
         *,
+        version: str,
         cache: CacheStatus,
         attempt: Attempt | None = None,
         stream: bool = False,
@@ -80,7 +90,7 @@ class EstimationService:
         log_llm_call(
             provider=attempt.provider,
             model=attempt.model,
-            prompt_version=self.prompt.version,
+            prompt_version=version,
             usage=usage,
             latency_ms=latency_ms,
             outcome=error.code if error else "ok",
@@ -95,12 +105,17 @@ class EstimationService:
         )
 
     def _log_cancelled(
-        self, attempt: Attempt, latency_ms: int, ttft_ms: int | None, cache: CacheStatus
+        self,
+        attempt: Attempt,
+        latency_ms: int,
+        ttft_ms: int | None,
+        cache: CacheStatus,
+        version: str,
     ) -> None:
         log_llm_call(
             provider=attempt.provider,
             model=attempt.model,
-            prompt_version=self.prompt.version,
+            prompt_version=version,
             usage=None,
             latency_ms=latency_ms,
             outcome="cancelled",
@@ -116,11 +131,14 @@ class EstimationService:
         result: LLMResult[EstimationBreakdown],
         request: EstimateRequest,
         *,
+        version: str,
         cache: CacheStatus,
         stream: bool = False,
         ttft_ms: int | None = None,
     ) -> EstimateResponse:
-        self._log_call(result, result.latency_ms, cache=cache, stream=stream, ttft_ms=ttft_ms)
+        self._log_call(
+            result, result.latency_ms, version=version, cache=cache, stream=stream, ttft_ms=ttft_ms
+        )
         breakdown = enrich(
             result.parsed,
             weekly_capacity_hours=self.weekly_capacity_hours,
@@ -138,7 +156,7 @@ class EstimationService:
             grounding=grounding,
             model=result.model,
             provider=result.provider,
-            prompt_version=self.prompt.version,
+            prompt_version=version,
             usage=result.usage,
             metrics=CallMetrics(
                 latency_ms=result.latency_ms,
@@ -149,17 +167,17 @@ class EstimationService:
             ),
         )
 
-    def _cache_key(self, user: str) -> str:
+    def _cache_key(self, prompt: RenderedPrompt) -> str:
         return cache_key(
-            prompt_version=self.prompt.version,
-            system=self.prompt.system_text,
-            user=user,
+            prompt_version=prompt.version,
+            system=prompt.system,
+            user=prompt.user,
             scope=self.cache_scope,
             schema_name=EstimationBreakdown.__name__,
         )
 
     async def _lookup(
-        self, key: str, *, refresh: bool, stream: bool
+        self, key: str, *, version: str, refresh: bool, stream: bool
     ) -> tuple[EstimateResponse | None, CacheStatus]:
         """A hit carries this request's metrics: no LLM call, so no cost, attempts or TTFT."""
         if refresh:
@@ -175,7 +193,7 @@ class EstimationService:
                 "fields": {
                     "provider": cached.provider,
                     "model": cached.model,
-                    "prompt_version": self.prompt.version,
+                    "prompt_version": version,
                     "latency_ms": metrics.latency_ms,
                     "stream": stream,
                     "cache": status,
@@ -192,34 +210,43 @@ class EstimationService:
     async def estimate(
         self, request: EstimateRequest, *, refresh: bool = False
     ) -> EstimateResponse:
-        prompt_version_var.set(self.prompt.version)
-        user = build_user_message(request.transcription, request.output_language)
-        key = self._cache_key(user)
-        cached, lookup = await self._lookup(key, refresh=refresh, stream=False)
+        prompt = self._render(request)
+        key = self._cache_key(prompt)
+        cached, lookup = await self._lookup(
+            key, version=prompt.version, refresh=refresh, stream=False
+        )
         if cached:
             return cached
         start = time.perf_counter()
         try:
             result = await self.provider.generate(
-                system=self.prompt.system_text,
-                user=user,
+                system=prompt.system,
+                user=prompt.user,
                 schema=EstimationBreakdown,
-                cache_key=self.prompt_cache_key,
+                cache_key=routing_key(prompt),
             )
         except LLMError as exc:
-            self._log_call(None, _ms_since(start), exc, cache=lookup, attempt=exc.attempt)
+            self._log_call(
+                None,
+                _ms_since(start),
+                exc,
+                version=prompt.version,
+                cache=lookup,
+                attempt=exc.attempt,
+            )
             raise
-        response = self._respond(result, request, cache=lookup)
+        response = self._respond(result, request, version=prompt.version, cache=lookup)
         await self._store(key, response, lookup)
         return response
 
     async def estimate_stream(
         self, request: EstimateRequest, *, refresh: bool = False
     ) -> AsyncGenerator[StreamItem]:
-        prompt_version_var.set(self.prompt.version)
-        user = build_user_message(request.transcription, request.output_language)
-        key = self._cache_key(user)
-        cached, lookup = await self._lookup(key, refresh=refresh, stream=True)
+        prompt = self._render(request)
+        key = self._cache_key(prompt)
+        cached, lookup = await self._lookup(
+            key, version=prompt.version, refresh=refresh, stream=True
+        )
         if cached:
             yield StatusEvent(phase="cache_hit", provider=cached.provider, model=cached.model)
             yield cached
@@ -234,10 +261,10 @@ class EstimationService:
         try:
             async with aclosing(
                 self.provider.stream(
-                    system=self.prompt.system_text,
-                    user=user,
+                    system=prompt.system,
+                    user=prompt.user,
                     schema=EstimationBreakdown,
-                    cache_key=self.prompt_cache_key,
+                    cache_key=routing_key(prompt),
                 )
             ) as events:
                 async for event in events:
@@ -263,6 +290,7 @@ class EstimationService:
                 None,
                 _ms_since(start),
                 exc,
+                version=prompt.version,
                 cache=lookup,
                 attempt=in_flight,
                 stream=True,
@@ -272,11 +300,13 @@ class EstimationService:
         # Disconnect mid-await (CancelledError) or aclose() while parked at a yield (GeneratorExit).
         # Sync logging only: any await here would be cancelled again.
         except (asyncio.CancelledError, GeneratorExit):
-            self._log_cancelled(in_flight, _ms_since(start), ttft_ms, lookup)
+            self._log_cancelled(in_flight, _ms_since(start), ttft_ms, lookup, prompt.version)
             raise
         # Built (and logged) before the trailing events: the upstream call is complete, so a client
         # leaving now must still leave exactly one llm_call record.
-        response = self._respond(result, request, cache=lookup, stream=True, ttft_ms=ttft_ms)
+        response = self._respond(
+            result, request, version=prompt.version, cache=lookup, stream=True, ttft_ms=ttft_ms
+        )
         if partial := snapshotter.flush(snapshot):
             yield partial
         yield StatusEvent(phase="validating")

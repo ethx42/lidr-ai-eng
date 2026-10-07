@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.prompts.loader import PROMPT_VERSION, load_prompt
+from app.prompts.loader import DEFAULT_VERSION
 from app.schemas.estimation import (
     CallMetrics,
     EstimateRequest,
@@ -105,7 +105,7 @@ def response_fixture() -> EstimateResponse:
         grounding=grounding,
         model="fake-model",
         provider="openai",
-        prompt_version=PROMPT_VERSION,
+        prompt_version=DEFAULT_VERSION,
         usage=Usage(input_tokens=1200, output_tokens=800),
         metrics=CallMetrics(latency_ms=42),
     )
@@ -114,7 +114,7 @@ def response_fixture() -> EstimateResponse:
 def make_service(provider: LLMProvider, cache: ResponseCache | None = None) -> EstimationService:
     return EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=DEFAULT_VERSION,
         weekly_capacity_hours=30,
         hourly_rate=None,
         cache=cache or NullCache(),

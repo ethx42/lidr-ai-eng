@@ -1,6 +1,6 @@
 # Tech stack brief
 
-stack-fingerprint: e40780ccc2fa
+stack-fingerprint: ffa6b0153b8e
 updated: 2026-10-07
 
 How the installed versions are meant to be used today. Read before writing code against them; update when you learn something new (`stack-grounding` skill). Installed versions win over memory and over docs for other versions.
@@ -529,6 +529,17 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 ### Typed request enums (2026-10-07, session 4 Task 1)
 - **`StrEnum` request fields (Pydantic 2.13.5):** JSON (and `model_validate` on a dict) accepts the value strings and stores the member; `model_dump(mode="json")` gives the value, and a member compares equal to its string. The schema is a `$defs` entry `{"enum": [...], "type": "string", "title": ...}`, and the field is `{"$ref": ..., "description": ...}` (sibling keywords next to `$ref`, valid in OpenAPI 3.1). openapi-typescript 7.13.0 emits each as a string-literal union under `components["schemas"]` (`ProjectType: "mobile_app" | ...`), so an object literal kept in a variable needs `as const` (or a type annotation) to fit the request type; one written inline in the call is typed by context.
 - **mypy `init_typed = true`:** the pydantic plugin types `EstimateRequest(...)` with the field types, so code under `app/`/`scripts/` (and `evals/`, which mypy follows from `scripts/record_cassettes.py`) passes members (`ProjectType.WEB_SAAS`); a `"web_saas"` literal is an `arg-type` error (verified). Tests are not type-checked and use `model_validate` through `tests/factories.py` (`request`, `typed_request`, `request_body`).
+
+### Jinja prompts in practice (2026-10-07, session 4 Task 2)
+- **Installed:** `jinja2` 3.1.6 + `markupsafe` 3.0.4 (`uv add "jinja2>=3.1.6"`), a direct runtime dependency because `app/prompts/loader.py` imports it (`tests/test_structure.py`).
+- **Whitespace (verified):** with `trim_blocks` + `lstrip_blocks` and the default `keep_trailing_newline=False`, a `{% include %}` on its own line and a `{% for %}` fragment reproduce M1's f-string layout byte for byte: `estimation/v1` system equals M1 `v4` up to `</reference_estimations>` (M1's pinned hash reproduced from the old loader), then the enum blocks. `keep_trailing_newline=True` would only add one final newline. A template whose last line is `{% endif %}` still ends the output with the newline of the line before it (the user message ends in `\n`).
+- **Values are data (verified):** a transcript holding `{{ 7*7 }}` or `{% include 'x' %}` renders literally; rendering never re-parses context values. The risks are `from_string(user_text)` and a user-controlled template name: versions are checked against the directory listing (`VERSION_PATTERN` + `available_versions()`) before any `get_template`, so `../v1` never reaches the loader.
+- **StrictUndefined in conditionals:** `{% if evidence_reminder %}` raises `UndefinedError` when the key is missing, so the loader always passes every variable (`""` for "off"). Unused context keys are fine (`project_type` reaches `system.j2` but only `user.j2` prints it).
+- **Startup check:** the lifespan (`check_prompts` in `app/main.py`) rejects an unknown `PROMPT_VERSION` and renders every version once with the default enums, so a `TemplateSyntaxError` (raised at load) or an `UndefinedError` in the branches that run fails the boot instead of the first request. Other enum branches are only exercised by the template tests (`tests/prompts/`), which render every `output_format` and `detail_level`. It cannot be a `Settings` validator: `app.schemas` imports `app.config`, so importing the loader there is circular. Test pattern: `monkeypatch.setattr(loader, "_env", loader._env.overlay(loader=FileSystemLoader(tmp_path)))` (an overlay shares the config with its own template cache).
+- **Prefix for provider caching (measured):** the 36 enum combinations give 9 distinct system prompts (~22k chars); any two share at least 98.2% of the shorter one as a prefix. Right after the eval, cassette recording with `prompt_cache_key=estimator-v1` read 6144 of 6697 input tokens from OpenAI's cache.
+- **Hashes:** `prompt_rendered.prompt_sha256` is `sha256(system + "\x00" + user)`, the same function as `cassette_key`, so the log line names the cassette replay would look up. The response cache hashes the pair differently (`canonical_json([system, user])` plus version and scope).
+- **`UV_ENV_FILE` never overrides the environment (uv 0.12.18, verified with a probe file):** a variable already set wins over the file, so `make eval LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini PROMPT_VERSION=v1` pins beat `.env` (make exports command-line variables to the recipe).
+- **ruff S701 (0.16.8, verified):** `# noqa: S701  # <reason>` and `# noqa: S701 - <reason>` both suppress it, and E501 skips an over-long line whose pragma starts within the limit. The repo uses the first form (`tests/test_compose.py`).
 
 ## Web, BFF, Docker and CI (2026-10-06)
 

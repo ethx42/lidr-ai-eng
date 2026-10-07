@@ -1174,7 +1174,7 @@
                     "ttft_ms": 1150
                   },
                   "model": "gpt-4o-mini",
-                  "prompt_version": "v4",
+                  "prompt_version": "v1",
                   "provider": "openai",
                   "usage": {
                     "cache_write_tokens": 0,

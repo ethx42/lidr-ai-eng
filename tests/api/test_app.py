@@ -1,11 +1,14 @@
 import json
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi import APIRouter
+from jinja2 import FileSystemLoader, UndefinedError
 
 from app.main import create_app
 from app.observability import JsonFormatter
+from app.prompts import loader
 from app.services.cache import NullCache
 from tests.api.conftest import ClientFactory
 from tests.factories import request_body
@@ -152,6 +155,25 @@ def test_startup_fails_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
             pass
     finally:
         get_settings.cache_clear()
+
+
+def test_startup_fails_on_an_unknown_prompt_version(make_client: ClientFactory) -> None:
+    unknown = make_client(prompt_version="v999")
+    with pytest.raises(ValueError, match="PROMPT_VERSION='v999'"), unknown:
+        pass
+
+
+def test_a_broken_template_fails_startup_not_the_first_request(
+    make_client: ClientFactory, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    version = tmp_path / "estimation" / "v1"
+    version.mkdir(parents=True)
+    (version / "system.j2").write_text("System.")
+    (version / "user.j2").write_text("{{ transcript }} {{ typo_variable }}")
+    monkeypatch.setattr(loader, "PROMPTS_DIR", tmp_path)
+    monkeypatch.setattr(loader, "_env", loader._env.overlay(loader=FileSystemLoader(tmp_path)))
+    with pytest.raises(UndefinedError, match="typo_variable"), make_client():
+        pass
 
 
 @pytest.mark.parametrize(

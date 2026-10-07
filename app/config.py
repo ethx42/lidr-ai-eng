@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     # Unset: no response cache (NullCache). Secret: the URL can carry a password.
     redis_url: SecretStr | None = None
     cache_ttl_seconds: int = Field(default=86_400, gt=0)
+    # Prompt template version (app/prompts/estimation/<version>/); checked against the templates
+    # at startup, since importing the loader here would be circular.
+    prompt_version: str = "v1"
 
     @property
     def chain(self) -> list[tuple[Provider, str]]:

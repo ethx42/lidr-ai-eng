@@ -65,7 +65,7 @@ async def test_a_hit_reports_this_requests_metrics_and_logs_no_llm_call(
     [call] = records(caplog, "llm_call")
     assert call["cache"] == "miss"
     [hit] = records(caplog, "estimate_cache_hit")
-    assert (hit["cache"], hit["stream"], hit["prompt_version"]) == ("hit", False, "v4")
+    assert (hit["cache"], hit["stream"], hit["prompt_version"]) == ("hit", False, "v1")
     assert hit["latency_ms"] == second.metrics.latency_ms
     assert (second.metrics.ttft_ms, second.metrics.fallback_used) == (None, False)
     assert second.model_dump(exclude={"metrics"}) == first.model_dump(exclude={"metrics"})

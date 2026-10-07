@@ -1,9 +1,13 @@
 import logging
+import shutil
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from jinja2 import FileSystemLoader
 
-from app.prompts.loader import load_prompt
+from app.prompts import loader
+from app.prompts.loader import DEFAULT_VERSION, render_estimation_prompt
 from app.schemas.estimation import Usage
 from app.services.cache import NullCache
 from app.services.errors import (
@@ -22,7 +26,7 @@ from tests.fakes import FakeProvider
 def service(provider: LLMProvider, rate: float | None = None) -> EstimationService:
     return EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=DEFAULT_VERSION,
         weekly_capacity_hours=30,
         hourly_rate=rate,
         cache=NullCache(),
@@ -32,18 +36,17 @@ def service(provider: LLMProvider, rate: float | None = None) -> EstimationServi
 
 async def test_estimate_pipeline() -> None:
     provider = FakeProvider()
-    response = await service(provider, rate=100).estimate(
-        typed_request(TRANSCRIPT, output_language="Spanish")
-    )
+    request = typed_request(TRANSCRIPT, output_language="Spanish")
+    response = await service(provider, rate=100).estimate(request)
     assert response.breakdown.totals.expected_hours == 41.0
     assert response.breakdown.totals.estimated_cost == 4100.0
     assert "**Total estimated: 41.0 hours**" in response.estimation
     assert response.grounding.score == 1.0
-    assert response.prompt_version == "v4"
+    assert response.prompt_version == "v1"
     assert (response.provider, response.model) == ("openai", "fake-model")
     assert response.usage.cached_input_tokens == 1024
     [call] = provider.calls
-    assert call["system"] == load_prompt().system_text
+    assert (call["system"], call["user"]) == render_estimation_prompt(request)
     assert TRANSCRIPT in call["user"]
     assert "<output_language>Spanish</output_language>" in call["user"]
 
@@ -57,22 +60,28 @@ async def test_system_prompt_identical_across_requests() -> None:
     assert "Client: one" not in provider.calls[0]["system"]
 
 
-async def test_cache_key_follows_prompt_version() -> None:
+async def test_cache_key_follows_prompt_version(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     provider = FakeProvider()
     request = typed_request("Client: one")
     await service(provider).estimate(request)
     await service(provider).estimate(request)
-    bumped = replace(load_prompt(), version="v99")
+    # A second version without shipping one: v1's templates, also served as v99, from a scratch dir.
+    for version in ("v1", "v99"):
+        shutil.copytree(loader.PROMPTS_DIR / "estimation" / "v1", tmp_path / "estimation" / version)
+    monkeypatch.setattr(loader, "PROMPTS_DIR", tmp_path)
+    monkeypatch.setattr(loader, "_env", loader._env.overlay(loader=FileSystemLoader(tmp_path)))
     await EstimationService(
         provider=provider,
-        prompt=bumped,
+        prompt_version="v99",
         weekly_capacity_hours=30,
         hourly_rate=None,
         cache=NullCache(),
         cache_scope="",
     ).estimate(request)
     keys = [call["cache_key"] for call in provider.calls]
-    assert keys[0] == keys[1] == f"estimator-{load_prompt().version}"
+    assert keys[0] == keys[1] == "estimator-v1"
     assert keys[2] == "estimator-v99"
 
 
@@ -176,8 +185,8 @@ async def test_a_fallback_logs_one_record_per_attempt(caplog: pytest.LogCaptureF
     with caplog.at_level(logging.INFO):
         await service(FallbackProvider([primary, secondary], Cooldown())).estimate(request())
     assert logged(caplog) == [
-        ("llm_fallback", ("openai", "gpt-4o-mini", 1, False, False, "v4", "upstream_unavailable")),
-        ("llm_call", ("anthropic", "claude-haiku-4-5", 2, True, False, "v4", "ok")),
+        ("llm_fallback", ("openai", "gpt-4o-mini", 1, False, False, "v1", "upstream_unavailable")),
+        ("llm_call", ("anthropic", "claude-haiku-4-5", 2, True, False, "v1", "ok")),
     ]
 
 
@@ -193,7 +202,7 @@ async def test_an_error_after_a_fallback_logs_the_attempt_that_failed(
         await service(router).estimate(request())
     assert logged(caplog)[-1] == (
         "llm_call",
-        ("anthropic", "claude-haiku-4-5", 2, True, False, "v4", "invalid_model_output"),
+        ("anthropic", "claude-haiku-4-5", 2, True, False, "v1", "invalid_model_output"),
     )
 
 
@@ -213,6 +222,6 @@ async def test_a_failing_fallback_after_a_cooldown_skip_reports_attempt_1(
     assert logged(caplog) == [
         (
             "llm_call",
-            ("anthropic", "claude-haiku-4-5", 1, True, False, "v4", "upstream_rate_limited"),
+            ("anthropic", "claude-haiku-4-5", 1, True, False, "v1", "upstream_rate_limited"),
         ),
     ]

@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.config import Settings
-from app.prompts.loader import load_prompt
+from app.prompts.loader import DEFAULT_VERSION
 from app.schemas.estimation import (
     DetailLevel,
     EstimateRequest,
@@ -178,7 +178,7 @@ async def run(outcomes: list[EstimationBreakdown | Exception], names: list[str])
     provider = ScriptedProvider(outcomes)
     service = EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=DEFAULT_VERSION,
         weekly_capacity_hours=30,
         hourly_rate=None,
         cache=NullCache(),
@@ -240,7 +240,7 @@ async def test_explicit_report_path(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert path == target
     report = json.loads(target.read_text())
     assert 0 <= report["score"] <= 1
-    assert report["prompt_version"] == "v4"
+    assert report["prompt_version"] == "v1"
     assert len(report["cases"]) == len(load_golden_cases(GOLDEN_DIR))
     assert fake.closed
     assert "score=" in capsys.readouterr().out
@@ -255,7 +255,7 @@ async def test_default_report_name_includes_version(
     settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
     path = await main([], settings=settings, provider_factory=lambda _: FakeProvider(result=FULL))
     assert path.parent == tmp_path
-    assert path.name.startswith("v4-")
+    assert path.name.startswith("v1-")
 
 
 def test_detect_language() -> None:
@@ -302,7 +302,7 @@ SPANISH_NARRATIVE = FULL.model_copy(
 async def test_unknown_expected_language_fails_check() -> None:
     service = EstimationService(
         provider=ScriptedProvider([FULL]),
-        prompt=load_prompt(),
+        prompt_version=DEFAULT_VERSION,
         weekly_capacity_hours=30,
         hourly_rate=None,
         cache=NullCache(),
@@ -340,7 +340,7 @@ async def test_explicit_output_language_is_sent_and_checked() -> None:
     provider = ScriptedProvider([SPANISH_NARRATIVE])
     service = EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=DEFAULT_VERSION,
         weekly_capacity_hours=30,
         hourly_rate=None,
         cache=NullCache(),
@@ -394,6 +394,39 @@ async def test_eval_runs_the_primary_provider_only(
 
     await main(["--report", str(tmp_path / "r.json")], provider_factory=factory)
     assert [s.chain for s in seen] == [[("openai", "gpt-4o-mini")]]
+
+
+async def test_the_prompt_version_flag_wins_over_the_setting(tmp_path: Path) -> None:
+    settings = Settings(
+        _env_file=None, openai_api_key="test-key", llm_fallbacks="", prompt_version="v999"
+    )
+    path = await main(
+        ["--prompt-version", "v1", "--report", str(tmp_path / "r.json")],
+        settings=settings,
+        provider_factory=lambda _: FakeProvider(result=FULL),
+    )
+    assert json.loads(path.read_text())["prompt_version"] == "v1"
+
+
+@pytest.mark.parametrize(
+    "flag,setting", [(["--prompt-version", "v999"], "v1"), ([], "v999")], ids=["flag", "setting"]
+)
+async def test_eval_refuses_an_unknown_prompt_version_before_spending(
+    tmp_path: Path, flag: list[str], setting: str
+) -> None:
+    ledger = tmp_path / "spend.jsonl"
+    settings = Settings(
+        _env_file=None, openai_api_key="test-key", llm_fallbacks="", prompt_version=setting
+    )
+    fake = FakeProvider(result=FULL)
+    with pytest.raises(SystemExit):
+        await main(
+            [*flag, "--report", str(tmp_path / "r.json")],
+            settings=settings,
+            provider_factory=lambda _: fake,
+            ledger=ledger,
+        )
+    assert fake.calls == [] and not ledger.exists()
 
 
 def ledger_entries(ledger: Path) -> list[dict[str, Any]]:

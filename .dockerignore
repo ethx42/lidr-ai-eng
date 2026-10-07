@@ -1,6 +1,6 @@
 # Build context of the AI service image (Dockerfile); compose watch applies the same rules.
-# The image needs only pyproject.toml, uv.lock and app/. Never exclude *.md: app/prompts/**/system.md
-# is read at runtime.
+# The image needs only pyproject.toml, uv.lock and app/. Never exclude *.j2: the prompt templates
+# (app/prompts/**/*.j2) are read at runtime.
 
 # Secrets never enter the context (root and nested)
 **/.env*

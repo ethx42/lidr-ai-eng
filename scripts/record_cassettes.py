@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.config import Settings
 from app.observability import configure_logging
-from app.prompts.loader import PromptBundle, build_user_message, load_prompt
+from app.prompts.loader import render
 from app.schemas.estimation import (
     DetailLevel,
     EstimateRequest,
@@ -40,6 +40,9 @@ SAMPLES = tuple(
     )
 )
 MODEL = "gpt-4o-mini"
+# The settings default, never .env's PROMPT_VERSION: the e2e stack that replays these cassettes gets
+# no .env, so this is the version it serves.
+DEFAULT_PROMPT_VERSION: str = Settings.model_fields["prompt_version"].default
 ESTIMATE_USD = 0.01
 
 
@@ -63,10 +66,10 @@ def sample_request(sample: Path) -> EstimateRequest:
     )
 
 
-def prompt_pair(sample: Path, prompt: PromptBundle) -> tuple[str, str]:
+def prompt_pair(sample: Path, version: str) -> tuple[str, str]:
     """The service's system and user strings for the sample's request."""
-    request = sample_request(sample)
-    return prompt.system_text, build_user_message(request.transcription, request.output_language)
+    prompt = render(sample_request(sample), version)
+    return prompt.system, prompt.user
 
 
 async def record(provider: LLMProvider, system: str, user: str, cache_key: str) -> Cassette:
@@ -105,14 +108,15 @@ async def main() -> None:
     settings = Settings(llm_provider="openai", llm_model=MODEL, llm_fallbacks="")
     ensure_budget(guard_usd(settings.llm_max_output_tokens))
     bound = call_bound_usd(MODEL, settings.llm_max_output_tokens)
-    prompt = load_prompt()
     provider = build_one(settings, "openai", MODEL, settings.llm_max_retries)
     try:
         for sample in SAMPLES:
-            system, user = prompt_pair(sample, prompt)
+            system, user = prompt_pair(sample, DEFAULT_PROMPT_VERSION)
             spent = bound  # until the call reports its usage
             try:
-                cassette = await record(provider, system, user, f"estimator-{prompt.version}")
+                cassette = await record(
+                    provider, system, user, f"estimator-{DEFAULT_PROMPT_VERSION}"
+                )
                 cost = cost_usd(cassette.model, cassette.usage)
                 spent = bound if cost is None else cost
             finally:

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import Settings
-from app.prompts.loader import load_prompt
+from app.prompts.loader import available_versions
 from app.schemas.estimation import (
     DetailLevel,
     EnrichedBreakdown,
@@ -196,7 +196,7 @@ async def run_cases(
     results = [await evaluate_case(service, case) for case in cases]
     checks = [ok for r in results for ok in r["checks"].values()]
     return {
-        "prompt_version": service.prompt.version,
+        "prompt_version": service.prompt_version,
         "provider": provider,
         "model": model,
         "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -247,10 +247,16 @@ async def main(
 ) -> Path:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, help="write the JSON report to exactly this path")
+    parser.add_argument(
+        "--prompt-version", help="prompt version to score (default: PROMPT_VERSION)"
+    )
     args = parser.parse_args(argv)
 
     # Primary only: a fallback would mix two models' answers into one score.
     resolved = settings or Settings(llm_fallbacks="")
+    version, versions = args.prompt_version or resolved.prompt_version, available_versions()
+    if version not in versions:
+        parser.error(f"unknown prompt version {version!r}; available: {', '.join(versions)}")
     cases = load_golden_cases()
     bound = 0.0
     if ledger:
@@ -261,7 +267,7 @@ async def main(
     # Never cached: every case must reach the model being scored.
     service = EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=version,
         weekly_capacity_hours=resolved.weekly_capacity_hours,
         hourly_rate=resolved.blended_hourly_rate,
         cache=NullCache(),

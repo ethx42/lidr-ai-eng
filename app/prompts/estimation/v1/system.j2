@@ -32,5 +32,25 @@ Work through the schema fields in order:
 
 <reference_estimations>
 These past estimations show the expected depth, granularity, and calibration. Each has the meeting summary it was based on and the estimation in the exact output format.
-{reference_estimations}
+{% include "estimation/v1/examples.j2" %}
 </reference_estimations>
+
+<output_format>
+{% if output_format == "phases_table" %}
+The client reads this estimate as a phases_table: a rollup of hours by delivery phase. Assign every task to the phase that truly owns the work and keep each rationale to one sentence.
+{% elif output_format == "line_items" %}
+The client reads this estimate as line items: every task appears as its own row. Name each task so it reads well on its own and keep each rationale to one sentence.
+{% elif output_format == "narrative" %}
+The client reads this estimate as prose, one paragraph per delivery phase. Write each rationale as two or three complete sentences that explain the scope and what drives the size.
+{% endif %}
+</output_format>
+
+<detail_level>
+{% if detail_level == "summary" %}
+Keep the breakdown coarse: at most eight tasks, ideally one per phase that applies, and only the three most important risks.
+{% elif detail_level == "medium" %}
+Use a balanced breakdown, typically between eight and twenty tasks.
+{% elif detail_level == "detailed" %}
+List assumptions per phase: every phase that has tasks gets at least one assumption (A*) that its tasks rely on. Keep tasks at or below 40 likely hours and call out at least three risks, each with a mitigation.
+{% endif %}
+</detail_level>

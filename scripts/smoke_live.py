@@ -12,7 +12,6 @@ from openai import AsyncOpenAI
 
 from app.config import Provider, Settings
 from app.observability import configure_logging
-from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateResponse
 from app.services.cache import NullCache, cache_scope
 from app.services.errors import LLMError
@@ -130,7 +129,7 @@ async def run(check: Check) -> Row:
     provider = check.build(settings)
     service = EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=settings.prompt_version,
         weekly_capacity_hours=settings.weekly_capacity_hours,
         hourly_rate=settings.blended_hourly_rate,
         cache=NullCache(),  # every check must reach a provider

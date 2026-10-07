@@ -16,8 +16,9 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app import __version__
 from app.config import Settings, get_settings
 from app.observability import configure_logging, request_id_var
-from app.prompts.loader import load_prompt
+from app.prompts.loader import DEFAULT_PARAMS, available_versions, render_estimation_prompt
 from app.routers import estimations
+from app.schemas.estimation import EstimateRequest
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.cache import ResponseCache, build_cache, cache_scope
 from app.services.errors import LLMError
@@ -44,6 +45,22 @@ STREAM_EVENT_SCHEMAS: dict[str, Any] = jsonable_encoder(  # JSON Schema objects 
     )[1]["$defs"],
     exclude_none=True,
 )
+
+
+def check_prompts(version: str) -> None:
+    """Fail at startup, not on the first request: an unknown PROMPT_VERSION, or any version whose
+    templates do not render (StrictUndefined, syntax)."""
+    versions = available_versions()
+    if version not in versions:
+        raise ValueError(f"PROMPT_VERSION={version!r} is unknown; available: {', '.join(versions)}")
+    placeholder = EstimateRequest(
+        transcription="Startup check.",
+        project_type=DEFAULT_PARAMS.project_type,
+        detail_level=DEFAULT_PARAMS.detail_level,
+        output_format=DEFAULT_PARAMS.output_format,
+    )
+    for each in versions:
+        render_estimation_prompt(placeholder, each)
 
 
 def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -122,12 +139,13 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         resolved = settings or get_settings()
         configure_logging(resolved.log_level)
+        check_prompts(resolved.prompt_version)
         provider = provider_factory(resolved)
         cache = cache_factory(resolved)
         app.state.settings = resolved
         app.state.service = EstimationService(
             provider=provider,
-            prompt=load_prompt(),
+            prompt_version=resolved.prompt_version,
             weekly_capacity_hours=resolved.weekly_capacity_hours,
             hourly_rate=resolved.blended_hourly_rate,
             cache=cache,

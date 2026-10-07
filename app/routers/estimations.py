@@ -11,7 +11,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from app.config import Settings
 from app.context.examples import DENTAL_CLINIC, REFERENCE_ESTIMATIONS
 from app.observability import request_id_var
-from app.prompts.loader import PROMPT_VERSION
+from app.prompts.loader import DEFAULT_PARAMS, DEFAULT_VERSION, render_system
 from app.schemas.context import ContextResponse, ReferenceView
 from app.schemas.estimation import CallMetrics, EstimateRequest, EstimateResponse, Usage
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
@@ -102,7 +102,7 @@ def example_response() -> dict[str, Any]:
         grounding=grounding,
         model="gpt-4o-mini",
         provider="openai",
-        prompt_version=PROMPT_VERSION,
+        prompt_version=DEFAULT_VERSION,
         usage=usage,
         metrics=CallMetrics(latency_ms=9800, ttft_ms=1150, cost_usd=cost_usd("gpt-4o-mini", usage)),
     ).model_dump(mode="json")
@@ -192,8 +192,8 @@ async def estimate_stream(items: ServiceStream) -> AsyncIterator[ServerSentEvent
 @router.get("/context", summary="Prompt, reference estimations and limits used for estimates")
 async def context(service: ServiceDep, settings: SettingsDep) -> ContextResponse:
     return ContextResponse(
-        prompt_version=service.prompt.version,
-        system_prompt=service.prompt.system_text,
+        prompt_version=service.prompt_version,
+        system_prompt=render_system(DEFAULT_PARAMS, service.prompt_version),
         references=[
             ReferenceView(
                 size=ref.size, meeting_summary=ref.meeting_summary, estimation=ref.estimation

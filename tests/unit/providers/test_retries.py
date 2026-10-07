@@ -12,7 +12,7 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
 from app.observability import CLIENT_LOGGERS, configure_logging
-from app.prompts.loader import load_prompt
+from app.prompts.loader import DEFAULT_VERSION
 from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, UpstreamRateLimited
@@ -330,7 +330,7 @@ async def test_failed_call_logs_cause_without_upstream_detail(
     provider = build(lambda _: httpx.Response(status, json=body))
     service = EstimationService(
         provider=provider,
-        prompt=load_prompt(),
+        prompt_version=DEFAULT_VERSION,
         weekly_capacity_hours=30,
         hourly_rate=None,
         cache=NullCache(),

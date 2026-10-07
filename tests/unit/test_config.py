@@ -21,6 +21,7 @@ ENV_VARS = [
     "LLM_COOLDOWN_FAILURES",
     "LLM_COOLDOWN_SECONDS",
     "ALLOWED_HOSTS",
+    "PROMPT_VERSION",
 ]
 
 
@@ -50,6 +51,7 @@ def test_defaults_with_only_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.max_transcription_chars == 50_000
     assert settings.blended_hourly_rate is None
     assert settings.weekly_capacity_hours == 30
+    assert settings.prompt_version == "v1"
 
 
 def test_replay_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:

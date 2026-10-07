@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from app.prompts.loader import load_prompt
+from app.config import Settings
+from app.prompts.loader import DEFAULT_VERSION
 from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import LLMResult, TextDelta
@@ -34,13 +35,13 @@ async def test_recorder_sends_the_prompt_pair_the_service_sends(sample: Path) ->
     request = typed_request(sample_text(sample))
     [_ async for _ in service.estimate_stream(request)]
     [call] = fake.calls
-    assert prompt_pair(sample, load_prompt()) == (call["system"], call["user"])
+    assert prompt_pair(sample, service.prompt_version) == (call["system"], call["user"])
 
 
 async def test_a_recorded_cassette_is_what_replay_serves_for_that_prompt_pair(
     tmp_path: Path,
 ) -> None:
-    system, user = prompt_pair(SAMPLES[0], load_prompt())
+    system, user = prompt_pair(SAMPLES[0], DEFAULT_VERSION)
     cassette = await record(FakeProvider(model="gpt-4o-mini"), system, user, "estimator-test")
     path = save(cassette, tmp_path)
 
@@ -70,7 +71,8 @@ async def test_a_recorded_cassette_is_what_replay_serves_for_that_prompt_pair(
 
 @pytest.mark.parametrize("sample", SAMPLES, ids=lambda p: p.stem)
 def test_every_sample_has_a_current_cassette(sample: Path) -> None:
-    key = cassette_key(*prompt_pair(sample, load_prompt()))
+    # The e2e stack replays with no .env, so it serves the settings default version.
+    key = cassette_key(*prompt_pair(sample, Settings.model_fields["prompt_version"].default))
     path = CASSETTES / f"{key}.json"
     # A prompt or sample change moves the key; replay would then quietly synthesise a stream.
     assert path.is_file(), f"stale cassettes: no {path.name}; run `make record-cassettes`"

@@ -125,7 +125,7 @@ async def test_both_paths_send_the_same_prompt_cache_key(fake: FakeProvider) -> 
     service = make_service(fake)
     await service.estimate(request())
     [_ async for _ in service.estimate_stream(request())]
-    assert [c["cache_key"] for c in fake.calls] == [service.prompt_cache_key] * 2
+    assert [c["cache_key"] for c in fake.calls] == ["estimator-v1"] * 2
 
 
 def llm_calls(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
@@ -192,7 +192,7 @@ async def test_metrics_after_a_fallback_are_end_to_end(caplog: pytest.LogCapture
     assert (failed["stream"], failed["fallback"], failed["prompt_version"]) == (
         True,
         False,
-        service.prompt.version,
+        service.prompt_version,
     )
 
 
