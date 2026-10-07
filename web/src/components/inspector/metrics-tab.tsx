@@ -51,10 +51,11 @@ export const MetricsTab = ({ call }: { call?: Call }) => {
         <Row label="Cache hit">{show(metrics.cacheHit, (hit) => (hit ? "Yes" : "No"))}</Row>
       </Rows>
       <Rows>
-        <Row label="Request ID">
+        <Row label="Request ID" stacked>
           {requestId ? (
-            <span className="flex items-center justify-end gap-2">
-              <code className="min-w-0 font-mono text-xs break-all">{requestId}</code>
+            // A UUID fills a line of the panel; Copy wraps under it when both do not fit.
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <code className="min-w-0 font-mono text-xs wrap-anywhere">{requestId}</code>
               <Button type="button" variant="outline" size="xs" aria-label="Copy request ID" onClick={() => void copyText(requestId, "Request ID copied")}>
                 <Copy />
                 Copy

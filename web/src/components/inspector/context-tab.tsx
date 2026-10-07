@@ -36,7 +36,7 @@ const Reference = ({ reference: { size, meetingSummary, projectName, estimation 
         {projectName && <h4 className="min-w-0 truncate text-sm font-medium">{projectName}</h4>}
       </div>
     )}
-    <p className="text-sm whitespace-pre-line">{meetingSummary}</p>
+    <p className="text-xs whitespace-pre-line text-muted-foreground">{meetingSummary}</p>
     {estimation && (
       <details className="group">
         <summary className="flex min-h-6 w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">

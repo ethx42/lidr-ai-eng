@@ -12,11 +12,18 @@ const parseEntry = (entry: string) => {
   return at < 0 ? { provider: entry, model: "" } : { provider: entry.slice(0, at), model: entry.slice(at + 1) };
 };
 
+// The model is omitted when it only repeats the provider (replay reports "replay:replay").
 const Model = ({ entry }: { entry: string }) => {
   const { provider, model } = parseEntry(entry);
   return (
     <span className="truncate">
-      {formatProvider(provider)} <span className="font-mono text-foreground">{model}</span>
+      {formatProvider(provider)}
+      {model && model !== provider && (
+        <>
+          {" "}
+          <span className="font-mono text-foreground">{model}</span>
+        </>
+      )}
     </span>
   );
 };

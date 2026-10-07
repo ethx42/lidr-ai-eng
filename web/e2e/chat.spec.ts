@@ -55,6 +55,8 @@ const projectName = (page: Page) => estimate(page).getByRole("heading", { level:
 const totals = (page: Page) => estimate(page).locator("header dl");
 const stopped = (page: Page) => page.getByRole("status").filter({ hasText: "Stopped" });
 const valueOf = (scope: Locator, label: string) => scope.locator(`dt:text-is("${label}") + dd`);
+// An inline element has one client rect per line it spans.
+const expectOneLine = async (locator: Locator, what: string) => expect(await locator.evaluate((element) => element.getClientRects().length), `${what} on one line`).toBe(1);
 
 // The sample cards render once the thread has hydrated from sessionStorage.
 const pickSample = async (page: Page) => {
@@ -128,6 +130,7 @@ test.describe("chat", () => {
     await expect(valueOf(call, "Provider")).toHaveText("Replay");
     await expect(valueOf(call, "Model")).toHaveText("replay");
     await expect(valueOf(call, "Request ID").locator("code")).toHaveText(requestId);
+    await expectOneLine(valueOf(call, "Request ID").locator("code"), "the request ID");
     await shot(page, "result-inspector");
 
     await estimate(page).getByRole("button", { name: /^Evidence for / }).first().hover();
@@ -268,6 +271,7 @@ test.describe("375 px wide", () => {
     await settled(sheet);
     const call = await openLastCall(sheet);
     await expect(valueOf(call, "Provider")).toHaveText("Replay");
+    await expectOneLine(valueOf(call, "Request ID").locator("code"), "the request ID");
     await expectNoHorizontalScroll(page);
     await expectAccessible(page, "inspector sheet");
 
