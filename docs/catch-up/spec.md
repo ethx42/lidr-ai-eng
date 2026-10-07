@@ -139,7 +139,7 @@ Exactly one terminal event per stream. Keep-alive comments every 15 s. Headers d
 
 ### 4.5 Exact-match cache
 
-- Key: SHA-256 over canonical JSON of `{cache_schema: 1, prompt_version, prompt_sha256 (rendered system + user), chain: ["provider:model", …], params (temperature, effort, max output tokens), output schema name}`; stored as `estimate:{hex}`.
+- Key: SHA-256 over canonical JSON of `{cache_schema: 1, prompt_version, prompt_sha256 (rendered system + user), chain: ["provider:model", …], params (temperature, effort, max output tokens, blended hourly rate, weekly capacity hours — both are baked into the cached totals), output schema name}`; stored as `estimate:{hex}`.
 - Value: the `EstimateResponse` JSON. On a hit, `metrics.cache_hit = true`, `cost_usd = 0`, `attempts = 0`.
 - TTL `CACHE_TTL_SECONDS` (86400). `REDIS_URL` unset → `NullCache`.
 - Any Redis error logs `cache_error` and is treated as a miss (get) or ignored (set). Only successful results are stored.

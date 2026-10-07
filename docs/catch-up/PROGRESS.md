@@ -16,12 +16,12 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - [x] Task 7: BFF route handlers (9ad502a)
 - [x] Task 8: useEstimateStream hook (e918f9b)
 - [x] Task 9: Estimate view (progressive rendering) (de272e3)
-- [ ] Task 10: Chat page
-- [ ] Task 11: Inspector panel
+- [x] Task 10: Chat page (504dd10)
+- [x] Task 11: Inspector panel (f2cd253)
 - [x] Task 12: OpenAI streaming (95f9454)
 - [x] Task 13: Anthropic streaming and mid-stream error mapping (780db0c)
 - [x] Task 14: Fallback router with cooldown (af9a0a2)
-- [ ] Task 15: Exact-match response cache
+- [x] Task 15: Exact-match response cache (e23222f)
 - [ ] Task 16: Cassette recorder and live smoke test
 - [ ] Task 17: Docker and Compose
 - [ ] Task 18: End-to-end tests, accessibility and media
