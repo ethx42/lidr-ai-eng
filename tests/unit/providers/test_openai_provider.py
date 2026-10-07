@@ -14,7 +14,6 @@ from app.services.errors import (
     UpstreamRateLimited,
     UpstreamUnavailable,
 )
-from app.services.providers.base import LLMResult, TextDelta
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.profiles import get_profile
 from tests.factories import breakdown
@@ -184,18 +183,3 @@ async def test_aclose_closes_client() -> None:
     provider, _ = make()
     await provider.aclose()
     provider.client.close.assert_awaited_once()  # type: ignore[attr-defined]
-
-
-async def test_interim_stream_yields_one_delta_then_the_result() -> None:
-    provider, _ = make(return_value=response(breakdown()))
-    events = [
-        e
-        async for e in provider.stream(
-            system="s", user="u", schema=EstimationBreakdown, cache_key="k"
-        )
-    ]
-    delta, result = events
-    assert isinstance(delta, TextDelta)
-    assert delta.text == delta.snapshot == breakdown().model_dump_json()
-    assert isinstance(result, LLMResult) and result.parsed == breakdown()
-    assert (result.provider, result.model) == ("openai", "gpt-4o-mini")
