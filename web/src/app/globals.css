@@ -19,8 +19,14 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
-/* Short viewports (landscape phones, 400% zoom): the fixed header and form would leave the result no height. */
-@custom-variant short (@media (max-height: 30rem));
+/* Short viewports (landscape phones, 400% zoom), and side by side up to 720 px tall (a laptop window, where the form
+   takes about 460 px): the fixed header and form would leave the result no usable height. Keep SHORT (split-view.tsx)
+   equal. Block form: the parenthesised shorthand splits on commas, as a selector list, and drops the second query. */
+@custom-variant short {
+  @media (max-height: 30rem), (min-width: 48rem) and (max-height: 45rem) {
+    @slot;
+  }
+}
 
 @theme inline {
   --color-background: var(--background);

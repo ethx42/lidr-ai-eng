@@ -13,7 +13,7 @@ type Props = { transcript: Pane; estimate: Pane; tab: SplitTab; onTabChange: (ta
 // Tailwind's `md`: from here the panes sit side by side.
 export const WIDE = "(min-width: 48rem)";
 // The `short` variant (globals.css): the page scrolls as a whole and the split sits a viewport tall below the form.
-export const SHORT = "(max-height: 30rem)";
+export const SHORT = "(max-height: 30rem), (min-width: 48rem) and (max-height: 45rem)";
 
 // Both panes stay mounted in either layout, so a stream keeps its Stop, Esc and announcements behind the other tab.
 // Side by side there are no tabs: a pane is a group named by its heading, not a tab stop. Below 768 px it is a tab

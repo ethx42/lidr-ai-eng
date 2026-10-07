@@ -156,7 +156,8 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   };
 
   return (
-    // Below 480 px tall (`short`) nothing is fixed: the page scrolls as a whole and the split is a viewport tall.
+    // Below 480 px tall, or 720 px side by side (`short`), nothing is fixed: the page scrolls as a whole and the split is
+    // a viewport tall.
     // Below 768 px wide the form and the tabs scroll together in `main`.
     <div className="flex h-dvh min-h-0 flex-col short:h-auto short:min-h-dvh">
       <AppHeader actions={<InspectorSheet call={lastCall} context={promptContext} panelRef={inspectorRef} />} />

@@ -391,8 +391,9 @@ describe("Workspace", () => {
     expect(await screen.findByText("0 / 1,200")).toBeInTheDocument();
   });
 
-  // ui-1 (session 3): a fixed header and form must never leave the result no height. Below 480 px tall nothing is fixed
-  // and the page scrolls as a whole, with the split a full viewport tall; below 768 px wide the workspace scrolls in one.
+  // ui-1 (session 3): a fixed header and form must never leave the result no height. Below 480 px tall (720 px side by
+  // side) nothing is fixed and the page scrolls as a whole, with the split a full viewport tall; below 768 px wide the
+  // workspace scrolls in one.
   it("keeps the result usable on short and narrow viewports", async () => {
     const { user, input } = setup();
     const main = screen.getByRole("main");
