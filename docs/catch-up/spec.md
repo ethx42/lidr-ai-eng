@@ -211,7 +211,7 @@ Brief deliverable branch name: `pre-session-04`. Learning objectives to defend: 
 ### 6.4 Prompt `v2` and the eval gate
 
 - `v1` (faithful port) must score ≥ `evals/baseline.json` − 0.02 on `gpt-4o-mini`; the baseline is then re-recorded (after the `covers_frontend` check is added) from the winning version.
-- `v2` is a deliberate change that fixes the M1 carry-over "estimates skip frontend tasks for client-facing surfaces": an explicit coverage rule, plus a new eval check (frontend task present when the transcript mentions a client-facing surface). The v1 vs v2 comparison goes in the README eval table and the takeaways.
+- `v2` is a deliberate change that fixes the M1 carry-over "estimates skip frontend tasks for client-facing surfaces": an explicit coverage rule, plus a new eval check, `covers_frontend`: at least one `frontend` task in every golden case whose front matter declares `expects_frontend: true`. The v1 vs v2 comparison goes in the README eval table and the takeaways.
 
 ### 6.5 Web
 

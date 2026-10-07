@@ -6,7 +6,7 @@ Project for the LIDR AI Engineering course, grown one branch per course brief.
 
 **Session 3 (branch `pre-session-03`): conversational interface with streaming.** A Next.js web app (UI plus a backend-for-frontend) where you paste a transcript into a chat and watch the estimate build live. The AI service gained an SSE endpoint that streams validated partial snapshots of the structured estimate, a fallback router (OpenAI, then Anthropic) with cooldown, a Redis exact-match response cache that fails open, per-call cost and latency metrics, and a `replay` provider that serves recorded streams with no API key and no spend. What the branch taught, with a quiz: [`docs/takeaways/session-03.md`](docs/takeaways/session-03.md).
 
-**Session 4 (branch `pre-session-04`): from chat to product interface.** The chat became a typed form (transcript plus project type, detail level and output format), and the prompt moved into versioned Jinja2 templates under `app/prompts/estimation/<version>/`, with template tests that run offline in milliseconds. Requests can pick a prompt version with `?prompt_version=`. Prompt `v2` adds an explicit frontend-coverage rule, measured by a new eval check, and is the default. Results open in a split view that links each requirement to its quote in the transcript. What the branch taught, with a quiz: [`docs/takeaways/session-04.md`](docs/takeaways/session-04.md).
+**Session 4 (branch `pre-session-04`): from chat to product interface.** The chat became a typed form (transcript plus project type, detail level and output format), and the prompt moved into versioned Jinja2 templates under `app/prompts/estimation/<version>/`, with template tests that run offline in milliseconds. Requests can pick a prompt version with `?prompt_version=`. Prompt `v2` adds an explicit frontend-coverage rule, measured by a new eval check, and is the default. Results open in a split view that links each requirement to its quote in the transcript, with a Structured / Document toggle for the server's markdown in the chosen output format. What the branch taught, with a quiz: [`docs/takeaways/session-04.md`](docs/takeaways/session-04.md).
 
 ## Architecture
 
@@ -134,7 +134,7 @@ Live tooling (read from the process environment, not by the app):
 
 - `llm_call`: one per LLM call that served or failed last, with provider, model, prompt version, token counts, `latency_ms`, `ttft_ms` (streaming), `cost_usd`, `stream`, `attempt`, `fallback`, `cache` (`hit|miss|error|bypass`) and `outcome` (`ok`, an error code, or `cancelled` when the client left). A failed call also carries `cause` (the stop condition, e.g. `stop_reason:max_tokens`, or the upstream error class) and `upstream_status`, never the provider's message.
 - `llm_fallback` (warning): one per failed attempt that the router moved past, with that attempt's own latency and cause.
-- `prompt_rendered`: one per rendered prompt, with `prompt_version` and `prompt_sha256` (of the system prompt and user message), never their content.
+- `prompt_rendered`: one per prompt rendered for a provider call or a cache lookup, with `prompt_version` and `prompt_sha256` (of the system prompt and user message), never their content. The context endpoint and the startup check render without logging.
 - `estimate_cache_hit`: a request served from the cache (no `llm_call`).
 - `cache_error` (warning): a Redis failure, with the operation and exception class only.
 
@@ -230,7 +230,7 @@ make gate BRANCH=pre-session-04   # branch close gate: check, compose e2e, contr
 
 - `make check` runs ruff, mypy (strict), pytest, OpenSpec validation and `web-check` (eslint, `next typegen` + `tsc`, Vitest, and a check that `schema.d.ts` matches `contracts/openapi.json`). `tests/test_openapi_snapshot.py` fails when the committed contract is stale; regenerate with `make openapi`, then `make web-types`.
 - Tests are offline: a fake provider, SDK clients on a mock transport serving recorded SSE bodies (`tests/fixtures/sse/`), fakeredis, and uvicorn in-process for disconnect tests. They never call a real LLM.
-- `make e2e` runs the 10 Playwright tests in `web/e2e/estimate.spec.ts`: the typed form flow (sample, choices, streaming, tasks by phase, evidence highlights by hover and keyboard, Copy as markdown, the inspector's Last call), the Document view per output format, Stop and Regenerate, keyboard use, the Transcript | Estimate tabs and the inspector sheet at 375 px, and the 1280×600, 640×360 and 320×256 viewports, with axe checks (WCAG 2.2 AA tags) that fail on any serious or critical violation in light and dark themes, empty, sample picked, streaming and done. Plain `make e2e` never writes tracked files.
+- `make e2e` runs the 12 Playwright tests in `web/e2e/estimate.spec.ts`: the typed form flow (sample, choices, streaming, tasks by phase, evidence highlights by hover and keyboard, Copy as markdown, the inspector's Last call), the Document view per output format, Stop and Regenerate, keyboard use, the Transcript | Estimate tabs and the inspector sheet at 375 px, the 1280×600, 640×360 and 320×256 viewports, and both sides of the short-window threshold (at 1280×772 the page scrolls, at 1280×773 the split stays fixed below the form). Axe checks (WCAG 2.2 AA tags) fail on any serious or critical violation in light and dark themes, empty, sample picked, streaming and done. Plain `make e2e` never writes tracked files.
 - `make gate` prints `GATE PASS <branch> <sha>` only when every stage passes.
 - CI (`.github/workflows/ci.yml`) has two jobs on every push and pull request: `check` installs from both lockfiles, runs `make check` and validates the Compose files (`docker compose config -q`); `images` builds both images with `docker buildx bake` and the GitHub Actions cache. End-to-end tests run in `make gate`, not in CI. The last green CI run recorded here is session 3's: [37620980069](https://github.com/ethx42/lidr-ai-eng/actions/runs/37620980069), on commit `e66aade` (`pre-session-03`).
 
@@ -269,7 +269,7 @@ The golden set (`evals/golden/`) has five transcriptions: the course meeting, a 
 
 OpenAI requests carry `prompt_cache_key=estimator-<prompt version>` (blocking and streaming alike) so calls sharing the system prompt are routed to the same cache; `usage.cache_write_tokens` reports cache writes where the provider exposes them (Anthropic always, OpenAI gpt-4o-mini reports 0).
 
-**v1 vs v2 (session 4).** Each version ran twice and the means were compared, since one failed check moves a single run by 0.019. The new check is what separates them: before it existed, v1 scored 47/47. v2 raises frontend coverage from 3/10 to 5/10 with no regression elsewhere. Per case over two runs, v1 then v2: course meeting 1 and 1, clinic portal 0 and 1, vague marketplace 0 and 0, Spanish injection 2 and 2, explicit language 0 and 1. That meets the promotion rule (mean score ≥ v1's − 0.02 and a `covers_frontend` pass rate ≥ v1's), so `PROMPT_VERSION` defaults to `v2`. Half the cases still miss a frontend task on gpt-4o-mini, and the vague marketplace never gets one, so the improvement is directional, within about one case of run-to-run noise, and does not close the gap. The baseline is v2's higher-scoring run, the stricter of the two; run 1 passes it (0.9423 ≥ 0.9415). A later run at 48/52 (0.9231) fails this baseline, even for v2.
+**v1 vs v2 (session 4).** The comparison, per-case results, promotion rule and the baseline it set are in [Evaluation: v1 vs v2](#evaluation-v1-vs-v2).
 
 Session 4 prompt versions live in `app/prompts/estimation/<version>/` (`v1` ports M1's `v4`; `v2` adds the frontend rule). The M1 rows (`v1`–`v4`) lived in `app/prompts/<version>/`; their rationale and expected eval impact are in the archived [design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md) (D4).
 
@@ -277,7 +277,7 @@ The eval is never part of `make check` or CI.
 
 ## Session 4: from chat to product interface
 
-The session 3 chat is now a typed form, and the estimation prompt lives in versioned Jinja2 templates instead of Python strings. The form sends the transcript plus the brief's three enums (`project_type`, `detail_level`, `output_format`). The AI service renders `app/prompts/estimation/<version>/{system,user,examples}.j2` through one loader and sends the system and user prompts as separate messages. Any request can pick a prompt version with `?prompt_version=`. The result opens in a resizable split view: the transcript with evidence highlights on the left, the estimate on the right, and a Structured / Document toggle that shows the server's markdown in the chosen output format. What the branch taught, with a quiz: [`docs/takeaways/session-04.md`](docs/takeaways/session-04.md).
+What the session changed is summarised at the [top of this README](#lidr-ai-eng), and what it taught is in [`docs/takeaways/session-04.md`](docs/takeaways/session-04.md). This section maps the brief to the code and lists the evidence for each item.
 
 ### Where the brief's names map to this repo
 
@@ -313,7 +313,7 @@ The session 3 chat is now a typed form, and the estimation prompt lives in versi
 | Tests run in milliseconds with no external API | 11 tests for `v1` plus 38 for `v2` (36 of them render every enum combination); `uv run pytest tests/prompts -q` | All 49 run in about 0.05 s; the whole offline suite runs in `make check` |
 | **Bonus.** `v2/` with a deliberate change, selectable with `?prompt_version=v2` | `v2` is `v1` plus one rule: every client-facing surface the client mentions gets a frontend task of its own. All three endpoints accept `?prompt_version=`, and an unknown version is a 422 before any model call. `v2` is the default since this branch (see the eval below) | `tests/prompts/test_estimation_v2.py` (`v2` is `v1` plus that one line across all 36 combinations); `tests/api/test_prompt_version.py`; `tests/unit/test_cache_key.py::test_cache_key_changes_with_prompt_version` |
 | Bonus: optional `reference_projects: list[ReferenceProject] \| None` looped in the template | **Not done**, on purpose (see below) | |
-| Bonus: log every render with the version and a hash of the content | A `prompt_rendered` record with `prompt_version` and `prompt_sha256`, never the content. It uses the project's JSON logging rather than structlog | `test_render_logs_version_and_hash_but_never_content` |
+| Bonus: log every render with the version and a hash of the content | A `prompt_rendered` record for every prompt rendered for a provider call or a cache lookup, with `prompt_version` and `prompt_sha256`, never the content. It uses the project's JSON logging rather than structlog | `test_render_logs_version_and_hash_but_never_content` |
 | **Deliverable.** Branch `pre-session-04` | This branch | |
 | README on how to run it and run the tests | "Run it" below | |
 | Screenshot or GIF of the new interface | `docs/media/session-04/` | Screenshots below |
@@ -356,7 +356,7 @@ MEDIA=1 make e2e                # same, and refreshes docs/media/session-04/
 
 ### Evaluation: v1 vs v2
 
-Each version ran twice on `openai/gpt-4o-mini`, interleaved, and the means were compared, because a single failed check moves one run by about 0.02. Per-case numbers and report links are in [Evaluation](#evaluation).
+Each version ran twice on `openai/gpt-4o-mini`, interleaved, and the means were compared, because a single failed check moves one run by about 0.02. The reports are linked from the [Evaluation](#evaluation) table.
 
 | Version | Runs | Mean score | `covers_frontend` |
 |---|---|---|---|
@@ -364,9 +364,9 @@ Each version ran twice on `openai/gpt-4o-mini`, interleaved, and the means were 
 | `v1` (port of M1 `v4`) | 0.9231 (48/52), 0.9231 (48/52) | 0.9231 | 2/5, 1/5 (3/10) |
 | `v2` (adds the coverage rule) | 0.9423 (49/52), 0.9615 (50/52) | 0.9519 | 2/5, 3/5 (5/10) |
 
-The port passed the gate against the M1 `v4` baseline of 0.9787 (46/47) with the 0.02 tolerance. The new check is what separates the versions. `v2` met the promotion rule set before the runs (mean score at least `v1`'s minus 0.02, and a `covers_frontend` pass rate at least `v1`'s), so it became the default. Read the gain as directional: it's two cases out of ten, and each version moved by one case between identical runs. The vague marketplace case got no frontend task in any run. The check counts at least one `frontend` task per estimate, not one per surface, and no golden case expects the absence of frontend work yet. Both are candidates for `v3`.
+The port passed the gate against the M1 `v4` baseline of 0.9787 (46/47) with the 0.02 tolerance. The new check is what separates the versions. `v2` met the promotion rule set before the runs (mean score at least `v1`'s minus 0.02, and a `covers_frontend` pass rate at least `v1`'s), so it became the default. Per case over the two runs, `v1` then `v2`, the estimate had a frontend task in: course meeting 1 and 1, clinic portal 0 and 1, vague marketplace 0 and 0, Spanish injection 2 and 2, explicit language 0 and 1. Every other check passed in both `v2` runs. Read the gain as directional: it's two cases out of ten, each version moved by one case between identical runs, and `v2` still left out frontend work in half the case runs. The vague marketplace case got no frontend task in any run. The check counts at least one `frontend` task per estimate, not one per surface, and no golden case expects the absence of frontend work yet. Both are candidates for `v3`.
 
-The baseline (`evals/baseline.json`) is `v2`'s higher-scoring run, 0.9615. With the default tolerance of 0.02 a later report needs at least 0.9415, which means 49/52: a run at 48/52 (0.9231) fails the gate, even for `v2`.
+The baseline (`evals/baseline.json`) is `v2`'s higher-scoring run, 0.9615, the stricter of the two; run 1 passes it (0.9423 ≥ 0.9415). With the default tolerance of 0.02 a later report needs at least 0.9415, which means 49/52: a run at 48/52 (0.9231) fails the gate, even for `v2`.
 
 To compare versions yourself (live and spend-guarded; pin the baseline's provider and model, since the gate fails on a model mismatch):
 
@@ -399,6 +399,10 @@ Captured by `MEDIA=1 make e2e` against the replay provider (zero spend), so the 
 - The startup check renders each version with the default choices only, so an error inside another enum branch would surface on the first request that uses it. The template tests render every branch of both versions.
 - `covers_frontend` checks for at least one frontend task per estimate, not one per surface, and all five golden cases expect frontend work. Frontend coverage on gpt-4o-mini is 5/10 with `v2`.
 - Two small web follow-ups from the Task 7 review are still open: crossing 768 px several times mid-run can announce the end of a run twice, and narrowing the window can hide the focused pane.
+- Side by side, windows up to 772 px tall use the page-scroll layout, 1366×768 laptops included: after a run the split fills the window and the form sits above it. Taller windows get the fixed split below the form, where the e2e bar of 240 px counts the estimate pane's whole content (the status and actions row plus the article). The article alone gets less on windows from 773 to about 912 px tall: at 773 px it shows 101–165 px above the fold, depending on how that row wraps.
+- In the page-scroll layout the inspector is a full viewport tall (`short:h-dvh` in `web/src/components/inspector/inspector.tsx`) and sits below the 48 px header, so on windows 1024 px or wider and up to 772 px tall the empty page scrolls by 48 px.
+- Deferred to session 5's `v3` prompt: the `summary` detail level of `v1` and `v2` asks for at most eight tasks, while every task must stay at or below 80 likely hours, so a summary estimate tops out at 640 likely hours. Published versions don't change, so both keep the contradiction.
+- Deferred to session 5: the Anthropic fallback sends the system prompt as one cached block, so two requests whose enum blocks differ share no cached prefix there. OpenAI caches matching prefixes on its own, so its requests do.
 
 ## Session 3: conversational interface with streaming
 
