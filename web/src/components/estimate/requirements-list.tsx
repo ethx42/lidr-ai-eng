@@ -16,15 +16,17 @@ type PinHandler = (id: string) => void;
 const Evidence = ({ id, quote, ungrounded, onPin }: { id?: string; quote: string; ungrounded: boolean; onPin?: () => void }) => {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
+  // While it pins, the card never opens, not even later: a card opened then would show once the viewport widens.
+  const show = (next: boolean) => setOpen(next && !onPin);
   return (
-    <HoverCard open={open && !onPin} onOpenChange={setOpen} openDelay={200} closeDelay={150}>
+    <HoverCard open={open && !onPin} onOpenChange={show} openDelay={200} closeDelay={150}>
       <HoverCardTrigger asChild>
         <button
           type="button"
           aria-label={id ? `Evidence for ${id}` : "Evidence"}
           aria-describedby={descriptionId}
-          onClick={() => (onPin ? onPin() : setOpen(true))}
-          onPointerDown={(event) => event.pointerType === "touch" && setOpen(true)}
+          onClick={() => (onPin ? onPin() : show(true))}
+          onPointerDown={(event) => event.pointerType === "touch" && show(true)}
           className="inline-flex h-6 items-center gap-1 rounded-sm px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <Quote className="size-3.5" />

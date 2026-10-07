@@ -504,6 +504,22 @@ describe("Workspace", () => {
     expect(transcriptPane().querySelector("mark[data-active]")).toBeNull(); // the new attempt numbers its own requirements
   });
 
+  it("leaves the evidence card closed after a tap pins its requirement, also once the viewport widens", async () => {
+    const resize = viewport(false);
+    const { user, input } = setup();
+    await run(user, input);
+    await finish(0);
+    const evidence = screen.getByRole("button", { name: "Evidence for R2" });
+    fireEvent.pointerDown(evidence, { pointerType: "touch" }); // a tap: Radix ignores touch, so the button opens the card itself
+    await user.click(evidence);
+    expect(mark("R2")).toHaveAttribute("data-active");
+    const pastOpenDelay = () => act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    await pastOpenDelay();
+    resize(true); // later, the phone turns to landscape
+    await pastOpenDelay();
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+  });
+
   it("keeps the run's panes, focus and scroll when the viewport crosses 768 px mid-run", async () => {
     const resize = viewport(true);
     const { user, input } = setup();
