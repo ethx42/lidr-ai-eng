@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ServiceContextProvider, useServiceContext } from "./service-context";
 
-const context = { prompt_version: "v1", system_prompt: "", references: [], chain: ["replay:gpt-4o-mini"], max_transcription_chars: 1200 };
+const context = { prompt_version: "v1", available_versions: ["v1", "v2"], system_prompt: "", references: [], chain: ["replay:gpt-4o-mini"], max_transcription_chars: 1200 };
 
 const Probe = () => {
   const value = useServiceContext();
@@ -22,6 +22,17 @@ describe("ServiceContextProvider", () => {
 
   it("is unavailable when the response is an error or malformed", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ...context, max_transcription_chars: "many" })));
+    render(<ServiceContextProvider><Probe /></ServiceContextProvider>);
+    expect(await screen.findByText("unavailable")).toBeInTheDocument();
+  });
+
+  // The form's prompt-version choice relies on both.
+  it.each([
+    ["no available versions", { available_versions: undefined }],
+    ["a version that is not a string", { available_versions: ["v1", 2] }],
+    ["no default prompt version", { prompt_version: null }],
+  ])("is unavailable with %s", async (_, change) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ...context, ...change })));
     render(<ServiceContextProvider><Probe /></ServiceContextProvider>);
     expect(await screen.findByText("unavailable")).toBeInTheDocument();
   });

@@ -3,6 +3,23 @@ import { serverEnv } from "./env";
 
 // Fixed paths only: the upstream URL is AI_SERVICE_URL plus code-owned paths, never client input (SSRF guard).
 type UpstreamPath = `/api/v1/${string}`;
+type Allowlist = Record<string, (value: string) => boolean>;
+
+// The upstream query is rebuilt from allowlisted keys only, each value re-encoded, so a value cannot smuggle in another
+// parameter. Each key also checks its value: one the AI service could not accept is dropped, never forwarded.
+export const withQuery = (path: UpstreamPath, request: Request, allowed: Allowlist): UpstreamPath => {
+  const incoming = new URL(request.url).searchParams;
+  const query = new URLSearchParams();
+  for (const [key, accept] of Object.entries(allowed)) {
+    const value = incoming.get(key);
+    if (value !== null && accept(value)) query.set(key, value);
+  }
+  const search = query.toString();
+  return search ? `${path}?${search}` : path;
+};
+
+export const oneOf = (values: readonly string[]) => (value: string) => values.includes(value);
+export const matching = (pattern: RegExp) => (value: string) => pattern.test(value);
 
 const DEFAULT_MAX_BODY_BYTES = 2_000_000;
 const FORWARDED_HEADERS = ["content-type", "accept"] as const;

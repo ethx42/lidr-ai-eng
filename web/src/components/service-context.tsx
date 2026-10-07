@@ -10,18 +10,26 @@ export const DEFAULT_MAX_CHARS = 50_000;
 // undefined while loading, null when the AI service cannot provide it (or outside a provider).
 const Context = createContext<ServiceContext | null | undefined>(null);
 
-// Checks the fields the shell relies on; anything else in the response stays unchecked wire data.
+const isStrings = (value: unknown): value is string[] => Array.isArray(value) && value.every((entry) => typeof entry === "string");
+
+// Checks the fields the shell relies on (the header chain, the form's limit and prompt versions); anything else in the
+// response stays unchecked wire data.
 const isServiceContext = (value: unknown): value is ServiceContext =>
   typeof value === "object" &&
   value !== null &&
   "chain" in value &&
-  Array.isArray(value.chain) &&
-  value.chain.every((entry) => typeof entry === "string") &&
+  isStrings(value.chain) &&
   "max_transcription_chars" in value &&
   Number.isInteger(value.max_transcription_chars) &&
-  Number(value.max_transcription_chars) > 0;
+  Number(value.max_transcription_chars) > 0 &&
+  "available_versions" in value &&
+  isStrings(value.available_versions) &&
+  "prompt_version" in value &&
+  typeof value.prompt_version === "string";
 
-// One browser read of GET /api/context per page load (never from a Server Component), shared by the shell.
+// One browser read of GET /api/context per page load (never from a Server Component), shared by the shell: the header's
+// model chain, the form's character limit, its prompt versions and the default one. The inspector's Context tab reads
+// the prompt for the form's current choices on its own (`usePromptContext`).
 export const ServiceContextProvider = ({ children }: { children: ReactNode }) => {
   const [value, setValue] = useState<ServiceContext | null | undefined>(undefined);
   useEffect(() => {

@@ -24,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <TooltipProvider>
             <ServiceContextProvider>{children}</ServiceContextProvider>
           </TooltipProvider>
-          {/* Below the 48 px header, clear of the composer docked at the bottom. */}
+          {/* Below the 48 px header. */}
           <Toaster position="top-right" offset={{ top: 56 }} mobileOffset={{ top: 56 }} />
         </ThemeProvider>
       </body>

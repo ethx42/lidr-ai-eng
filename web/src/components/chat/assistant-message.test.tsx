@@ -121,7 +121,7 @@ describe("AssistantMessage on error", () => {
     expect(onRegenerate).toHaveBeenCalledTimes(1);
   });
 
-  it("asks to shorten an over-long transcript and puts it back in the composer", async () => {
+  it("asks to shorten an over-long transcript and puts it back in the form", async () => {
     const { user, onEditTranscript } = setup(failed("invalid_request", { details: [{ type: "string_too_long" }] }));
     expect(screen.getByRole("alert")).toHaveTextContent("The transcript is over the character limit. Shorten it and try again.");
     await user.click(button("Edit transcript"));

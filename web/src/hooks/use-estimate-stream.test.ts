@@ -65,6 +65,20 @@ describe("useEstimateStream", () => {
     expect(signalOf(0)?.aborted).toBe(true); // a new start supersedes the previous request
   });
 
+  it("appends the chosen prompt version, encoded, and omits an empty one", () => {
+    const { result } = renderStream();
+    act(() => result.current.start(request, { promptVersion: "v2" }));
+    act(() => result.current.start(request, { promptVersion: "v2", refresh: true }));
+    act(() => result.current.start(request, { promptVersion: "" }));
+    act(() => result.current.start(request, { promptVersion: "v1&refresh=true" }));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/estimate/stream?prompt_version=v2",
+      "/api/estimate/stream?prompt_version=v2&refresh=true",
+      "/api/estimate/stream",
+      "/api/estimate/stream?prompt_version=v1%26refresh%3Dtrue",
+    ]);
+  });
+
   it("streams status and partials split across chunks, then ends done with the response request id", async () => {
     const { result, states } = renderStream();
     act(() => result.current.start(request));

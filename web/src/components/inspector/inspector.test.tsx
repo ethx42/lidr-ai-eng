@@ -2,11 +2,11 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ServiceContextProvider } from "@/components/service-context";
 import type { components } from "@/lib/ai-service/schema";
 import { breakdown, fullResponse } from "@/lib/estimate/fixtures";
 import type { StreamState } from "@/lib/estimate/types";
 import { InspectorPanel, InspectorSheet } from "./inspector";
+import { usePromptContext } from "./use-prompt-context";
 
 type Done = Extract<StreamState, { status: "done" }>;
 
@@ -21,7 +21,9 @@ const context = {
   ],
   chain: ["openai:gpt-4o-mini", "anthropic:claude-haiku-4-5"],
   max_transcription_chars: 50_000,
+  available_versions: ["v4"],
 };
+const PARAMS = { project_type: "web_saas", detail_level: "medium", output_format: "phases_table", prompt_version: "" } as const;
 const done: Done = { status: "done", result: fullResponse, requestId: "req-42" };
 const withMetrics = (metrics: Partial<components["schemas"]["CallMetrics"]>, provider: Done["result"]["provider"] = "openai"): Done => ({
   ...done,
@@ -29,13 +31,11 @@ const withMetrics = (metrics: Partial<components["schemas"]["CallMetrics"]>, pro
 });
 
 const serve = (respond: () => Promise<Response>) => vi.stubGlobal("fetch", vi.fn(respond));
+// The panel as the workspace renders it: the Context tab shows the prompt for the form's current choices.
+const Panel = ({ call }: { call?: Done }) => <InspectorPanel call={call} context={usePromptContext(PARAMS)} />;
 const renderPanel = (call?: Done) => {
   const user = userEvent.setup();
-  render(
-    <ServiceContextProvider>
-      <InspectorPanel call={call} />
-    </ServiceContextProvider>,
-  );
+  render(<Panel call={call} />);
   return user;
 };
 const showLastCall = async (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole("tab", { name: "Last call" }));
@@ -94,6 +94,12 @@ describe("Inspector, Context tab", () => {
     expect(screen.getByRole("tabpanel", { name: "Context" })).toHaveClass(inset);
     await showLastCall(user);
     expect(screen.getByRole("tabpanel", { name: "Last call" })).toHaveClass(inset);
+  });
+
+  it("keeps the shown prompt, dimmed and busy, while the prompt for new choices loads", () => {
+    render(<InspectorPanel context={{ context, loading: true }} />);
+    const busy = screen.getByRole("region", { name: "System prompt" }).closest('[aria-busy="true"]');
+    expect(busy).toHaveClass("opacity-60");
   });
 
   it("shows skeletons while the context loads", () => {
@@ -214,14 +220,15 @@ const viewport = (wide: boolean) => {
   return { matchMedia, listeners, resize };
 };
 
-// The sheet and the panel as `Chat` renders them; CSS shows one or the other, jsdom renders both.
+// The sheet and the panel as the workspace renders them; CSS shows one or the other, jsdom renders both.
 const Workspace = () => {
   const panelRef = useRef<HTMLElement>(null);
+  const context = usePromptContext(PARAMS);
   return (
-    <ServiceContextProvider>
-      <InspectorSheet call={done} panelRef={panelRef} />
-      <InspectorPanel ref={panelRef} call={done} />
-    </ServiceContextProvider>
+    <>
+      <InspectorSheet call={done} context={context} panelRef={panelRef} />
+      <InspectorPanel ref={panelRef} call={done} context={context} />
+    </>
   );
 };
 

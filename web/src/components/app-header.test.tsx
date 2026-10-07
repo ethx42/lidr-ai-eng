@@ -4,7 +4,7 @@ import { AppHeader } from "./app-header";
 import { ServiceContextProvider } from "./service-context";
 
 const renderWithChain = (chain: string[]) => {
-  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ prompt_version: "v1", system_prompt: "", references: [], chain, max_transcription_chars: 50_000 })));
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ prompt_version: "v1", available_versions: ["v1"], system_prompt: "", references: [], chain, max_transcription_chars: 50_000 })));
   render(
     <ServiceContextProvider>
       <AppHeader />
