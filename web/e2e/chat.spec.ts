@@ -56,8 +56,14 @@ const projectName = (page: Page) => estimate(page).getByRole("heading", { level:
 const totals = (page: Page) => estimate(page).locator("header dl");
 const stopped = (page: Page) => page.getByRole("status").filter({ hasText: "Stopped" });
 const valueOf = (scope: Locator, label: string) => scope.locator(`dt:text-is("${label}") + dd`);
-// An inline element has one client rect per line it spans.
-const expectOneLine = async (locator: Locator, what: string) => expect(await locator.evaluate((element) => element.getClientRects().length), `${what} on one line`).toBe(1);
+// A Range over the text has one client rect per line it spans. The element's own rects do not count lines: a flex item
+// (the request ID's <code>) is a single box however its text wraps.
+const lineCount = (element: Element) => {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  return range.getClientRects().length;
+};
+const expectOneLine = async (locator: Locator, what: string) => expect(await locator.evaluate(lineCount), `${what} on one line`).toBe(1);
 
 // The sample cards render once the thread has hydrated from sessionStorage.
 const pickSample = async (page: Page) => {
