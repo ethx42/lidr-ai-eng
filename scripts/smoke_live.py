@@ -11,6 +11,7 @@ from dataclasses import astuple, dataclass
 from openai import AsyncOpenAI
 
 from app.config import Provider, Settings
+from app.observability import configure_logging
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest, EstimateResponse
 from app.services.cache import NullCache, cache_scope
@@ -22,11 +23,12 @@ from app.services.providers.fallback import Cooldown, FallbackProvider
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.profiles import get_profile
 from scripts.live_budget import ensure_budget, record_spend
-from scripts.record_cassettes import SAMPLES, sample_text
+from scripts.record_cassettes import SAMPLES, call_bound_usd, sample_text
 
 OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 DEAD_URL = "http://127.0.0.1:9"  # discard port: nothing listens, so the primary never answers
+DEAD_KEY = "sk-unused"  # never send a real key to a port that anything local could open
 ESTIMATE_USD = 0.05
 COLUMNS = ("check", "provider served", "fallback", "ttft ms", "latency ms", "cost usd", "result")
 
@@ -50,10 +52,15 @@ class Row:
 class Check:
     name: str
     serves: Provider
+    model: str  # the model that bills for this check
     fallback: bool
-    estimate_usd: float  # recorded when the check reports no cost: ~7k tokens in, 4096 out
     settings: Settings
     build: Callable[[Settings], LLMProvider]
+
+    @property
+    def bound_usd(self) -> float:
+        """Recorded when the check reports no cost."""
+        return call_bound_usd(self.model, self.settings.llm_max_output_tokens)
 
 
 def _cell(value: str | bool | float | None) -> str:
@@ -102,9 +109,7 @@ def failed_row(check: str, exc: LLMError) -> Row:
 
 def dead_primary(settings: Settings) -> LLMProvider:
     """OpenAI at a closed port (refused at once, or cut by the 2 s timeout), then Anthropic."""
-    client = AsyncOpenAI(
-        api_key=settings.key_for("openai"), base_url=DEAD_URL, timeout=2, max_retries=0
-    )
+    client = AsyncOpenAI(api_key=DEAD_KEY, base_url=DEAD_URL, timeout=2, max_retries=0)
     primary = OpenAIProvider(
         client=client,
         model=OPENAI_MODEL,
@@ -142,22 +147,22 @@ async def run(check: Check) -> Row:
     return row_for(check.name, response, provider=check.serves, fallback=check.fallback)
 
 
-async def main() -> int:
-    # Built first: a missing key fails here, before anything is spent.
-    checks = [
+def default_checks() -> list[Check]:
+    """Builds the settings, so a missing key fails before anything is spent."""
+    return [
         Check(
             "openai stream",
             serves="openai",
+            model=OPENAI_MODEL,
             fallback=False,
-            estimate_usd=0.004,
             settings=Settings(llm_provider="openai", llm_model=OPENAI_MODEL, llm_fallbacks=""),
             build=build_provider,
         ),
         Check(
             "anthropic stream",
             serves="anthropic",
+            model=ANTHROPIC_MODEL,
             fallback=False,
-            estimate_usd=0.03,
             settings=Settings(
                 llm_provider="anthropic", llm_model=ANTHROPIC_MODEL, llm_fallbacks=""
             ),
@@ -166,8 +171,8 @@ async def main() -> int:
         Check(
             "forced fallback",
             serves="anthropic",
+            model=ANTHROPIC_MODEL,  # the dead primary never bills
             fallback=True,
-            estimate_usd=0.03,
             settings=Settings(
                 llm_provider="openai",
                 llm_model=OPENAI_MODEL,
@@ -176,13 +181,23 @@ async def main() -> int:
             build=dead_primary,
         ),
     ]
-    ensure_budget(ESTIMATE_USD)
+
+
+def guard_usd(checks: Sequence[Check]) -> float:
+    """What `ensure_budget` checks: the brief's estimate, or every check at its worst if more."""
+    return max(ESTIMATE_USD, sum(check.bound_usd for check in checks))
+
+
+async def main() -> int:
+    configure_logging("INFO")
+    checks = default_checks()
+    ensure_budget(guard_usd(checks))
     rows: list[Row] = []
     for check in checks:
-        spent = check.estimate_usd  # until the check reports its cost
+        spent = check.bound_usd  # until the check reports its cost
         try:
             row = await run(check)
-            spent = check.estimate_usd if row.cost_usd is None else row.cost_usd
+            spent = check.bound_usd if row.cost_usd is None else row.cost_usd
         finally:
             record_spend("smoke-live", spent)
         rows.append(row)

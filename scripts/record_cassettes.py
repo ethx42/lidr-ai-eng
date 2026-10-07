@@ -12,8 +12,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import Settings
+from app.observability import configure_logging
 from app.prompts.loader import PromptBundle, build_user_message, load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.schemas.estimation import EstimateRequest, EstimationBreakdown, Usage
 from app.services.pricing import cost_usd
 from app.services.providers.base import LLMProvider, LLMResult, TextDelta
 from app.services.providers.factory import build_one
@@ -34,8 +35,26 @@ SAMPLES = tuple(
 )
 MODEL = "gpt-4o-mini"
 ESTIMATE_USD = 0.01
-# Recorded for a call that ends without usage: ~7k tokens in, 4096 out, rounded up.
-CALL_ESTIMATE_USD = 0.004
+# Above any request here: system prompt, schema and sample measured 6.4k-6.6k input tokens.
+PROMPT_TOKENS_BOUND = 8_000
+
+
+def call_bound_usd(model: str, max_output_tokens: int) -> float:
+    """One call's worst case: the whole prompt billed as a cache write, then every output token."""
+    usage = Usage(
+        input_tokens=PROMPT_TOKENS_BOUND,
+        cache_write_tokens=PROMPT_TOKENS_BOUND,
+        output_tokens=max_output_tokens,
+    )
+    cost = cost_usd(model, usage)
+    if cost is None:
+        raise ValueError(f"no price for {model}: cannot bound live spend")
+    return cost
+
+
+def guard_usd(max_output_tokens: int) -> float:
+    """What `ensure_budget` checks: the brief's estimate, or every call at its worst if more."""
+    return max(ESTIMATE_USD, len(SAMPLES) * call_bound_usd(MODEL, max_output_tokens))
 
 
 def sample_text(sample: Path) -> str:
@@ -81,18 +100,20 @@ def save(cassette: Cassette, directory: Path = CASSETTES) -> Path:
 
 
 async def main() -> None:
+    configure_logging("INFO")
     settings = Settings(llm_provider="openai", llm_model=MODEL, llm_fallbacks="")
-    ensure_budget(ESTIMATE_USD)
+    ensure_budget(guard_usd(settings.llm_max_output_tokens))
+    bound = call_bound_usd(MODEL, settings.llm_max_output_tokens)
     prompt = load_prompt()
     provider = build_one(settings, "openai", MODEL, settings.llm_max_retries)
     try:
         for sample in SAMPLES:
             system, user = prompt_pair(sample, prompt)
-            spent = CALL_ESTIMATE_USD  # until the call reports its usage
+            spent = bound  # until the call reports its usage
             try:
                 cassette = await record(provider, system, user, f"estimator-{prompt.version}")
                 cost = cost_usd(cassette.model, cassette.usage)
-                spent = CALL_ESTIMATE_USD if cost is None else cost
+                spent = bound if cost is None else cost
             finally:
                 record_spend("record-cassettes", spent)
             path = save(cassette)
@@ -101,6 +122,7 @@ async def main() -> None:
                 f"{sample.name} -> {path.relative_to(ROOT)}: {len(cassette.chunks)} chunks, "
                 f"{usage.input_tokens} in ({usage.cached_input_tokens} cached) / "
                 f"{usage.output_tokens} out, cost ${spent:.6f}"
+                + (" (estimated)" if cost is None else "")
             )
     finally:
         await provider.aclose()
