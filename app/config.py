@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import Field, SecretStr, model_validator
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     max_transcription_chars: int = Field(default=50_000, gt=0)
     blended_hourly_rate: float | None = Field(default=None, gt=0)
     weekly_capacity_hours: float = Field(default=30, gt=0)
+    replay_cassette_dir: Path = Path("tests/cassettes")
+    replay_delay_scale: float = Field(default=1.0, ge=0)
 
     @property
     def api_key(self) -> str:
@@ -35,7 +38,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_provider_key(self) -> Self:
-        if not self.api_key:
+        if self.llm_provider != "replay" and not self.api_key:
             raise ValueError(
                 f"{self.llm_provider.upper()}_API_KEY is required when "
                 f"LLM_PROVIDER={self.llm_provider}"

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +15,8 @@ ENV_VARS = [
     "LLM_TEMPERATURE",
     "LLM_REASONING_EFFORT",
     "BLENDED_HOURLY_RATE",
+    "REPLAY_CASSETTE_DIR",
+    "REPLAY_DELAY_SCALE",
 ]
 
 
@@ -41,6 +45,21 @@ def test_defaults_with_only_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.max_transcription_chars == 50_000
     assert settings.blended_hourly_rate is None
     assert settings.weekly_capacity_hours == 30
+
+
+def test_replay_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "replay")
+    settings = load()
+    assert settings.llm_provider == "replay"
+    assert settings.replay_cassette_dir == Path("tests/cassettes")
+    assert settings.replay_delay_scale == 1.0
+
+
+def test_negative_replay_delay_scale_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "replay")
+    monkeypatch.setenv("REPLAY_DELAY_SCALE", "-1")
+    with pytest.raises(ValidationError, match="replay_delay_scale"):
+        load()
 
 
 def test_missing_key_for_selected_provider_names_variable(monkeypatch: pytest.MonkeyPatch) -> None:
