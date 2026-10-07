@@ -25,6 +25,7 @@ const isApple = () => /Mac|iPhone|iPad/.test(navigator.userAgent);
 export const Composer = ({ inputRef, draft, onSend, samples, noteId }: Props) => {
   const id = useId();
   const keepRef = useRef<HTMLButtonElement>(null);
+  const samplesRef = useRef<HTMLButtonElement>(null);
   const { value, pending } = draft;
   const limit = useServiceContext()?.max_transcription_chars ?? DEFAULT_MAX_CHARS;
   const length = useMemo(() => countChars(value), [value]);
@@ -35,14 +36,15 @@ export const Composer = ({ inputRef, draft, onSend, samples, noteId }: Props) =>
     (part) => `${id}-${part}`,
   );
 
-  // A pending replacement takes focus on its safe choice; either answer returns focus to the transcript.
+  // A pending replacement takes focus on its safe choice. Either answer removes the question, so focus returns to the
+  // transcript, or on a touch screen (where that would open the keyboard) to Samples, never to the page.
   useEffect(() => {
     if (pending) keepRef.current?.focus();
   }, [pending]);
   const answer = (replace: boolean) => {
     if (replace) draft.confirm();
     else draft.cancel();
-    focusForTyping(inputRef.current);
+    if (!focusForTyping(inputRef.current)) samplesRef.current?.focus();
   };
   const focusAfterPick = () => {
     if (!pending) return focusForTyping(inputRef.current);
@@ -102,6 +104,7 @@ export const Composer = ({ inputRef, draft, onSend, samples, noteId }: Props) =>
         />
         <div className="flex items-center gap-3">
           <SampleMenu
+            triggerRef={samplesRef}
             samples={samples}
             onPick={(sample) => draft.replace(sampleDraft(sample))}
             onPicked={focusAfterPick}

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, FileText } from "lucide-react";
-import { useId, useRef } from "react";
+import { type Ref, useId, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Replacement } from "@/hooks/use-draft";
@@ -13,12 +13,12 @@ export const sampleDraft = (sample: Sample): Replacement => ({ text: sample.text
 
 // Picking a sample only fills the composer; the user still reviews and sends it.
 // `onPicked` returns whether it moved focus; when it did not, focus returns to the trigger.
-export const SampleMenu = ({ samples, onPick, onPicked }: Props & { onPicked: () => boolean }) => {
+export const SampleMenu = ({ samples, onPick, onPicked, triggerRef }: Props & { onPicked: () => boolean; triggerRef?: Ref<HTMLButtonElement> }) => {
   const picked = useRef(false);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm">
+        <Button ref={triggerRef} type="button" variant="ghost" size="sm">
           <FileText />
           Samples
           <ChevronDown />

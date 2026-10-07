@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleStop, Copy, ListChecks, RotateCcw, Square } from "lucide-react";
-import { useEffect, useEffectEvent, useRef } from "react";
+import { type Ref, useEffect, useEffectEvent, useRef } from "react";
 import { EstimateView } from "@/components/estimate/estimate-view";
 import { StatusSteps } from "@/components/estimate/status-steps";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { AiDisclosure } from "./ai-disclosure";
 import { ErrorCard } from "./error-card";
 
 type Done = Extract<StreamState, { status: "done" }>;
-type Props = { state: StreamState; kept?: Done; onStop: () => void; onRegenerate: () => void; onEditTranscript: () => void };
+type Props = { state: StreamState; kept?: Done; onStop: () => void; onRegenerate: () => void; onEditTranscript: () => void; stopRef?: Ref<HTMLButtonElement> };
 
 // Plain text, so the questions paste cleanly into an email to the client.
 const numbered = (items: string[]) => items.map((item, i) => `${i + 1}. ${item}`).join("\n");
@@ -49,7 +49,7 @@ const DoneActions = ({ state, onRegenerate }: { state: Done; onRegenerate?: () =
 
 const isComposing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229; // Safari reports it only via 229
 
-export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript }: Props) => {
+export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript, stopRef }: Props) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const previous = useRef(state.status);
   const focusWithin = useRef(false); // focus was last inside this message, or one of its actions was used
@@ -112,7 +112,7 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {shown.status === "streaming" && (
-              <Button type="button" variant="outline" size="sm" onClick={own(onStop)} aria-keyshortcuts="Escape">
+              <Button ref={stopRef} type="button" variant="outline" size="sm" onClick={own(onStop)} aria-keyshortcuts="Escape">
                 <Square />
                 Stop
                 <kbd aria-hidden className="hidden font-sans text-xs text-muted-foreground sm:inline">

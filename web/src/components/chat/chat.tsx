@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef } from "react";
+import { flushSync } from "react-dom";
 import { AppHeader } from "@/components/app-header";
 import { InspectorPanel, InspectorSheet } from "@/components/inspector/inspector";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,7 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
   const draft = useDraft();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
+  const stopRef = useRef<HTMLButtonElement>(null); // the last turn's Stop, while it streams
   const noteId = useId();
   // The thread comes from sessionStorage, which the server render cannot see: show it once hydrated.
   const hydrated = useHydrated();
@@ -42,10 +44,18 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
   const fillComposer = (next: Replacement) => {
     if (draft.replace(next)) focusForTyping(inputRef.current);
   };
+  // Editing is a request to type, so the transcript takes focus on any pointer (screen-reader users on touch need it too).
+  const editTranscript = (text: string) => {
+    if (draft.replace({ text, what: "the transcript to shorten" })) inputRef.current?.focus();
+  };
+  // Estimate is disabled once the composer clears, so focus moves on: to the transcript, which keeps Esc (stop) and the
+  // next transcript one keystroke away, or on a touch screen to the new turn's Stop. flushSync renders that turn first.
   const submit = () => {
-    send(draft.value);
-    draft.clear();
-    focusForTyping(inputRef.current); // keeps Esc (stop) and the next transcript one keystroke away
+    flushSync(() => {
+      send(draft.value);
+      draft.clear();
+    });
+    if (!focusForTyping(inputRef.current)) stopRef.current?.focus({ preventScroll: true });
   };
 
   return (
@@ -65,7 +75,8 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
                   onPickSample={(sample) => fillComposer(sampleDraft(sample))}
                   onStop={stop}
                   onRegenerate={regenerate}
-                  onEditTranscript={(text) => fillComposer({ text, what: "the transcript to shorten" })}
+                  onEditTranscript={editTranscript}
+                  stopRef={stopRef}
                 />
               ) : (
                 <ThreadSkeleton />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { type Ref, useEffect, useRef } from "react";
 import type { Turn } from "@/hooks/use-thread";
 import type { Sample } from "@/lib/samples";
 import { AssistantMessage } from "./assistant-message";
@@ -15,6 +15,7 @@ type Props = {
   onStop: () => void;
   onRegenerate: (turnId: string) => void;
   onEditTranscript: (transcription: string) => void;
+  stopRef?: Ref<HTMLButtonElement>; // given to the last turn's Stop
 };
 
 // Shown once, in the empty state or above the thread (it used to sit in the composer, on every screen's fixed chrome).
@@ -37,7 +38,7 @@ const EmptyState = ({ samples, onPickSample, noteId }: Pick<Props, "samples" | "
   </div>
 );
 
-export const Thread = ({ turns, samples, noteId, onPickSample, onStop, onRegenerate, onEditTranscript }: Props) => {
+export const Thread = ({ turns, samples, noteId, onPickSample, onStop, onRegenerate, onEditTranscript, stopRef }: Props) => {
   const lastId = turns.at(-1)?.id;
   const lastRef = useRef<HTMLLIElement>(null);
 
@@ -60,6 +61,7 @@ export const Thread = ({ turns, samples, noteId, onPickSample, onStop, onRegener
               onStop={onStop}
               onRegenerate={() => onRegenerate(turn.id)}
               onEditTranscript={() => onEditTranscript(turn.transcription)}
+              stopRef={turn.id === lastId ? stopRef : undefined}
             />
           </li>
         ))}

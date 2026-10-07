@@ -86,6 +86,31 @@ describe("Chat", () => {
     expect(input).not.toHaveFocus();
   });
 
+  // §8 managed focus: Estimate is disabled once the composer clears, so focus must not stay on it or fall to the page.
+  it("on a touch screen, moves focus from Estimate to the new turn's Stop without scrolling", async () => {
+    stubPointer("coarse");
+    const { user, input, send } = setup();
+    await user.type(input, "We need a booking portal.");
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    await user.click(send);
+    const stop = screen.getByRole("button", { name: "Stop" });
+    expect(stop).toHaveFocus();
+    expect(focus.mock.contexts.at(-1)).toBe(stop);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+
+  it("on a touch screen, Edit transcript still moves focus into the transcript (the user asked to edit it)", async () => {
+    stubPointer("coarse");
+    stream = () => Response.json(tooLong, { status: 422 });
+    const { user, input, send } = setup();
+    await user.type(input, "A very long transcript");
+    await user.click(send);
+    await user.click(await screen.findByRole("button", { name: "Edit transcript" }));
+    expect(input).toHaveValue("A very long transcript");
+    expect(input).toHaveFocus();
+  });
+
   it("puts a rejected transcript back in the composer from the error card, asking first if there is a draft", async () => {
     stream = () => Response.json(tooLong, { status: 422 });
     const { user, input } = setup();

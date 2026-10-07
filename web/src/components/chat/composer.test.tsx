@@ -182,6 +182,30 @@ describe("Composer", () => {
     expect(input).not.toHaveFocus();
   });
 
+  // §8 managed focus: the question's buttons go away with the answer, and focus must not fall to the page.
+  it("on a touch screen, an answer to the replace question moves focus to Samples, not to the page", async () => {
+    stubPointer("coarse");
+    const { user, input } = setup();
+    const samples = screen.getByRole("button", { name: "Samples" });
+    await user.type(input, "My notes");
+    await pickSample(user, /Clinic portal/);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Keep my draft" })).toHaveFocus());
+    await user.click(screen.getByRole("button", { name: "Keep my draft" }));
+    expect(input).toHaveValue("My notes");
+    expect(samples).toHaveFocus();
+
+    await pickSample(user, /Clinic portal/);
+    await user.click(await screen.findByRole("button", { name: "Replace draft" }));
+    expect(input).toHaveValue(SAMPLES[1].text);
+    expect(samples).toHaveFocus();
+
+    await user.type(input, " and more");
+    await pickSample(user, /Course meeting/);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Keep my draft" })).toHaveFocus());
+    await user.keyboard("{Escape}");
+    expect(samples).toHaveFocus();
+  });
+
   it("keeps the draft on Escape, without the key reaching the stream's Stop shortcut", async () => {
     const { user, input } = setup();
     await user.type(input, "My notes");
