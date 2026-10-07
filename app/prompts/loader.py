@@ -89,13 +89,20 @@ def split_system(system: str) -> tuple[str, str]:
     return system[:cut], system[cut:]
 
 
+def _fact(value: str) -> str:
+    # Model output re-rendered into the system prompt, where every tag is ours: no angle brackets
+    # (as for output_language), and one line, so a value cannot forge a list item or a role line.
+    return " ".join(re.sub(r"[<>]", "", value).split())
+
+
 def _neutral_metadata(metadata: ProjectMetadata) -> ProjectMetadata:
-    # Model output, re-rendered into every later system prompt.
     return metadata.model_copy(
         update={
-            "project_name": metadata.project_name and neutralize(metadata.project_name),
-            "mentioned_technologies": [neutralize(t) for t in metadata.mentioned_technologies],
-            "agreed_scope": metadata.agreed_scope and neutralize(metadata.agreed_scope),
+            "project_name": metadata.project_name and _fact(metadata.project_name),
+            "mentioned_technologies": [
+                fact for t in metadata.mentioned_technologies if (fact := _fact(t))
+            ],
+            "agreed_scope": metadata.agreed_scope and _fact(metadata.agreed_scope),
         }
     )
 

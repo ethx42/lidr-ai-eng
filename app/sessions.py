@@ -92,32 +92,47 @@ class ProjectMetadata(BaseModel):
         return self == ProjectMetadata()
 
 
-MAX_TECHNOLOGIES = 30
 # v3 re-renders the metadata into every system prompt, outside MAX_HISTORY_CHARS.
+MAX_TECHNOLOGIES = 30
 MAX_TECHNOLOGY_CHARS = 80
+MAX_PROJECT_NAME_CHARS = 120
+MAX_SCOPE_CHARS = 1_000
+
+
+def _bounded(value: str, limit: int) -> str:
+    """The stripped value, or "" (no answer) when it is longer than a fact of its kind can be."""
+    value = value.strip()
+    return value if len(value) <= limit else ""
 
 
 def merge_metadata(
     current: ProjectMetadata, breakdown: EstimationBreakdown
 ) -> tuple[ProjectMetadata, list[str]]:
-    """Fold one answer into the known facts, in code: a blank answer never erases a fact.
+    """Fold one answer into the known facts, in code: a blank or over-long answer never
+    replaces a fact.
 
-    Latest non-blank name and summary win; the team size is the sum of the latest team; the
-    technologies are a case-insensitive union that keeps the first spelling and drops names over
-    `MAX_TECHNOLOGY_CHARS`. The union is capped at `MAX_TECHNOLOGIES`: once full, the known
-    entries stay and new names are dropped without being reported as a change. Returns the merged
-    metadata and the names of the fields that changed.
+    Latest non-blank name and summary win, unless longer than `MAX_PROJECT_NAME_CHARS` /
+    `MAX_SCOPE_CHARS`: such a value is dropped whole (a cut could flip what the scope says) and
+    the known one stays. The team size is the sum of the latest team. The technologies are a
+    case-insensitive union that keeps the first spelling and drops names over
+    `MAX_TECHNOLOGY_CHARS`; it is capped at `MAX_TECHNOLOGIES`: once full, the known entries stay
+    and new names are dropped without being reported as a change. Returns the merged metadata and
+    the names of the fields that changed.
     """
     spellings: dict[str, str] = {}
-    for name in (*current.mentioned_technologies, *(t.strip() for t in breakdown.technologies)):
-        if name and len(name) <= MAX_TECHNOLOGY_CHARS:
+    for name in (
+        *current.mentioned_technologies,
+        *(_bounded(t, MAX_TECHNOLOGY_CHARS) for t in breakdown.technologies),
+    ):
+        if name:
             spellings.setdefault(name.casefold(), name)
     merged = ProjectMetadata(
-        project_name=breakdown.project_name.strip() or current.project_name,
+        project_name=_bounded(breakdown.project_name, MAX_PROJECT_NAME_CHARS)
+        or current.project_name,
         assumed_team_size=sum(member.count for member in breakdown.team)
         or current.assumed_team_size,
         mentioned_technologies=list(spellings.values())[:MAX_TECHNOLOGIES],
-        agreed_scope=breakdown.summary.strip() or current.agreed_scope,
+        agreed_scope=_bounded(breakdown.summary, MAX_SCOPE_CHARS) or current.agreed_scope,
     )
     changed = [
         field

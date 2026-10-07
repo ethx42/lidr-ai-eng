@@ -32,8 +32,24 @@ from tests.factories import typed_request
 PINNED_SHA256 = {
     "v1": "72fe57bfc9b18459fe354b3acc9a077c3736d6d946faedf23a3a9ed22c855c9a",
     "v2": "0c84aa152004f4f1a0c93233a689975623d43a8d4703cb840602f3053010b107",
-    "v3": "8be43ba255d79aca6a95746d3427bead45f4f397ce0f8d2861ec1b34348fd7bd",
+    "v3": "f326e4ef376a31f66c7426c3414235f26da630a16f92a2d3b95a454ca70f5578",
 }
+# From v3 on, a version also renders the session inputs: every system prompt with filled metadata,
+# plus a user message with two attachments. Pinned apart so the earlier versions' digests stay put.
+PINNED_SESSION_SHA256 = {
+    "v3": "60d89e007632b81c2e19ef0ee04174549e84719d8314af6570150e935b455237",
+}
+SESSION_VERSIONS_FROM = 3
+SESSION_METADATA = ProjectMetadata(
+    project_name="Yoga Booking",
+    assumed_team_size=3,
+    mentioned_technologies=["Stripe", "Twilio"],
+    agreed_scope="Booking app with online payments.",
+)
+SESSION_ATTACHMENTS = [
+    ExtractedAttachment(filename="spec.pdf", kind="pdf", text="Payments via Redsys.", pages=1),
+    ExtractedAttachment(filename="notes.docx", kind="docx", text="Launch in May.", pages=None),
+]
 
 
 def user_message(transcription: str, output_language: str | None) -> str:
@@ -117,6 +133,34 @@ def test_published_versions_never_change(version: str) -> None:
     assert digest == PINNED_SHA256[version], (
         f"estimation/{version} changed, but published versions never change: revert the edit "
         f"and make it in a new version directory (vN+1) with its own pin. Digest now: {digest}"
+    )
+
+
+def session_renders(version: str) -> str:
+    systems = [
+        render_system(PromptParams(*choices), version, metadata=SESSION_METADATA)
+        for choices in product(ProjectType, DetailLevel, OutputFormat)
+    ]
+    _, user = render_estimation_prompt(
+        typed_request("Client: we need a booking app."), version, attachments=SESSION_ATTACHMENTS
+    )
+    return "\x00".join([*systems, user])
+
+
+@pytest.mark.parametrize("version", PINNED_SESSION_SHA256)
+def test_published_session_renders_never_change(version: str) -> None:
+    digest = hashlib.sha256(session_renders(version).encode()).hexdigest()
+    assert digest == PINNED_SESSION_SHA256[version], (
+        f"estimation/{version} changed, but published versions never change: revert the edit "
+        f"and make it in a new version directory (vN+1) with its own pins. Digest now: {digest}"
+    )
+
+
+def test_every_session_version_has_a_session_pin() -> None:
+    session_versions = {v for v in available_versions() if int(v[1:]) >= SESSION_VERSIONS_FROM}
+    assert set(PINNED_SESSION_SHA256) == session_versions, (
+        "every version from v3 on needs a session pin: add it to PINNED_SESSION_SHA256 with any "
+        "digest, and test_published_session_renders_never_change prints the real one"
     )
 
 

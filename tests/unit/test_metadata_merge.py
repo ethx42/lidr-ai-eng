@@ -1,4 +1,10 @@
-from app.sessions import MAX_TECHNOLOGIES, ProjectMetadata, merge_metadata
+from app.sessions import (
+    MAX_PROJECT_NAME_CHARS,
+    MAX_SCOPE_CHARS,
+    MAX_TECHNOLOGIES,
+    ProjectMetadata,
+    merge_metadata,
+)
 from tests.factories import breakdown
 
 
@@ -106,3 +112,23 @@ def test_full_list_keeps_known_entries_and_drops_new_names_silently() -> None:
     )
     assert merged == full
     assert changed == []
+
+
+def test_overlong_name_and_summary_never_replace_known_facts() -> None:
+    merged, changed = merge_metadata(
+        KNOWN,
+        breakdown(
+            **SAME_AS_KNOWN
+            | {
+                "project_name": "n" * (MAX_PROJECT_NAME_CHARS + 1),
+                "summary": "s" * (MAX_SCOPE_CHARS + 1),
+            }
+        ),
+    )
+    assert merged == KNOWN and changed == []
+
+
+def test_name_and_summary_at_their_bounds_are_kept() -> None:
+    name, scope = "n" * MAX_PROJECT_NAME_CHARS, "s" * MAX_SCOPE_CHARS
+    merged, _ = merge_metadata(ProjectMetadata(), breakdown(project_name=name, summary=scope))
+    assert (merged.project_name, merged.agreed_scope) == (name, scope)
