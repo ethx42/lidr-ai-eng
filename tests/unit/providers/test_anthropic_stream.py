@@ -356,10 +356,12 @@ def broken(after: int, error: Exception) -> Handler:
     return lambda _: httpx.Response(200, headers=SSE_HEADERS, stream=body)
 
 
+# Every httpx2.RequestError raised while reading the body, as OpenAI's SDK wraps them.
 TRANSPORT_ERRORS = [
     httpx.ReadTimeout("stalled"),
     httpx.RemoteProtocolError("peer closed connection"),
     httpx.ReadError("connection reset"),
+    httpx.DecodingError("corrupt content encoding"),
 ]
 
 

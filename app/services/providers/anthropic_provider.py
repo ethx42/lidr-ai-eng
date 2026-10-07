@@ -156,8 +156,9 @@ class AnthropicProvider:
                             message = event.message
         except anthropic.APIError as exc:
             raise map_error(exc) from exc
-        except httpx2.TransportError as exc:
-            # Unlike OpenAI's, this SDK does not wrap errors raised while reading the body.
+        except httpx2.RequestError as exc:
+            # Unlike OpenAI's, this SDK does not wrap errors raised while reading the body
+            # (transport and decoding errors alike).
             raise UpstreamUnavailable(reason="stream_transport") from exc
         except httpx2.StreamError:
             raise  # a RuntimeError, but our misuse of the response, not the upstream's
