@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import pickle
+import resource
 import signal
 import struct
 import subprocess
@@ -14,6 +15,7 @@ import zlib
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from multiprocessing.connection import Connection
 from pathlib import Path
 
 import pypdf
@@ -646,3 +648,73 @@ def test_errors_keep_their_reason_across_the_process_boundary() -> None:
     assert err.value.reason == "invalid"
     busy = pickle.loads(pickle.dumps(AttachmentError("x", reason="busy")))  # noqa: S301  (own bytes)
     assert (str(busy), busy.reason) == ("x", "busy")
+
+
+# Fix round 4: the child's edge paths.
+
+
+def die_mid_message(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    # The child's pipe end, from the progress callback's closure; then half a message and exit.
+    cells = on_file.__closure__ or ()
+    conn = next(c.cell_contents for c in cells if isinstance(c.cell_contents, Connection))
+    os.write(conn.fileno(), struct.pack("!i", 100) + b"partial")
+    os._exit(0)
+
+
+def report_cpu_limit(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    raise AttachmentError(str(resource.getrlimit(resource.RLIMIT_CPU)[0]))
+
+
+def test_a_child_dying_mid_message_is_an_attachment_error() -> None:
+    with pytest.raises(AttachmentError, match=r"^attachments: could not be read$") as err:
+        run_isolated(die_mid_message, [load("notes.txt")], AttachmentLimits())
+    assert err.value.reason == "invalid"
+
+
+def test_a_failed_start_closes_both_pipe_ends(monkeypatch: pytest.MonkeyPatch) -> None:
+    pipes: list[tuple[Connection, Connection]] = []
+    real_pipe = isolation.CONTEXT.Pipe
+
+    def pipe(duplex: bool = True) -> tuple[Connection, Connection]:
+        pipes.append(real_pipe(duplex))
+        return pipes[-1]
+
+    def fail_to_start(self: object) -> None:
+        raise OSError("cannot fork")
+
+    monkeypatch.setattr(isolation.CONTEXT, "Pipe", pipe)
+    monkeypatch.setattr(isolation.CONTEXT.Process, "start", fail_to_start)
+    with pytest.raises(OSError, match="cannot fork"):
+        extract_all_isolated([load("notes.txt")], AttachmentLimits())
+    assert [end.closed for end in pipes[0]] == [True, True]
+
+
+def test_the_child_cpu_limit_follows_the_timeout() -> None:
+    with pytest.raises(AttachmentError, match=r"^4$"):  # ceil(2.5) + 1 CPU seconds
+        run_isolated(report_cpu_limit, [load("notes.txt")], AttachmentLimits(timeout_seconds=2.5))
+
+
+MAIN_SCRIPT = """
+import sys
+sys.path.insert(0, {root!r})
+with open({counter!r}, "a") as runs:
+    runs.write("x")  # each execution of this script, as __main__ or as __mp_main__
+if __name__ == "__main__":
+    from app.attachments.extractor import Attachment, AttachmentLimits
+    from app.attachments.isolation import extract_all_isolated
+    for _ in range(3):
+        extract_all_isolated([Attachment("n.txt", b"hello")], AttachmentLimits())
+"""
+
+
+def test_children_do_not_rerun_the_parent_main_script(tmp_path: Path) -> None:
+    counter = tmp_path / "runs.txt"
+    script = tmp_path / "main_script.py"
+    script.write_text(MAIN_SCRIPT.format(root=str(ROOT), counter=str(counter)))
+    subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # noqa: S603  (own script)
+    # Once as __main__, once in the forkserver; never in the three children.
+    assert counter.read_text() == "xx"

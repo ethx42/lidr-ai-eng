@@ -3,11 +3,15 @@ hostile upload can at worst take down its own process. Blocking: call it via `as
 
 import contextlib
 import logging
+import math
 import multiprocessing
+import os
 import resource
+import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
+from multiprocessing import spawn
 from multiprocessing.connection import Connection
 from typing import Protocol
 
@@ -21,7 +25,19 @@ parse_logger = logging.getLogger("app.attachments.extractor")
 # parsers (about 10 ms per extraction after a one-off start of about 100 ms; spawn pays 110 to
 # 160 ms each time). Never fork the threaded web server itself. The preload list is process-wide.
 CONTEXT = multiprocessing.get_context("forkserver")
-CONTEXT.set_forkserver_preload([__name__])
+CONTEXT.set_forkserver_preload(["__main__", __name__])
+
+# Each child re-runs the parent's main script unless the server has already loaded it (uvicorn's
+# console script: about 25 ms per child). The "__main__" preload above should do that, but
+# CPython 3.12's forkserver reads "main_path" where spawn sends "init_main_from_path", so it never
+# fires. The parent therefore names its script in the environment the server inherits, and the
+# server, importing this module as a preload, loads it once; children then skip it.
+PARENT_MAIN_ENV = "ATTACHMENTS_PARENT_MAIN"
+if sys.orig_argv[-1].startswith("from multiprocessing.forkserver import main"):
+    if parent_main := os.environ.get(PARENT_MAIN_ENV):
+        spawn.import_main_path(parent_main)
+elif main_script := getattr(sys.modules["__main__"], "__file__", None):
+    os.environ[PARENT_MAIN_ENV] = os.path.abspath(main_script)
 
 # At most `max_concurrent` children at once, process-wide. Callers wait in worker threads
 # (asyncio.to_thread), so a thread semaphore fits. Sized from the limits on first use: the
@@ -51,18 +67,21 @@ class Forward(logging.Handler):
         self.conn.send(("log", record.getMessage()))
 
 
-def cap_memory(limit: int) -> None:
-    """Best effort. Linux enforces RLIMIT_AS; macOS rejects any limit below the address space a
-    process has already reserved (ValueError), so there the cap is skipped."""
-    _, hard = resource.getrlimit(resource.RLIMIT_AS)
+def cap(kind: int, limit: int) -> None:
+    """Best effort: lower the soft limit and keep the hard one. Where the OS refuses, skip it
+    (macOS rejects any RLIMIT_AS below the address space a process has already reserved)."""
+    _, hard = resource.getrlimit(kind)
     with contextlib.suppress(ValueError, OSError):
-        resource.setrlimit(resource.RLIMIT_AS, (limit, hard))
+        resource.setrlimit(kind, (limit, hard))
 
 
 def child(
     conn: Connection, extract: Extractor, files: Sequence[Attachment], limits: AttachmentLimits
 ) -> None:
-    cap_memory(limits.max_memory_bytes)
+    cap(resource.RLIMIT_AS, limits.max_memory_bytes)
+    # CPU seconds, one more than the wall-clock timeout: the parent's kill comes first, and this
+    # stops a child that no parent is left to kill.
+    cap(resource.RLIMIT_CPU, math.ceil(limits.timeout_seconds) + 1)
     # Only the extractor's records leave the child: library messages can quote the document.
     logging.getLogger().addHandler(logging.NullHandler())
     parse_logger.addHandler(Forward(conn))
@@ -118,9 +137,24 @@ def run_child(
     extract: Extractor, files: Sequence[Attachment], limits: AttachmentLimits
 ) -> list[ExtractedAttachment]:
     receive, send = CONTEXT.Pipe(duplex=False)
-    worker = CONTEXT.Process(target=child, args=(send, extract, list(files), limits), daemon=True)
-    worker.start()
-    send.close()  # the child now holds the only write end: its death reads as EOF
+    with receive, send:
+        worker = CONTEXT.Process(
+            target=child, args=(send, extract, list(files), limits), daemon=True
+        )
+        worker.start()
+        send.close()  # the child now holds the only write end: its death reads as EOF
+        try:
+            return await_result(receive, worker, limits)
+        finally:
+            if worker.is_alive():
+                worker.kill()
+            worker.join()
+            worker.close()
+
+
+def await_result(
+    receive: Connection, worker: multiprocessing.process.BaseProcess, limits: AttachmentLimits
+) -> list[ExtractedAttachment]:
     current = "attachments"
     deadline = time.monotonic() + limits.timeout_seconds
     try:
@@ -140,14 +174,9 @@ def run_child(
                 raise AttachmentError(f"{current}: could not be read")
         logger.warning("attachment worker killed after %s s", limits.timeout_seconds)
         raise AttachmentError(f"{current}: took too long to read")
-    except EOFError:
-        # Killed by a signal (the OOM killer included) or exited without a result.
+    # EOFError: killed by a signal (the OOM killer included) or exited without a result.
+    # OSError: it died in the middle of a message.
+    except (EOFError, OSError):
         worker.join(1)
         logger.warning("attachment worker died with exit code %s", worker.exitcode)
         raise AttachmentError(f"{current}: could not be read") from None
-    finally:
-        if worker.is_alive():
-            worker.kill()
-        worker.join()
-        worker.close()
-        receive.close()

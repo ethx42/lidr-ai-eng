@@ -408,7 +408,14 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 - **Start method: `forkserver`, via `multiprocessing.get_context("forkserver")`.** A library should not call `set_start_method`.
   - The server is launched with `spawnv_passfds`, meaning fork+exec, so starting it from a threaded server is safe. It is single-threaded, and every child forks from it.
   - `set_forkserver_preload([...])` is process-wide and only takes effect before the server starts. `ImportError` is ignored.
-  - Passing an explicit list drops the default `['__main__']`, so neither uvicorn's nor pytest's main module is re-imported.
+  - **Correction (fix round 4):** an explicit list without `"__main__"` does not stop main from being re-imported. It moves the work into every child: `spawn.prepare()` re-runs the parent's main *script* (`init_main_from_path`) in each child, unless the child inherited a `__main__` whose `__file__` matches.
+    - A `-m` main (`init_main_from_name` ending in `.__main__`) is never re-run.
+    - With uvicorn's console script as `__main__`, a child cost a median of 35.5 ms against 11.6 ms once the server had loaded the script (macOS, `uvicorn --app-dir … probe_app:app`, 20 calls on the three fixtures).
+  - **`["__main__", ...]` is a no-op on CPython 3.12.11:** `forkserver.ensure_running` keeps only `{'main_path', 'sys_path'}` from `spawn.get_preparation_data()`, which emits `init_main_from_path`, so `main_path` is always `None` in the server. Verified in source and by measurement.
+  - **Workaround in `app/attachments/isolation.py`:**
+    - The parent exports its script path (`ATTACHMENTS_PARENT_MAIN`) before the server starts.
+    - When the module is imported as a preload inside the server, it calls `spawn.import_main_path(path)` (in `spawn.__all__`). It recognises the server by `sys.orig_argv[-1]` starting with `from multiprocessing.forkserver import main`.
+    - Children then skip the re-run. Test: a script counts its own executions, and three children leave the count at 2 (the parent and the server).
   - The server gets the parent's `sys.path` from the spawn preparation data. That is how test-module targets unpickle in the child.
 - **Measured overhead:**
   - forkserver: about 11 ms per child on Linux (7 ms on macOS) after a one-off 91–114 ms start.
@@ -431,6 +438,10 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   - The caller holds a slot for the child's whole lifetime. `acquire(timeout=...)` returns `False` on expiry, which becomes a "busy" `AttachmentError`.
   - A thread semaphore is right because callers wait in `asyncio.to_thread` worker threads.
 - **Exception attributes across the pipe:** `BaseException.__reduce__` returns `(cls, args, __dict__)`. An attribute set in `__init__` (`AttachmentError.reason`) therefore survives pickling, as long as the extra `__init__` parameter has a default, since unpickling calls `cls(*args)` and then restores `__dict__`. Verified by a round-trip test.
+- **`RLIMIT_CPU` as a backstop:** the child sets a soft `RLIMIT_CPU` of `ceil(timeout) + 1` CPU seconds. Since CPU time is at most wall time for this single-threaded work, the parent's wall-clock kill always comes first. The limit only stops a child that outlived its parent: the forkserver exits with the parent, but its children do not. macOS and Linux both accept it (verified by reading it back in the child).
+- **Pipe edge cases:**
+  - A child killed in the middle of `send` leaves a partial message. `recv()` then raises `OSError("got end of file during message")`, not `EOFError`, so catch both.
+  - Open the pipe with `with receive, send:` so both ends close even when `Process.start()` raises. `Connection.close()` is idempotent.
 - **Logging in the child:** a forked child has no handlers, so `logging.lastResort` would print WARNING and above to stderr, unformatted (pypdf's included). Add a `NullHandler` to the root logger in the child and forward only the extractor's type-name records through the pipe.
 
 ### httpx2 2.13.0: async integration tests
