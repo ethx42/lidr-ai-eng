@@ -165,10 +165,13 @@ describe("Inspector, Context tab", () => {
 
     await user.click(within(error).getByRole("button", { name: "Retry" }));
     expect(error).toHaveAttribute("aria-busy", "true");
-    expect(within(error).getByRole("button", { name: "Updating…" })).toBeInTheDocument();
+    // still focusable (it does not drop focus), but announced as unavailable while it does nothing
+    const updating = within(error).getByRole("button", { name: "Updating…" });
+    expect(updating).toHaveAttribute("aria-disabled", "true");
+    expect(updating).not.toBeDisabled();
     await act(async () => answer(unreadable()));
     expect(error).toHaveAttribute("aria-busy", "false");
-    expect(within(error).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(within(error).getByRole("button", { name: "Retry" })).not.toHaveAttribute("aria-disabled", "true");
   });
 
   it("skips malformed references and shows n/a for an unreadable prompt version", async () => {

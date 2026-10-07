@@ -47,6 +47,8 @@ const ContextError = ({ title, description, busy = false, onRetry }: ContextErro
         type="button"
         variant="outline"
         size="xs"
+        // not `disabled`: that would drop focus to the page; this keeps it on the button and says it does nothing now
+        aria-disabled={busy}
         onClick={(event) => {
           if (busy) return;
           event.currentTarget.closest<HTMLElement>('[role="tabpanel"]')?.focus({ preventScroll: true });
