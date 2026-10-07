@@ -153,6 +153,14 @@ async def test_error_events_inside_the_stream_are_mapped_by_type(
     assert received and all(isinstance(e, TextDelta) for e in received)
 
 
+@pytest.mark.parametrize("name", ["overloaded_midstream", "rate_limit_midstream"])
+async def test_error_events_inside_the_stream_report_no_upstream_status(name: str) -> None:
+    # The 200 is the stream's: logged next to an unavailable outcome, it would mislead.
+    with pytest.raises(LLMError) as info:
+        await collect(provider_for(serve(fixture(name))))
+    assert info.value.upstream_status is None
+
+
 async def test_other_error_events_inside_the_stream_are_upstream_errors() -> None:
     body = fixture("overloaded_midstream").replace(
         '"type":"overloaded_error"', '"type":"invalid_request_error"'
@@ -232,6 +240,7 @@ async def test_http_errors_map_the_same_on_both_paths(
     for info in (streamed, blocking):
         assert type(info.value) is expected
         assert info.value.cause == cause
+        assert info.value.upstream_status == status
 
 
 def without(body: str, *types: str) -> str:

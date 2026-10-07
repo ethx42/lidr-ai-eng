@@ -38,8 +38,10 @@ class LLMError(Exception):
 
     @property
     def upstream_status(self) -> int | None:
+        """The upstream's HTTP error status; None for an error inside a 200 stream (Anthropic's
+        SDK raises it as a status error that carries the stream's 200)."""
         status = getattr(self.__cause__, "status_code", None)
-        return status if isinstance(status, int) else None
+        return status if isinstance(status, int) and status >= 400 else None
 
 
 class UpstreamRateLimited(LLMError):

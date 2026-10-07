@@ -521,6 +521,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 
 ### Review fix wave, AI service (2026-10-07, session 3 panel)
 - **Failed calls keep their bill (ai-1):** both providers read the usage before the stop condition, so `InvalidModelOutput` (and OpenAI's `response.failed` error) carries `LLMError.usage`, and the failed call's `llm_call` logs those tokens and `cost_usd`. A cancelled, transport or protocol failure has no reported usage: its tokens stay 0 (the spec's "0 for any count the provider does not report") and `cost_usd` is null, which is what marks the spend as unknown. On OpenAI's blocking path the envelope's `usage` is read with `ResponseUsage.construct(**usage)`: openai 3.19.0 overrides pydantic's `construct` (`openai/_models.py`) to build nested models without validation, as the SDK builds every response, so it works when `raw.parse()` fails on truncated JSON. `model_construct` is aliased to it at runtime only; mypy sees pydantic's non-recursive signature.
+- **Mid-stream errors have no upstream status (ai-2):** Anthropic 1.8.0 raises a mid-stream `event: error` through `_make_status_error(..., response=self.response)` (`anthropic/_streaming.py`), so the `APIStatusError` carries the stream's `status_code == 200`. `LLMError.upstream_status` returns only error statuses (>= 400), so `llm_call` and `llm_fallback` log `upstream_status: null` for it, as they already did for OpenAI's in-stream errors (raised unchained); `cause` still names the error type.
 
 ## Web, BFF, Docker and CI (2026-10-06)
 
