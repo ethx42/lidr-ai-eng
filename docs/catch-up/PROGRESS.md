@@ -48,9 +48,9 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 ## pre-session-05
 
 - [x] Plan audited (early, 30 plan defects fixed; rulings in Notes)
-- [ ] Task 1: Messages-based provider interface
-- [ ] Task 2: Session state — app/sessions.py
-- [ ] Task 3: Output schema technologies and the metadata merge
+- [x] Task 1: Messages-based provider interface (f31da42, 5d32ab8)
+- [x] Task 2: Session state — app/sessions.py (55809a8, ec26057)
+- [x] Task 3: Output schema technologies and the metadata merge (e4d2443, 19c4bc0)
 - [ ] Task 4: Attachment extraction (path B)
 - [ ] Task 5: Prompt estimation/v3 with project metadata and attachments
 - [ ] Task 6: Conversation service
@@ -82,3 +82,5 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - S4 review panel (Workflow, 4 reviewers + 4 adversarial verifiers): 12 findings, 11 confirmed (all minor after verification), 1 refuted (inactive mark contrast). Fixed: published-version pin covers every project type x detail level x output format plus user.j2, and every version must have a pin; streaming highlights mark only complete quotes; Evidence pins grounded quotes below 768 px; segmented controls check on arrow (Radix RadioGroup); equal pane header heights; Context tab keeps contrast and the last good prompt with a polite inline error and Retry; Document table region named by its heading and focusable only when it scrolls. Deferred into S5 Task 5 (v3 is the next prompt version): ai-1 the summary level's "at most eight tasks" vs the 80 h task cap; ai-2 Anthropic system prompt cached as one block.
 - Known flake to watch: tests/unit/test_llm_service_cache.py first-event bound (0.25 s) exceeded once (0.259 s) while a Docker e2e ran in parallel; green on rerun, never in sequential runs.
 - Owner commit on pre-session-04: 4cf1577 `.env.example` (S3+S4 settings).
+- S5 plan re-checked against the real S4 code before Task 1 (40 edits; rulings S5-R1..R8 in the plan). S4 panel items ai-1 (summary vs 80 h cap) and ai-2 (Anthropic system cache blocks) carried into S5 Task 5.
+- S5 Task 3 eval (measurement, ruling S5-R2): v2 after the `technologies` schema change scored 0.9231 and 0.9423 (mean 0.9327) against the 0.9415 floor; S4's v2 two-run mean was 0.9519. Baseline and floor untouched; reported in the README.

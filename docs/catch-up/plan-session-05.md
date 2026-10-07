@@ -465,6 +465,8 @@ Metadata values are neutralised too (they came from model output); `neutralize` 
 - ai-1: v1/v2's `summary` branch ("at most eight tasks") contradicts the 4–80 h per-task rule plus the mandatory qa/devops/project_management tasks: 8 × 80 h caps a summary at 640 likely hours. In v3, word the summary branch so it keeps the total effort of a medium breakdown and lets coarse tasks exceed 80 h (state that explicitly), and add a template test that the v3 summary render no longer combines "at most eight" with the 80 h cap. v1/v2 stay unchanged (published versions are immutable).
 - ai-2: the Anthropic provider sends the whole system prompt as one block with one `cache_control` breakpoint at its end, so any change in the enum/metadata tail misses the cache written by another variant. Have the loader expose the system prompt as (static prefix, tail) — v3's `<project_metadata>` tail varies per turn, so this matters more in S5 — and send two system text blocks to Anthropic with `cache_control` on the static block only (OpenAI keeps the concatenated string). Test: the Anthropic request body has two system blocks, the first carrying `cache_control`, and their concatenation equals the rendered system prompt.
 - Session 4 pins every published prompt version in `tests/unit/test_prompts.py` (`PINNED_SHA256`, one digest per version over every project_type × detail_level × output_format render plus user.j2) and asserts every discovered version has a pin: add v3's digest once its templates are final (v1/v2 digests must not change).
+- From Task 3's live recording: claude-haiku-4-5 invented technologies (HTML/CSS/JavaScript) for a transcript that names none, while gpt-4o-mini returned `[]`. v3's rules must say: list only technologies the transcript or the attachments name explicitly; return `[]` when none are named. Add a template test that the rendered v3 system prompt contains that rule.
+- From Task 3's review (do these first, as their own commit `test(sessions): latest-wins corrections and bounded technology names`): tests that a later non-blank `project_name`/summary replaces the known one, that a smaller latest team size replaces the known one (3 → 2), and that a one-field change reports exactly `changed == ["agreed_scope"]`; `merge_metadata` drops technology names longer than 80 characters (v3 re-renders the metadata into every system prompt, outside `MAX_HISTORY_CHARS`) with a test; a test pinning which entries survive the cap once the list is full (new names are dropped and not reported in `changed`), documented in the docstring.
 
 ---
 
@@ -562,6 +564,11 @@ async def test_conversation_never_uses_the_cache(conversation, spy_cache) -> Non
 
 - [ ] **Step 2: Implement** — `turn` acquires `session.lock` as its first step, before any `await`, without waiting (`if lock.locked(): raise SessionBusy`), renders `self.prompt_version` (v3) with metadata and the already-extracted attachments, calls `estimation.run(..., use_cache=False)` with `history.as_chat(prompt.user)`, then on success: `history.append(prompt.user, render_compact(response.breakdown))`, `merge_metadata`, `last_used = clock()`. Stream variant: same, history and metadata updated only after the final response; cancellation leaves both unchanged. `extract` runs `extract_all` via `anyio.to_thread.run_sync`.
 - [ ] **Step 3: `make check`; commit** `feat(conversation): multi-turn estimation with memory and attachments`
+
+**Orchestrator notes (from Task 2's review):**
+- Do not assign `session.last_used = clock()` after a turn without moving the session to the LRU end: either drop that assignment (the TTL is far longer than a turn; `get` already refreshes it) or add a store-owned `touch(session_id)` that updates both, with a test.
+- Every history passed to a provider must be non-empty and end with a user turn (`as_chat` guarantees it); the provider's `UpstreamError("no_user_message")` is only a backstop.
+- Attachment extraction is sync and CPU-bound: run `extract_all` off the event loop (`asyncio.to_thread`) as the brief says; never log `AttachmentError` with `exc_info` (chained parser messages can quote content).
 
 ---
 
