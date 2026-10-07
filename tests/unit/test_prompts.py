@@ -1,5 +1,6 @@
 import hashlib
 import re
+from itertools import product
 
 import pytest
 
@@ -18,12 +19,13 @@ from app.prompts.loader import (
 from app.schemas.estimation import DetailLevel, OutputFormat, ProjectType
 from tests.factories import typed_request
 
-# Each published version's system prompt for every detail level and output format, plus its user
-# message with and without an explicit language. Published versions never change: a changed
-# template needs a new version directory (app/prompts/estimation/vN/) and a new pin.
+# Each published version's system prompt for every project type, detail level and output format,
+# plus its user message for every project type with and without an explicit language. Published
+# versions never change: a changed template needs a new version directory
+# (app/prompts/estimation/vN/) and a new pin.
 PINNED_SHA256 = {
-    "v1": "17e613255d81caed0e06c3f9c0a1410f1ca605cbfdfb78543777a22d661147ad",
-    "v2": "b798680b915a4ab52cd885b15cafafc7131a3173e609e71da658a2fa896ab9b9",
+    "v1": "32ab95b8fc9ff0782dece7d8059da6bcd105fc82d5eab809e303ac1518e8a1ce",
+    "v2": "72addb482b48102a492ccbecc042c285b0f2f072d49fa398f58cefb1c17060f2",
 }
 
 
@@ -84,19 +86,19 @@ def test_system_text_has_no_request_data() -> None:
 
 def published_renders(version: str) -> str:
     systems = [
-        render_system(PromptParams(ProjectType.WEB_SAAS, detail, output), version)
-        for detail in DetailLevel
-        for output in OutputFormat
+        render_system(PromptParams(*choices), version)
+        for choices in product(ProjectType, DetailLevel, OutputFormat)
     ]
     users = [
         render_estimation_prompt(
             typed_request(
                 "Client: we need a booking app.",
-                project_type=ProjectType.WEB_SAAS,
+                project_type=project_type,
                 output_language=language,
             ),
             version,
         )[1]
+        for project_type in ProjectType
         for language in (None, "Spanish")
     ]
     return "\x00".join([*systems, *users])
