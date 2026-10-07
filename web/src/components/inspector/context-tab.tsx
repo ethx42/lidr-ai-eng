@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronRight, Copy } from "lucide-react";
+import { ChevronRight, CircleAlert, Copy, RotateCcw } from "lucide-react";
 import { useId } from "react";
-import { Empty } from "@/components/estimate/section";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +32,32 @@ const Updating = () => (
   </span>
 );
 
+// Never "reload the page": the run on screen lives only in memory. Retry asks again for the same choices; focus moves to
+// the tab panel first, because the button goes away while it does.
+const ContextError = ({ title, description, onRetry }: { title: string; description?: string; onRetry: () => void }) => (
+  <Alert className="border-destructive/40 bg-danger-subtle">
+    <CircleAlert className="text-destructive" />
+    <AlertTitle className="text-foreground">{title}</AlertTitle>
+    <AlertDescription className="flex flex-col items-start gap-2 text-foreground">
+      {description && <p>{description}</p>}
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        onClick={(event) => {
+          event.currentTarget.closest<HTMLElement>('[role="tabpanel"]')?.focus({ preventScroll: true });
+          onRetry();
+        }}
+      >
+        <RotateCcw />
+        Retry
+      </Button>
+    </AlertDescription>
+  </Alert>
+);
+
+const UNAVAILABLE = "The prompt and references could not be loaded from the AI service.";
+
 const Reference = ({ reference: { size, meetingSummary, projectName, estimation } }: { reference: ReferenceModel }) => (
   <li className="flex flex-col gap-2 py-4">
     {(size || projectName) && (
@@ -60,15 +86,17 @@ const Reference = ({ reference: { size, meetingSummary, projectName, estimation 
 );
 
 // What the model sees for the form's current choices: the system prompt and the reference estimations injected into it
-// (CAG). While the prompt for new choices loads, the previous one stays, marked busy, at full contrast.
-export const ContextTab = ({ context: { context, loading } }: { context: PromptContext }) => {
+// (CAG). While the prompt for new choices loads, the previous one stays, marked busy, at full contrast; if it cannot be
+// loaded, the previous one stays under an error that offers to try again.
+export const ContextTab = ({ context: { context, loading, failed, retry } }: { context: PromptContext }) => {
   const promptId = useId();
   const referencesId = useId();
-  if (context === undefined) return <ContextSkeleton />;
+  if (context === undefined && !failed) return <ContextSkeleton />;
   const { promptVersion, systemPrompt, references } = readContext(context);
-  if (!systemPrompt) return <Empty>The prompt and references could not be loaded from the AI service. Reload the page to try again.</Empty>;
+  if (!systemPrompt) return <ContextError title={UNAVAILABLE} onRetry={retry} />;
   return (
     <div aria-busy={loading} className="flex flex-col gap-8">
+      {failed && <ContextError title="Could not load the prompt for these choices." description="The prompt below is for your previous choices." onRetry={retry} />}
       <div className="flex flex-col gap-3">
         <Rows>
           <Row label="Prompt version" mono>
