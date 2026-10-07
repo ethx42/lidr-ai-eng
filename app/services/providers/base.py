@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
@@ -48,6 +48,6 @@ class LLMProvider(Protocol):
 
     def stream(
         self, *, system: str, user: str, schema: type[T], cache_key: str
-    ) -> AsyncIterator[StreamEvent[T]]: ...
+    ) -> AsyncGenerator[StreamEvent[T]]: ...
 
     async def aclose(self) -> None: ...

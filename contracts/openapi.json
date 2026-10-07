@@ -84,6 +84,45 @@
         "title": "CallMetrics",
         "type": "object"
       },
+      "ContextResponse": {
+        "properties": {
+          "chain": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Chain",
+            "type": "array"
+          },
+          "max_transcription_chars": {
+            "title": "Max Transcription Chars",
+            "type": "integer"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceView"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "system_prompt": {
+            "title": "System Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt_version",
+          "system_prompt",
+          "references",
+          "chain",
+          "max_transcription_chars"
+        ],
+        "title": "ContextResponse",
+        "type": "object"
+      },
       "EnrichedBreakdown": {
         "properties": {
           "assumptions": {
@@ -369,6 +408,97 @@
         "title": "EstimatedTask",
         "type": "object"
       },
+      "EstimationBreakdown": {
+        "properties": {
+          "assumptions": {
+            "description": "Gaps filled with explicit assumptions instead of invented scope.",
+            "items": {
+              "$ref": "#/components/schemas/Assumption"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "confidence": {
+            "description": "Confidence in this estimate; low for vague input.",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "confidence_rationale": {
+            "description": "Why this confidence level.",
+            "title": "Confidence Rationale",
+            "type": "string"
+          },
+          "open_questions": {
+            "description": "Questions to ask the client before committing.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Questions",
+            "type": "array"
+          },
+          "project_name": {
+            "description": "Short project name.",
+            "title": "Project Name",
+            "type": "string"
+          },
+          "requirements": {
+            "description": "Requirements explicitly stated in the transcript, each with verbatim evidence.",
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "risks": {
+            "description": "Main delivery risks.",
+            "items": {
+              "$ref": "#/components/schemas/Risk"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "summary": {
+            "description": "Two to four sentences describing the project scope.",
+            "title": "Summary",
+            "type": "string"
+          },
+          "tasks": {
+            "description": "Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "team": {
+            "description": "Recommended team composition.",
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            },
+            "title": "Team",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_name",
+          "summary",
+          "requirements",
+          "assumptions",
+          "open_questions",
+          "tasks",
+          "team",
+          "risks",
+          "confidence",
+          "confidence_rationale"
+        ],
+        "title": "EstimationBreakdown",
+        "type": "object"
+      },
       "GroundingReport": {
         "properties": {
           "requirements_grounded": {
@@ -425,6 +555,28 @@
           "breakdown"
         ],
         "title": "PartialEvent",
+        "type": "object"
+      },
+      "ReferenceView": {
+        "properties": {
+          "estimation": {
+            "$ref": "#/components/schemas/EstimationBreakdown"
+          },
+          "meeting_summary": {
+            "title": "Meeting Summary",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "string"
+          }
+        },
+        "required": [
+          "size",
+          "meeting_summary",
+          "estimation"
+        ],
+        "title": "ReferenceView",
         "type": "object"
       },
       "Requirement": {
@@ -525,6 +677,75 @@
           "model"
         ],
         "title": "StatusEvent",
+        "type": "object"
+      },
+      "Task": {
+        "properties": {
+          "basis": {
+            "description": "Requirement and/or assumption identifiers (R*, A*) this task rests on.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Basis",
+            "type": "array"
+          },
+          "id": {
+            "description": "Identifier T1, T2, ...",
+            "title": "Id",
+            "type": "string"
+          },
+          "likely_hours": {
+            "description": "Most likely effort in hours.",
+            "title": "Likely Hours",
+            "type": "number"
+          },
+          "name": {
+            "description": "Short task name.",
+            "title": "Name",
+            "type": "string"
+          },
+          "optimistic_hours": {
+            "description": "Best-case effort in hours.",
+            "title": "Optimistic Hours",
+            "type": "number"
+          },
+          "pessimistic_hours": {
+            "description": "Worst-case effort in hours.",
+            "title": "Pessimistic Hours",
+            "type": "number"
+          },
+          "phase": {
+            "description": "Delivery phase this task belongs to.",
+            "enum": [
+              "discovery",
+              "ux_ui",
+              "backend",
+              "frontend",
+              "integrations",
+              "qa",
+              "devops",
+              "project_management"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this task is needed and what drives its size.",
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase",
+          "name",
+          "rationale",
+          "basis",
+          "optimistic_hours",
+          "likely_hours",
+          "pessimistic_hours"
+        ],
+        "title": "Task",
         "type": "object"
       },
       "TeamMember": {
@@ -655,6 +876,27 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/context": {
+      "get": {
+        "operationId": "context_api_v1_context_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Prompt, reference estimations and limits used for estimates",
+        "tags": [
+          "estimations"
+        ]
+      }
+    },
     "/api/v1/estimate": {
       "post": {
         "description": "Send the body as JSON with `Content-Type: application/json`; other content types are rejected with `422 invalid_request`.",
@@ -902,6 +1144,72 @@
           }
         },
         "summary": "Estimate a project from a meeting transcription",
+        "tags": [
+          "estimations"
+        ]
+      }
+    },
+    "/api/v1/estimate/stream": {
+      "post": {
+        "description": "Same body as `POST /api/v1/estimate`; validation errors return `422` JSON before the stream\nstarts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq` is\nalso the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`\n(`ErrorEvent`).",
+        "operationId": "estimate_stream_api_v1_estimate_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstimateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/StatusEvent"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PartialEvent"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EstimateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEvent"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Invalid request (empty, too long, or unknown fields)."
+          }
+        },
+        "summary": "Stream an estimate as Server-Sent Events",
         "tags": [
           "estimations"
         ]

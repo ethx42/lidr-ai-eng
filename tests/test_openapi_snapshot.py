@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.main import create_app
 from app.routers.estimations import example_response
+from app.schemas.context import ContextResponse, ReferenceView
 from app.schemas.estimation import CallMetrics, EstimateResponse, Usage
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 
@@ -22,7 +23,17 @@ def test_stream_event_models_are_in_the_contract() -> None:
 
 
 @pytest.mark.parametrize(
-    "model", [EstimateResponse, CallMetrics, Usage, StatusEvent, PartialEvent, ErrorEvent]
+    "model",
+    [
+        EstimateResponse,
+        CallMetrics,
+        Usage,
+        StatusEvent,
+        PartialEvent,
+        ErrorEvent,
+        ContextResponse,
+        ReferenceView,
+    ],
 )
 def test_always_serialized_fields_are_required(model: type[BaseModel]) -> None:
     schema = create_app().openapi()["components"]["schemas"][model.__name__]
@@ -40,3 +51,11 @@ def test_documented_example_keeps_every_field() -> None:
     assert operation["responses"]["200"]["content"]["application/json"]["example"] == (
         example_response()
     )
+
+
+def test_stream_operation_documents_every_event_payload() -> None:
+    operation = create_app().openapi()["paths"]["/api/v1/estimate/stream"]["post"]
+    content = operation["responses"]["200"]["content"]["text/event-stream"]
+    refs = {item["$ref"].rsplit("/", 1)[1] for item in content["schema"]["oneOf"]}
+    assert refs == {"StatusEvent", "PartialEvent", "EstimateResponse", "ErrorEvent"}
+    assert operation["responses"]["422"]

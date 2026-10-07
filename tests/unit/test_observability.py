@@ -57,3 +57,31 @@ def test_debug_level_keeps_app_debug_and_caps_client_loggers() -> None:
         root.handlers = saved[1]
         for name in CLIENT_LOGGERS:
             logging.getLogger(name).setLevel(logging.NOTSET)
+
+
+def test_llm_call_record_carries_stream_cost_attempt_and_cache(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    common = {"provider": "openai", "model": "gpt-4o-mini", "prompt_version": "v1", "usage": None}
+    with caplog.at_level(logging.INFO, logger="app.llm"):
+        log_llm_call(**common, latency_ms=10, outcome="ok")
+        log_llm_call(
+            **common,
+            latency_ms=900,
+            outcome="cancelled",
+            stream=True,
+            ttft_ms=150,
+            cost_usd=0.0012,
+            attempt=2,
+            fallback=True,
+            cache="miss",
+        )
+    blocking, streamed = (
+        json.loads(JsonFormatter().format(r))
+        for r in caplog.records
+        if r.getMessage() == "llm_call"
+    )
+    keys = ("stream", "ttft_ms", "cost_usd", "attempt", "fallback", "cache")
+    assert [blocking[k] for k in keys] == [False, None, None, 1, False, "bypass"]
+    assert [streamed[k] for k in keys] == [True, 150, 0.0012, 2, True, "miss"]
+    assert streamed["outcome"] == "cancelled"

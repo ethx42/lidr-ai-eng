@@ -4,7 +4,7 @@ pair, or synthesises a stream from a fixture breakdown when none does."""
 import asyncio
 import hashlib
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from pathlib import Path
 
 import pydantic
@@ -87,7 +87,7 @@ class ReplayProvider:
 
     async def stream(
         self, *, system: str, user: str, schema: type[T], cache_key: str
-    ) -> AsyncIterator[StreamEvent[T]]:
+    ) -> AsyncGenerator[StreamEvent[T]]:
         start = time.perf_counter()
         chunks, usage = self._recording(cassette_key(system, user))
         previous, snapshot = 0.0, ""

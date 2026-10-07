@@ -1,5 +1,5 @@
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from functools import cache
 from typing import Any
 
@@ -103,7 +103,7 @@ class AnthropicProvider:
 
     async def stream(
         self, *, system: str, user: str, schema: type[T], cache_key: str
-    ) -> AsyncIterator[StreamEvent[T]]:
+    ) -> AsyncGenerator[StreamEvent[T]]:
         # Interim: the blocking call as a single delta until native streaming lands.
         result = await self.generate(system=system, user=user, schema=schema, cache_key=cache_key)
         text = result.parsed.model_dump_json()

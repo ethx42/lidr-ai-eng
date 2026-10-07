@@ -57,6 +57,12 @@ def log_llm_call(
     outcome: str,
     cause: str | None = None,
     upstream_status: int | None = None,
+    stream: bool = False,
+    ttft_ms: int | None = None,
+    cost_usd: float | None = None,
+    attempt: int = 1,
+    fallback: bool = False,
+    cache: str = "bypass",
 ) -> None:
     fields = {
         "provider": provider,
@@ -64,7 +70,13 @@ def log_llm_call(
         "prompt_version": prompt_version,
         **(usage or Usage()).model_dump(),
         "latency_ms": latency_ms,
-        "outcome": outcome,
+        "ttft_ms": ttft_ms,
+        "cost_usd": cost_usd,
+        "stream": stream,
+        "attempt": attempt,  # the attempt that served (or failed last)
+        "fallback": fallback,
+        "cache": cache,  # hit | miss | error | bypass
+        "outcome": outcome,  # ok | cancelled | an LLMError code
     }
     if outcome != "ok":
         fields |= {"cause": cause, "upstream_status": upstream_status}

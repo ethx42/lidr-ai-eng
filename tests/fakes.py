@@ -1,4 +1,5 @@
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncGenerator
 from itertools import pairwise
 from typing import Any, TypeVar
 
@@ -59,7 +60,7 @@ class FakeProvider:
 
     async def stream(
         self, *, system: str, user: str, schema: type[T], cache_key: str
-    ) -> AsyncIterator[StreamEvent[T]]:
+    ) -> AsyncGenerator[StreamEvent[T]]:
         self._record(system, user, schema, cache_key)
         if self.error:
             raise self.error
@@ -78,3 +79,24 @@ class FakeProvider:
 
     async def aclose(self) -> None:
         self.closed = True
+
+
+class SlowFakeProvider(FakeProvider):
+    """Streams one delta, then stalls forever: an upstream that stops mid-answer."""
+
+    first_delta = '{"project_name": "Yo'
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stream_closed = asyncio.Event()
+
+    async def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncGenerator[StreamEvent[T]]:
+        self._record(system, user, schema, cache_key)
+        try:
+            yield TextDelta(text=self.first_delta, snapshot=self.first_delta)
+            await asyncio.Event().wait()
+        finally:
+            self.closed_streams += 1
+            self.stream_closed.set()
