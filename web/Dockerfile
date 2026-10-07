@@ -2,7 +2,7 @@
 # Web UI and BFF, after Next.js's official with-docker example (standalone output).
 # AI_SERVICE_URL is read per request on the server, never at build time.
 FROM node:24.21.0-slim AS base
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 NEXT_TELEMETRY_DISABLED=1
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 NEXT_TELEMETRY_DISABLED=1 pnpm_config_update_notifier=false
 WORKDIR /app
 RUN corepack enable pnpm
 

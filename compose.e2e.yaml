@@ -2,6 +2,8 @@
 # No LLM calls: the replay provider serves the recorded cassettes (synthesised streams otherwise).
 services:
   ai-service:
+    # Hermetic: drop the base file's env_file, so this stack never receives the real API keys
+    env_file: !reset []
     environment:
       LLM_PROVIDER: replay
       # An empty value is ignored and restores the default Anthropic fallback (real spend)
