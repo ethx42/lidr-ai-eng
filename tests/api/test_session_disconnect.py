@@ -49,12 +49,24 @@ async def test_leaving_a_session_stream_releases_the_session(
     assert after.status_code == 200 and after.json()["history_turns"] == 1
 
 
+async def until_parked(provider: TickingFakeProvider) -> None:
+    """Returns once the stream has gone five ticks without being pulled: FastAPI's producer is
+    parked on its full buffer, with the endpoint generator paused at a `yield`."""
+    while True:
+        provider.ticked.clear()
+        try:
+            await asyncio.wait_for(provider.ticked.wait(), timeout=5 * provider.interval)
+        except TimeoutError:
+            return
+
+
 async def test_a_slow_reader_leaving_releases_the_session(settings: Settings) -> None:
     # A client that stops reading: FastAPI's producer ends up parked on a full buffer with the
     # endpoint generator paused at a `yield`, which no cancellation reaches.
     provider = TickingFakeProvider()
     app = create_app(settings=settings, provider_factory=lambda _: provider)
     body = urlencode(FORM).encode()
+    blocked = asyncio.Event()
     disconnected = asyncio.Event()
     received = sent_chunks = 0
 
@@ -71,6 +83,7 @@ async def test_a_slow_reader_leaving_releases_the_session(settings: Settings) ->
         if message["type"] == "http.response.body":
             sent_chunks += 1
             if sent_chunks > 1:  # the socket buffer is full from here on
+                blocked.set()
                 await asyncio.Event().wait()
 
     async with app.router.lifespan_context(app):
@@ -95,7 +108,9 @@ async def test_a_slow_reader_leaving_releases_the_session(settings: Settings) ->
             "server": ("127.0.0.1", 8000),
         }
         request = asyncio.create_task(app(scope, receive, send))
-        await asyncio.sleep(1)  # several partials: the buffers fill and the producer parks
+        async with asyncio.timeout(2):
+            await blocked.wait()
+            await until_parked(provider)
         assert session.lock.locked()
         disconnected.set()
         await asyncio.wait_for(provider.stream_closed.wait(), timeout=1)
