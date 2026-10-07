@@ -327,6 +327,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expect(transcript(page)).toBeVisible();
       await expectAccessible(page, "empty");
 
+      // The enabled Estimate button fades in from its disabled opacity; axe mid-transition reports a false contrast failure.
       await pickSample(page);
       await settled(page.getByRole("form", { name: "Estimate request" }));
       await expectAccessible(page, "sample picked");
@@ -402,26 +403,53 @@ test.describe("375 px wide", () => {
   });
 });
 
-// A mid-height laptop window: after a run the panes side by side still leave the estimate a usable height, as the run
-// left the page (the result is brought into view when the form would crowd it out), and the form stays reachable.
-test.describe("1280x600", () => {
-  test.use({ viewport: { width: 1280, height: 600 } });
+// The `short` threshold side by side, in px (globals.css, SHORT in split-view.tsx): up to this height the page scrolls
+// as a whole; above it the split is fixed below the form.
+const SHORT_MAX_HEIGHT = 772;
+const pageScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
 
-  test("the split view keeps a usable estimate area beside the transcript after a run", async ({ page }) => {
+// Mid-height laptop windows, up to the threshold: after a run the panes side by side still leave the estimate a usable
+// height, as the run left the page (the result is brought into view when the form would crowd it out), the inspector's
+// tabs stay in view, and the form stays reachable.
+for (const height of [600, SHORT_MAX_HEIGHT]) {
+  test.describe(`1280x${height}`, () => {
+    test.use({ viewport: { width: 1280, height } });
+
+    test("the page scrolls and the split view keeps a usable estimate area beside the transcript after a run", async ({ page }) => {
+      await page.goto("/");
+      await sendSample(page);
+      await expectResult(page);
+      expect(await pageScroll(page), "px the page scrolls").toBeGreaterThan(0);
+      await expect(page.getByRole("separator", { name: "Resize the transcript and the estimate" })).toBeVisible();
+      expect(await estimate(page).evaluate(visibleHeight), "px of the estimate in view").toBeGreaterThanOrEqual(240);
+      expect(await transcriptPane(page).evaluate(visibleHeight), "px of the submitted transcript in view").toBeGreaterThanOrEqual(240);
+      await expect(page.getByRole("complementary", { name: "Inspector" }).getByRole("tab", { name: "Last call" })).toBeInViewport({ ratio: 1 });
+      await estimateButton(page).scrollIntoViewIfNeeded();
+      await expect(estimateButton(page)).toBeInViewport();
+      await expectNoHorizontalScroll(page);
+    });
+  });
+}
+
+// Just above the threshold the split is fixed below the form and each pane scrolls on its own, the tightest fit: the
+// estimate pane's content (status and actions, then the article) and the transcript keep >= 240 px each.
+test.describe(`1280x${SHORT_MAX_HEIGHT + 1}`, () => {
+  test.use({ viewport: { width: 1280, height: SHORT_MAX_HEIGHT + 1 } });
+
+  test("just above the short threshold the fixed split keeps a usable estimate area beside the transcript", async ({ page }) => {
     await page.goto("/");
     await sendSample(page);
     await expectResult(page);
-    await expect(page.getByRole("separator", { name: "Resize the transcript and the estimate" })).toBeVisible();
-    expect(await estimate(page).evaluate(visibleHeight), "px of the estimate in view").toBeGreaterThanOrEqual(240);
+    expect(await pageScroll(page), "px the page scrolls").toBe(0);
+    expect(await estimate(page).locator("xpath=..").evaluate(visibleHeight), "px of the estimate pane's content in view").toBeGreaterThanOrEqual(240);
     expect(await transcriptPane(page).evaluate(visibleHeight), "px of the submitted transcript in view").toBeGreaterThanOrEqual(240);
-    await estimateButton(page).scrollIntoViewIfNeeded();
     await expect(estimateButton(page)).toBeInViewport();
     await expectNoHorizontalScroll(page);
   });
 });
 
 // A landscape phone, and 1280x1024 at 400% zoom (the WCAG 1.4.10 reference): the header and form once took the whole
-// height there. Below 480 px tall (720 px side by side) the page scrolls as a whole, so the estimate keeps a usable height.
+// height there. Below 480 px tall (772 px side by side) the page scrolls as a whole, so the estimate keeps a usable height.
 for (const viewport of [{ width: 640, height: 360 }, { width: 320, height: 256 }]) {
   test.describe(`${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport });

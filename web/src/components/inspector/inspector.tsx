@@ -39,10 +39,16 @@ const InspectorBody = ({ call, context, title }: Props & { title: ReactNode }) =
 );
 
 // From 1024 px: a panel beside the workspace. Below that it is hidden and `InspectorSheet` opens the same content.
+// Where the page scrolls as a whole (`short`), it sticks a viewport tall, so bringing the result into view keeps its tabs.
 export const InspectorPanel = ({ call, context, ref }: Props & { ref?: Ref<HTMLElement> }) => {
   const titleId = useId();
   return (
-    <aside ref={ref} tabIndex={-1} aria-labelledby={titleId} className="hidden w-88 shrink-0 flex-col border-l bg-surface lg:flex xl:w-96">
+    <aside
+      ref={ref}
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      className="hidden w-88 shrink-0 flex-col border-l bg-surface lg:flex xl:w-96 short:sticky short:top-0 short:h-dvh short:self-start"
+    >
       <InspectorBody
         call={call}
         context={context}

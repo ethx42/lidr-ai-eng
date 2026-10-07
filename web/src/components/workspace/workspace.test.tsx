@@ -391,7 +391,7 @@ describe("Workspace", () => {
     expect(await screen.findByText("0 / 1,200")).toBeInTheDocument();
   });
 
-  // ui-1 (session 3): a fixed header and form must never leave the result no height. Below 480 px tall (720 px side by
+  // ui-1 (session 3): a fixed header and form must never leave the result no height. Below 480 px tall (772 px side by
   // side) nothing is fixed and the page scrolls as a whole, with the split a full viewport tall; below 768 px wide the
   // workspace scrolls in one.
   it("keeps the result usable on short and narrow viewports", async () => {
@@ -400,6 +400,8 @@ describe("Workspace", () => {
     const shell = screen.getByRole("banner").parentElement;
     expect(shell).toHaveClass("h-dvh", "short:h-auto", "short:min-h-dvh");
     expect(main).toHaveClass("overflow-hidden", "max-md:overflow-y-auto", "short:overflow-visible");
+    // the inspector panel then sticks a viewport tall, so its tabs stay in view beside the result
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toHaveClass("short:sticky", "short:top-0", "short:h-dvh", "short:self-start");
     await run(user, input);
     const split = transcriptPane().closest("[data-slot=split-view]");
     expect(split).toHaveClass("flex-1", "md:short:h-dvh", "md:short:flex-none");

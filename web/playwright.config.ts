@@ -4,7 +4,7 @@ import { defineConfig, devices } from "@playwright/test";
 // 127.0.0.1, not localhost: web publishes on IPv4 loopback only, and localhost may resolve to ::1.
 export default defineConfig({
   testDir: "./e2e",
-  // Every test has its own browser context (and so its own sessionStorage thread); the replay streams run concurrently.
+  // Every test has its own browser context; the replay streams run concurrently.
   fullyParallel: true,
   // A recorded stream replays in about 8–13 s end to end, so a test that waits for one or two results needs more than the default 30 s.
   timeout: 90_000,
