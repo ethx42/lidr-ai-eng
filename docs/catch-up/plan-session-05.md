@@ -660,6 +660,7 @@ async def prepared_turn(form: Annotated[SessionEstimateForm, Form()], ...) -> Pr
 - [ ] **Step 4: `make openapi && make web-types && make check`; commit** `feat(api): conversational sessions with multipart attachments`
 
 **Orchestrator notes (from Task 4):** `AttachmentError.reason` is `"busy"` (no extraction slot within the timeout) or `"invalid"`; map `busy` to 503 and every other `AttachmentError` to 422 `invalid_attachment`, logging without `exc_info` (no parser text). Extraction goes through `app.attachments.isolation.extract_all_isolated` via `asyncio.to_thread` (Task 6), before the SSE stream starts.
+- From Task 6's re-review (do first, own commit `fix(sessions): bound stored client text by the history cap`): `ConversationHistory`'s char cap counts `max(len(user), len(source))` per pair, so the raw client text kept for grounding is bounded too (test: six turns of a transcript that neutralises to a much shorter user message stay within the cap). In this task's endpoint, enforce the same transcript length limit as the single-shot path (the `max_transcription_chars` the context endpoint advertises) on the multipart `transcript` field → 422 before extraction or streaming (test).
 
 ---
 
@@ -776,6 +777,8 @@ Complete the two short tests in the same style (every request carries `host: loc
   - Header action "New conversation" (secondary button, confirm if a turn is streaming) → `reset()`.
   - 409 → toast "This conversation is still answering the previous turn"; 404 → create a new session and tell the user.
 - [ ] **Step 3: `pnpm -C web test && pnpm -C web typecheck && pnpm -C web lint`, `make check`; commit** `feat(web): conversational session workspace with attachments and project memory`
+
+**Orchestrator notes (from Task 6):** grounding for a turn covers the windowed conversation the model saw (earlier user turns still in the window + the current transcript and attachments). A grounded requirement whose quote comes from an earlier turn has no `<mark>` in the current turn's transcript disclosure: its Evidence opens the hover card with the quote and a short "from an earlier message" note instead of pinning (same rule as S4's ungrounded case below 768 px: pin only when a mark exists).
 
 ---
 
