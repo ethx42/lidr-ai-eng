@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type Replacement, useDraft } from "@/hooks/use-draft";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useThread } from "@/hooks/use-thread";
+import { focusForTyping } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { Composer } from "./composer";
 import { sampleDraft } from "./sample-picker";
@@ -38,12 +39,12 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
 
   // When the draft must be confirmed first, the composer moves focus to that question instead.
   const fillComposer = (next: Replacement) => {
-    if (draft.replace(next)) inputRef.current?.focus();
+    if (draft.replace(next)) focusForTyping(inputRef.current);
   };
   const submit = () => {
     send(draft.value);
     draft.clear();
-    inputRef.current?.focus(); // keeps Esc (stop) and the next transcript one keystroke away
+    focusForTyping(inputRef.current); // keeps Esc (stop) and the next transcript one keystroke away
   };
 
   return (

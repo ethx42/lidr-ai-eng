@@ -4,6 +4,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fullResponse } from "@/lib/estimate/fixtures";
 import type { Sample } from "@/lib/samples";
+import { stubPointer } from "@/test/pointer";
 import { Chat } from "./chat";
 
 const SAMPLES: Sample[] = [
@@ -19,6 +20,7 @@ describe("Chat", () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    stubPointer("fine");
     Object.defineProperty(Element.prototype, "scrollIntoView", { value: vi.fn(), configurable: true }); // not in jsdom
     stream = () => new Response(new ReadableStream(), { headers: { "content-type": "text/event-stream" } }); // never ends
     vi.stubGlobal(
@@ -69,6 +71,19 @@ describe("Chat", () => {
     expect(screen.getByText("We need a booking portal.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
     expect(JSON.parse(String(streamCalls()[0][1]?.body))).toEqual({ transcription: "We need a booking portal." });
+  });
+
+  it("on a touch screen, never moves focus into the transcript, so the on-screen keyboard stays closed", async () => {
+    stubPointer("coarse");
+    const { user, input, send } = setup();
+    await user.click(screen.getByRole("button", { name: "Clinic portal" }));
+    expect(input).toHaveValue(SAMPLES[1].text);
+    expect(input).not.toHaveFocus();
+
+    await user.click(send);
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(input).not.toHaveFocus();
   });
 
   it("puts a rejected transcript back in the composer from the error card, asking first if there is a draft", async () => {

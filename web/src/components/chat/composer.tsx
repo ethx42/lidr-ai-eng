@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { Draft } from "@/hooks/use-draft";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { focusForTyping } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { countChars, formatChars, formatCount } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,12 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
   const answer = (replace: boolean) => {
     if (replace) draft.confirm();
     else draft.cancel();
-    inputRef.current?.focus();
+    focusForTyping(inputRef.current);
+  };
+  const focusAfterPick = () => {
+    if (!pending) return focusForTyping(inputRef.current);
+    keepRef.current?.focus();
+    return true;
   };
 
   const submit = (event?: FormEvent) => {
@@ -96,7 +102,7 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
           <SampleMenu
             samples={samples}
             onPick={(sample) => draft.replace(sampleDraft(sample))}
-            onPicked={() => (pending ? keepRef : inputRef).current?.focus()}
+            onPicked={focusAfterPick}
           />
           <span id={counterId} className={cn("num ml-auto text-xs", over ? "text-destructive" : length > limit * 0.9 ? "text-warning" : "text-muted-foreground")}>
             {`${formatCount(length)} / ${formatCount(limit)} `}

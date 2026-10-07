@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceContextProvider } from "@/components/service-context";
 import { useDraft } from "@/hooks/use-draft";
 import type { Sample } from "@/lib/samples";
+import { stubPointer } from "@/test/pointer";
 import { Composer } from "./composer";
 
 const SAMPLES: Sample[] = [
@@ -29,6 +30,7 @@ describe("Composer", () => {
 
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>(() => new Promise((resolve) => { resolveContext = resolve; })));
+    stubPointer("fine");
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -165,6 +167,19 @@ describe("Composer", () => {
     expect(input).toHaveValue(SAMPLES[1].text);
     expect(input).toHaveFocus();
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("on a touch screen, leaves the transcript unfocused after a pick or an answer (Samples keeps focus)", async () => {
+    stubPointer("coarse");
+    const { user, input } = setup();
+    await pickSample(user, /Clinic portal/);
+    expect(input).toHaveValue(SAMPLES[1].text);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Samples" })).toHaveFocus());
+
+    await pickSample(user, /Course meeting/);
+    await user.click(await screen.findByRole("button", { name: "Replace draft" }));
+    expect(input).toHaveValue(SAMPLES[0].text);
+    expect(input).not.toHaveFocus();
   });
 
   it("keeps the draft on Escape, without the key reaching the stream's Stop shortcut", async () => {
