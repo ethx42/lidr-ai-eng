@@ -1,10 +1,11 @@
 """The LLM call: rendered prompt -> cache lookup -> provider -> computed totals -> grounding ->
-markdown -> cache write."""
+markdown -> cache write. `run`/`stream_run` are the core; the single-shot wrappers render one user
+message and use the cache, the conversation service sends its history and bypasses it."""
 
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import aclosing
 
 import anyio
@@ -66,24 +67,27 @@ class EstimationService:
         self.cache_scope = cache_scope
         self.primary_attempt = Attempt(provider.name, provider.model)
 
-    def _prepare(
-        self, request: EstimateRequest, prompt_version: str | None
-    ) -> tuple[RenderedPrompt, str]:
-        """The rendered prompt and its cache key: one path for both endpoints and cache_key_for."""
-        prompt = render(request, self.prompt_version if prompt_version is None else prompt_version)
-        # Before any provider call: the router's llm_fallback records read it.
-        prompt_version_var.set(prompt.version)
-        key = cache_key(
+    def _prepare(self, request: EstimateRequest, prompt_version: str | None) -> RenderedPrompt:
+        """The single-turn prompt: one path for both endpoints and cache_key_for."""
+        return render(request, self.prompt_version if prompt_version is None else prompt_version)
+
+    def _key(self, prompt: RenderedPrompt) -> str:
+        return cache_key(
             prompt_version=prompt.version,
             system=prompt.system,
             user=prompt.user,
             scope=self.cache_scope,
             schema_name=EstimationBreakdown.__name__,
         )
-        return prompt, key
 
     def cache_key_for(self, request: EstimateRequest, prompt_version: str | None = None) -> str:
-        return self._prepare(request, prompt_version)[1]
+        return self._key(self._prepare(request, prompt_version))
+
+    def _start(self, prompt: RenderedPrompt, use_cache: bool) -> str | None:
+        """The cache key, or None when this call bypasses the cache."""
+        # Before any provider call: the router's llm_fallback records read it.
+        prompt_version_var.set(prompt.version)
+        return self._key(prompt) if use_cache else None
 
     def _log_call(
         self,
@@ -149,6 +153,7 @@ class EstimationService:
         self,
         result: LLMResult[EstimationBreakdown],
         request: EstimateRequest,
+        grounding_source: str,
         *,
         version: str,
         cache: CacheStatus,
@@ -163,7 +168,7 @@ class EstimationService:
             weekly_capacity_hours=self.weekly_capacity_hours,
             hourly_rate=self.hourly_rate,
         )
-        grounding = check_grounding(result.parsed, request.transcription)
+        grounding = check_grounding(result.parsed, grounding_source)
         if grounding.ungrounded_requirement_ids or grounding.tasks_without_valid_basis:
             logger.warning(
                 "grounding_warnings",
@@ -187,10 +192,10 @@ class EstimationService:
         )
 
     async def _lookup(
-        self, key: str, *, version: str, refresh: bool, stream: bool
+        self, key: str | None, *, version: str, refresh: bool, stream: bool
     ) -> tuple[EstimateResponse | None, CacheStatus]:
         """A hit carries this request's metrics: no LLM call, so no cost, attempts or TTFT."""
-        if refresh:
+        if key is None or refresh:
             return None, "bypass"
         start = time.perf_counter()
         cached, status = await self.cache.get(key)
@@ -212,15 +217,56 @@ class EstimationService:
         )
         return cached.model_copy(update={"metrics": metrics}), status
 
-    async def _store(self, key: str, response: EstimateResponse, lookup: CacheStatus) -> None:
+    async def _store(
+        self, key: str | None, response: EstimateResponse, lookup: CacheStatus
+    ) -> None:
         # Redis just failed the lookup: a second timeout would double the latency it adds.
-        if lookup != "error":
+        if key is not None and lookup != "error":
             await self.cache.set(key, response)
 
     async def estimate(
         self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
     ) -> EstimateResponse:
-        prompt, key = self._prepare(request, prompt_version)
+        prompt = self._prepare(request, prompt_version)
+        return await self.run(
+            prompt,
+            [ChatMessage("user", prompt.user)],
+            request,
+            request.transcription,
+            use_cache=True,
+            refresh=refresh,
+        )
+
+    async def estimate_stream(
+        self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
+    ) -> AsyncGenerator[StreamItem]:
+        prompt = self._prepare(request, prompt_version)
+        async with aclosing(
+            self.stream_run(
+                prompt,
+                [ChatMessage("user", prompt.user)],
+                request,
+                request.transcription,
+                use_cache=True,
+                refresh=refresh,
+            )
+        ) as items:
+            async for item in items:
+                yield item
+
+    async def run(
+        self,
+        prompt: RenderedPrompt,
+        messages: Sequence[ChatMessage],
+        request: EstimateRequest,
+        grounding_source: str,
+        *,
+        use_cache: bool,
+        refresh: bool = False,
+    ) -> EstimateResponse:
+        """One call with `messages` (ending with `prompt.user`); grounding checks quotes against
+        `grounding_source`. Without `use_cache` the cache is never read or written."""
+        key = self._start(prompt, use_cache)
         cached, lookup = await self._lookup(
             key, version=prompt.version, refresh=refresh, stream=False
         )
@@ -230,7 +276,7 @@ class EstimationService:
         try:
             result = await self.provider.generate(
                 system=prompt.system,
-                messages=[ChatMessage("user", prompt.user)],
+                messages=messages,
                 schema=EstimationBreakdown,
                 cache_key=routing_key(prompt),
             )
@@ -244,14 +290,24 @@ class EstimationService:
                 attempt=exc.attempt,
             )
             raise
-        response = self._respond(result, request, version=prompt.version, cache=lookup)
+        response = self._respond(
+            result, request, grounding_source, version=prompt.version, cache=lookup
+        )
         await self._store(key, response, lookup)
         return response
 
-    async def estimate_stream(
-        self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
+    async def stream_run(
+        self,
+        prompt: RenderedPrompt,
+        messages: Sequence[ChatMessage],
+        request: EstimateRequest,
+        grounding_source: str,
+        *,
+        use_cache: bool,
+        refresh: bool = False,
     ) -> AsyncGenerator[StreamItem]:
-        prompt, key = self._prepare(request, prompt_version)
+        """`run`, streamed: status and partial events, then exactly one response."""
+        key = self._start(prompt, use_cache)
         cached, lookup = await self._lookup(
             key, version=prompt.version, refresh=refresh, stream=True
         )
@@ -270,7 +326,7 @@ class EstimationService:
             async with aclosing(
                 self.provider.stream(
                     system=prompt.system,
-                    messages=[ChatMessage("user", prompt.user)],
+                    messages=messages,
                     schema=EstimationBreakdown,
                     cache_key=routing_key(prompt),
                 )
@@ -313,7 +369,13 @@ class EstimationService:
         # Built (and logged) before the trailing events: the upstream call is complete, so a client
         # leaving now must still leave exactly one llm_call record.
         response = self._respond(
-            result, request, version=prompt.version, cache=lookup, stream=True, ttft_ms=ttft_ms
+            result,
+            request,
+            grounding_source,
+            version=prompt.version,
+            cache=lookup,
+            stream=True,
+            ttft_ms=ttft_ms,
         )
         if partial := snapshotter.flush(snapshot):
             yield partial

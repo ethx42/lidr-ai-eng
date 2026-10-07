@@ -1,19 +1,23 @@
 import asyncio
 import contextlib
 import shutil
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import fakeredis
 import pytest
 from jinja2 import FileSystemLoader
 
+from app.attachments.limits import AttachmentLimits
 from app.prompts import loader
 from app.services.cache import RedisCache
+from app.services.conversation import ConversationService
 from app.services.errors import UpstreamUnavailable
 from app.services.llm_service import EstimationService
+from app.services.providers.base import LLMProvider
+from app.sessions import InMemorySessionStore
 from tests.factories import make_service
-from tests.fakes import FakeProvider, SlowFakeProvider
+from tests.fakes import FakeProvider, GatedFakeProvider, SlowFakeProvider, SpyCache
 
 
 @pytest.fixture
@@ -28,6 +32,42 @@ def prompts_v99(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 @pytest.fixture
 def fake() -> FakeProvider:
     return FakeProvider()
+
+
+@pytest.fixture
+def fake_provider(fake: FakeProvider) -> FakeProvider:
+    return fake
+
+
+@pytest.fixture
+def slow_fake_provider() -> GatedFakeProvider:
+    return GatedFakeProvider()
+
+
+@pytest.fixture
+def spy_cache() -> SpyCache:
+    return SpyCache()
+
+
+@pytest.fixture
+def make_conversation(spy_cache: SpyCache) -> Callable[[LLMProvider], ConversationService]:
+    def build(provider: LLMProvider) -> ConversationService:
+        return ConversationService(
+            estimation=make_service(provider, spy_cache),
+            store=InMemorySessionStore(
+                max_turns=6, max_history_chars=60_000, ttl_seconds=7200, max_sessions=1000
+            ),
+            limits=AttachmentLimits(),
+        )
+
+    return build
+
+
+@pytest.fixture
+def conversation(
+    make_conversation: Callable[[LLMProvider], ConversationService], fake_provider: FakeProvider
+) -> ConversationService:
+    return make_conversation(fake_provider)
 
 
 @pytest.fixture

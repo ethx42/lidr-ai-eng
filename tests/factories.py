@@ -49,6 +49,13 @@ def team_member(member: tuple[str, int] | dict[str, Any]) -> dict[str, Any]:
     return member
 
 
+def requirement(item: tuple[str, str, str] | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(item, tuple):
+        id, statement, evidence = item
+        return {"id": id, "statement": statement, "evidence": evidence}
+    return item
+
+
 def breakdown_data(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "project_name": "Yoga booking",
@@ -79,6 +86,10 @@ def breakdown_data(**overrides: Any) -> dict[str, Any]:
     }
     if "team" in overrides:
         overrides = overrides | {"team": [team_member(m) for m in overrides["team"]]}
+    if "requirements" in overrides:
+        overrides = overrides | {
+            "requirements": [requirement(r) for r in overrides["requirements"]]
+        }
     return data | overrides
 
 

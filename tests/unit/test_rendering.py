@@ -6,7 +6,7 @@ import pytest
 from app.schemas.estimation import EnrichedBreakdown, GroundingReport, OutputFormat, Phase
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
-from app.services.rendering import PHASE_LABELS, render_markdown
+from app.services.rendering import PHASE_LABELS, render_compact, render_markdown
 from tests.factories import TRANSCRIPT, breakdown, task
 
 GROUNDED = GroundingReport(
@@ -182,3 +182,24 @@ def test_grounding_marks_appear_in_every_layout(layout: OutputFormat) -> None:
     assert breakdown_section.count("⚠") == 1
     warnings = md.split("### Grounding warnings", 1)[1]
     assert "R3" in warnings and "T2" in warnings
+
+
+def test_render_compact_is_one_line_per_fact() -> None:
+    b = enrich(
+        breakdown(
+            project_name="Yoga\nBooking",
+            tasks=[task("T1", (16, 24, 40)), task("T2", (4, 6, 10), phase="qa")],
+        ),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+    )
+    assert render_compact(b).splitlines() == [
+        "Project: Yoga Booking",
+        "Summary: Booking app with online payments.",
+        "Tasks:",
+        "T1 [backend] Task T1 — 24.0 h likely",
+        "T2 [qa] Task T2 — 6.0 h likely",
+        "Total: 32.0 h expected (range 20.0–50.0 h), team of 2",
+        "Open questions:",
+        "- Which calendar system is in use?",
+    ]

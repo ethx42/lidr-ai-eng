@@ -1,12 +1,14 @@
 import asyncio
-from collections.abc import AsyncGenerator, Sequence
+from collections import deque
+from collections.abc import AsyncGenerator, Callable, Sequence
 from itertools import pairwise
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
 from app.config import Provider
-from app.schemas.estimation import EstimationBreakdown, Usage
+from app.schemas.estimation import EstimateResponse, EstimationBreakdown, Usage
+from app.services.cache import CacheStatus
 from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, TextDelta
 from tests.factories import breakdown
@@ -16,7 +18,8 @@ T = TypeVar("T", bound=BaseModel)
 
 class FakeProvider:
     """Offline LLMProvider: returns a canned breakdown or raises a configured error, either before
-    anything is streamed (`error`) or after `stream_error_after_chunks` deltas (`stream_error`)."""
+    anything is streamed (`error`) or after `stream_error_after_chunks` deltas (`stream_error`).
+    Each call answers the next `queue`d breakdown, else `respond_with(messages)`, else `result`."""
 
     def __init__(
         self,
@@ -33,9 +36,19 @@ class FakeProvider:
         self.error = error
         self.stream_error_after_chunks = stream_error_after_chunks
         self.stream_error = stream_error
+        self.respond_with: Callable[[Sequence[ChatMessage]], EstimationBreakdown] | None = None
+        self.queued: deque[EstimationBreakdown] = deque()
         self.calls: list[dict[str, Any]] = []
         self.closed = False
         self.closed_streams = 0
+
+    def queue(self, result: EstimationBreakdown) -> None:
+        self.queued.append(result)
+
+    def _answer(self, messages: Sequence[ChatMessage]) -> EstimationBreakdown:
+        if self.queued:
+            return self.queued.popleft()
+        return self.respond_with(messages) if self.respond_with else self.result
 
     def _record(
         self,
@@ -54,8 +67,9 @@ class FakeProvider:
         )
 
     def _result(self, schema: type[T]) -> LLMResult[T]:
+        """The answer to the call just recorded."""
         return LLMResult(
-            parsed=schema.model_validate(self.result.model_dump()),
+            parsed=schema.model_validate(self._answer(self.calls[-1]["messages"]).model_dump()),
             usage=Usage(
                 input_tokens=1200,
                 output_tokens=800,
@@ -98,6 +112,40 @@ class FakeProvider:
 
     async def aclose(self) -> None:
         self.closed = True
+
+
+class GatedFakeProvider(FakeProvider):
+    """`generate` answers only once `release` is set: a turn held in flight."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.release = asyncio.Event()
+
+    async def generate(
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
+    ) -> LLMResult[T]:
+        await self.release.wait()
+        return await super().generate(
+            system=system, messages=messages, schema=schema, cache_key=cache_key
+        )
+
+
+class SpyCache:
+    """A ResponseCache that counts lookups and writes, and always misses."""
+
+    def __init__(self) -> None:
+        self.gets = 0
+        self.sets = 0
+
+    async def get(self, key: str) -> tuple[EstimateResponse | None, CacheStatus]:
+        self.gets += 1
+        return None, "miss"
+
+    async def set(self, key: str, value: EstimateResponse) -> None:
+        self.sets += 1
+
+    async def aclose(self) -> None:
+        return None
 
 
 class SlowFakeProvider(FakeProvider):

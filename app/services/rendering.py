@@ -165,3 +165,28 @@ def render_markdown(
             for tid in grounding.tasks_without_valid_basis
         ]
     return "\n".join(lines) + "\n"
+
+
+def render_compact(b: EnrichedBreakdown) -> str:
+    """The assistant turn kept in a session's history: what the next turn must stay consistent
+    with, a fraction of the JSON's size. One line per fact, so model text cannot forge a line."""
+    t = b.totals
+    return "\n".join(
+        [
+            f"Project: {_inline(b.project_name)}",
+            f"Summary: {_inline(b.summary)}",
+            "Tasks:",
+            *(
+                f"{task.id} [{task.phase}] {_inline(task.name)} — "
+                f"{_hours(task.likely_hours)} h likely"
+                for task in b.tasks
+            ),
+            (
+                f"Total: {_hours(t.expected_hours)} h expected "
+                f"(range {_hours(t.optimistic_hours)}–{_hours(t.pessimistic_hours)} h), "
+                f"team of {t.team_size}"
+            ),
+            "Open questions:",
+            *(f"- {_inline(q)}" for q in b.open_questions),
+        ]
+    )
