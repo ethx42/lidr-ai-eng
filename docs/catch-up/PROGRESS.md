@@ -51,7 +51,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - [x] Task 1: Messages-based provider interface (f31da42, 5d32ab8)
 - [x] Task 2: Session state — app/sessions.py (55809a8, ec26057)
 - [x] Task 3: Output schema technologies and the metadata merge (e4d2443, 19c4bc0)
-- [ ] Task 4: Attachment extraction (path B)
+- [x] Task 4: Attachment extraction (path B) (413205a, 7a1d209, 8c78af9, 64c5ff6, 551aa15, e6878e1; merged 637b99c)
 - [ ] Task 5: Prompt estimation/v3 with project metadata and attachments
 - [ ] Task 6: Conversation service
 - [ ] Task 7: Session endpoints and the brief's integration tests
@@ -84,3 +84,4 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - Owner commit on pre-session-04: 4cf1577 `.env.example` (S3+S4 settings).
 - S5 plan re-checked against the real S4 code before Task 1 (40 edits; rulings S5-R1..R8 in the plan). S4 panel items ai-1 (summary vs 80 h cap) and ai-2 (Anthropic system cache blocks) carried into S5 Task 5.
 - S5 Task 3 eval (measurement, ruling S5-R2): v2 after the `technologies` schema change scored 0.9231 and 0.9423 (mean 0.9327) against the 0.9415 floor; S4's v2 two-run mean was 0.9519. Baseline and floor untouched; reported in the README.
+- S5 Task 4 ruling: attachments are parsed in a killable forkserver child (hard timeout, best-effort RLIMIT_AS/RLIMIT_CPU, at most ATTACHMENT_MAX_CONCURRENT children) instead of an in-thread tracer; in-process bounds (stored/deflated members only, bounded inflate, XML-tag cap, char budget, lowered pypdf caps) stay as defence in depth. Review findings fixed: bzip2/LZMA zip bomb (374 B → 631 MB), invalid ZIP names → 500, a 5.5 KB PDF burning 37 s of CPU, silent MemoryError.

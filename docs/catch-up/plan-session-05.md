@@ -568,7 +568,7 @@ async def test_conversation_never_uses_the_cache(conversation, spy_cache) -> Non
 **Orchestrator notes (from Task 2's review):**
 - Do not assign `session.last_used = clock()` after a turn without moving the session to the LRU end: either drop that assignment (the TTL is far longer than a turn; `get` already refreshes it) or add a store-owned `touch(session_id)` that updates both, with a test.
 - Every history passed to a provider must be non-empty and end with a user turn (`as_chat` guarantees it); the provider's `UpstreamError("no_user_message")` is only a backstop.
-- Attachment extraction is sync and CPU-bound: run `extract_all` off the event loop (`asyncio.to_thread`) as the brief says; never log `AttachmentError` with `exc_info` (chained parser messages can quote content).
+- Attachment extraction: call the process-isolated entry point Task 4 adds (killable child with time and memory limits; see task-4-report.md "Fix round 2") via `asyncio.to_thread` so the event loop never blocks; never log `AttachmentError` with `exc_info` (chained parser messages can quote content).
 
 ---
 
@@ -657,6 +657,8 @@ async def prepared_turn(form: Annotated[SessionEstimateForm, Form()], ...) -> Pr
 
 `prepared_turn` is a **dependency** shared by the blocking and streaming endpoints: it resolves the session (`conversation.get` → 404) and pre-checks `session.lock.locked()` (→ 409), drops empty browser file inputs (`filename == ""` or `size == 0`), enforces count and per-file size (`f.size`, then `await f.read(limits.max_bytes + 1)`), runs `await conversation.extract(...)`, builds the `EstimateRequest` (a `pydantic.ValidationError`, e.g. an over-long `output_language`, is re-raised as `RequestValidationError(exc.errors())` so it is a 422, not a 500), applies the transcription length check, and raises all of these **before** any SSE byte is sent (once a stream starts the status is fixed at 200). Total body size is capped by `starlette.middleware.body_limit.RequestBodyLimitMiddleware(max_body_size=max_files * max_bytes + 1 MiB)` (its 413 body is plain text; document it). `create_app` must not call `get_settings()` (the module-level `app` and `make openapi` run without env; settings resolve in the lifespan), so wrap it in a small ASGI middleware that sizes the limit from `scope["app"].state.settings` on HTTP requests. Errors after the stream started become `error` events; the stream generator maps a racing `SessionBusy` to an `error` event with code `session_busy` (`retryable: true`), not `internal_error`. The stream endpoint must not iterate `conversation.turn_stream(...)` directly: FastAPI never closes the endpoint generator on a disconnect, so the turn's generator would stay parked holding `session.lock` (every later turn a 409) until garbage collection. Obtain it from a request-scoped dependency that `aclose()`s it in teardown, exactly like `service_stream` in `app/routers/estimations.py` (bounded, shielded, `except* anyio.BrokenResourceError`).
 - [ ] **Step 4: `make openapi && make web-types && make check`; commit** `feat(api): conversational sessions with multipart attachments`
+
+**Orchestrator notes (from Task 4):** `AttachmentError.reason` is `"busy"` (no extraction slot within the timeout) or `"invalid"`; map `busy` to 503 and every other `AttachmentError` to 422 `invalid_attachment`, logging without `exc_info` (no parser text). Extraction goes through `app.attachments.isolation.extract_all_isolated` via `asyncio.to_thread` (Task 6), before the SSE stream starts.
 
 ---
 
