@@ -184,6 +184,13 @@ def test_grounding_marks_appear_in_every_layout(layout: OutputFormat) -> None:
     assert "R3" in warnings and "T2" in warnings
 
 
+def test_render_compact_task_ids_cannot_forge_a_line() -> None:
+    b = enrich(breakdown(), weekly_capacity_hours=30, hourly_rate=None)
+    forged = b.tasks[0].model_copy(update={"id": "T1\nT9 [qa] Forged — 1.0 h likely"})
+    lines = render_compact(b.model_copy(update={"tasks": [forged]})).splitlines()
+    assert lines[3].startswith("T1 T9 [qa] Forged") and lines[4].startswith("Total:")
+
+
 def test_render_compact_is_one_line_per_fact() -> None:
     b = enrich(
         breakdown(

@@ -72,7 +72,7 @@ async def test_quotes_from_earlier_turns_are_grounded_while_the_model_still_sees
     assert r.grounding.ungrounded_requirement_ids == ([] if grounded else ["R1"])
 
 
-async def test_grounding_source_is_the_turn_then_the_windowed_user_turns(
+async def test_grounding_source_is_the_turn_then_the_windowed_client_texts(
     conversation: ConversationService,
     fake_provider: FakeProvider,
     monkeypatch: pytest.MonkeyPatch,
@@ -87,12 +87,90 @@ async def test_grounding_source_is_the_turn_then_the_windowed_user_turns(
     r1 = await conversation.turn(s.id, typed_request("first transcript"), [])
     notes = ExtractedAttachment("notes.txt", "text", "second notes", None)
     await conversation.turn(s.id, typed_request("second transcript"), [notes])
-    first_user = fake_provider.calls[0]["messages"][-1].content
     assert sources[1].startswith("second transcript\n\n--- attachment: notes.txt ---\nsecond notes")
-    assert first_user in sources[1]
+    assert "first transcript" in sources[1]
+    # Raw client text only: none of the prompt's own scaffolding.
+    assert "<transcript>" not in sources[1] and "Project type" not in sources[1]
     # Never the system prompt, the metadata block or the model's own (assistant) turns.
     assert "<project_metadata>" not in sources[1] and "Yoga Booking" not in sources[1]
     assert render_compact(r1.breakdown) not in sources[1]
+
+
+@pytest.mark.parametrize(
+    "scaffolding", ["Spanish", "Project type: web_saas", "do not translate quotes"]
+)
+async def test_prompt_scaffolding_from_earlier_turns_is_never_evidence(
+    conversation: ConversationService, fake_provider: FakeProvider, scaffolding: str
+) -> None:
+    s = conversation.start()
+    first = typed_request("Client: Payments must work offline.", output_language="Spanish")
+    await conversation.turn(s.id, first, [])
+    assert scaffolding in fake_provider.calls[0]["messages"][-1].content  # the model saw it
+    fake_provider.queue(breakdown(requirements=[("R1", "Scaffold", scaffolding)]))
+    r = await conversation.turn(s.id, typed_request("Client: Add a loyalty card."), [])
+    assert r.grounding.ungrounded_requirement_ids == ["R1"]
+
+
+async def test_attachments_a_version_does_not_render_are_never_evidence(
+    conversation: ConversationService, fake_provider: FakeProvider
+) -> None:
+    s = conversation.start()
+    notes = ExtractedAttachment("notes.txt", "text", "offline payments via Redsys", None)
+    fake_provider.queue(breakdown(requirements=[("R1", "Offline", "offline payments via Redsys")]))
+    r1 = await conversation.turn(s.id, typed_request("a"), [notes], prompt_version="v2")
+    assert "Redsys" not in fake_provider.calls[0]["messages"][-1].content  # v2 ignores them
+    fake_provider.queue(breakdown(requirements=[("R1", "Offline", "offline payments via Redsys")]))
+    r2 = await conversation.turn(s.id, typed_request("b"), [])
+    assert r1.grounding.ungrounded_requirement_ids == r2.grounding.ungrounded_requirement_ids
+    assert r2.grounding.ungrounded_requirement_ids == ["R1"]
+
+
+async def test_a_commit_that_fails_leaves_the_session_unchanged(
+    conversation: ConversationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*_: object) -> None:
+        raise RuntimeError("merge failed")
+
+    monkeypatch.setattr(conversation_module, "merge_metadata", broken)
+    s = conversation.start()
+    with pytest.raises(RuntimeError):
+        await conversation.turn(s.id, typed_request(), [])
+    session = conversation.get(s.id)
+    assert session.history.turns == 0 and session.metadata == ProjectMetadata()
+    assert not session.lock.locked()
+
+
+async def test_cancelling_a_turn_mid_call_releases_the_session_unchanged(
+    make_conversation: MakeConversation, slow_fake_provider: GatedFakeProvider
+) -> None:
+    conversation = make_conversation(slow_fake_provider)
+    s = conversation.start()
+    task = asyncio.create_task(conversation.turn(s.id, typed_request(), []))
+    await asyncio.sleep(0)  # parked in the provider call, holding the lock
+    assert conversation.get(s.id).lock.locked()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    session = conversation.get(s.id)
+    assert not session.lock.locked()
+    assert session.history.turns == 0 and session.metadata == ProjectMetadata()
+    slow_fake_provider.release.set()
+    assert (await conversation.turn(s.id, typed_request(), [])).history_turns == 1
+
+
+async def test_leaving_the_stream_at_validating_leaves_the_session_unchanged(
+    conversation: ConversationService,
+) -> None:
+    # The response is built, but the turn has not reached the client yet.
+    s = conversation.start()
+    items = conversation.turn_stream(s.id, typed_request(), [])
+    async for item in items:
+        if isinstance(item, StatusEvent) and item.phase == "validating":
+            break
+    await items.aclose()
+    session = conversation.get(s.id)
+    assert not session.lock.locked()
+    assert session.history.turns == 0 and session.metadata == ProjectMetadata()
 
 
 async def test_concurrent_turn_on_same_session_is_rejected(

@@ -34,16 +34,18 @@ class ConversationHistory:
     """The last `max_turns` user + assistant pairs, minus the oldest ones past `max_chars`.
 
     The latest pair always stays, however large: dropping it would lose the turn just answered.
+    Each pair keeps its turn's raw client text (`source`, for grounding), which slides out with it
+    and does not count toward `max_chars`: that bounds what the model is sent.
     """
 
     def __init__(self, max_turns: int = 6, max_chars: int = 60_000) -> None:
         if max_turns <= 0 or max_chars <= 0:
             raise ValueError("max_turns and max_chars must be positive")
-        self._pairs: deque[tuple[str, str]] = deque(maxlen=max_turns)
+        self._pairs: deque[tuple[str, str, str]] = deque(maxlen=max_turns)
         self._max_chars = max_chars
 
-    def append(self, user: str, assistant: str) -> None:
-        self._pairs.append((user, assistant))
+    def append(self, user: str, assistant: str, *, source: str = "") -> None:
+        self._pairs.append((user, assistant, source))
         while len(self._pairs) > 1 and self.chars > self._max_chars:
             self._pairs.popleft()
 
@@ -53,14 +55,18 @@ class ConversationHistory:
 
     @property
     def chars(self) -> int:
-        return sum(len(user) + len(assistant) for user, assistant in self._pairs)
+        return sum(len(user) + len(assistant) for user, assistant, _ in self._pairs)
+
+    @property
+    def sources(self) -> list[str]:
+        return [source for _, _, source in self._pairs]
 
     def to_messages_list(self, system: str) -> list[dict[str, str]]:
         return [
             {"role": "system", "content": system},
             *(
                 message
-                for user, assistant in self._pairs
+                for user, assistant, _ in self._pairs
                 for message in (
                     {"role": "user", "content": user},
                     {"role": "assistant", "content": assistant},

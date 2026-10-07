@@ -10,7 +10,7 @@ from contextlib import aclosing
 from app.attachments.extractor import Attachment, ExtractedAttachment, format_attachments
 from app.attachments.isolation import extract_all_isolated
 from app.attachments.limits import AttachmentLimits
-from app.prompts.loader import RenderedPrompt, render
+from app.prompts.loader import RenderedPrompt, render, renders_attachments
 from app.schemas.estimation import EstimateRequest, EstimateResponse
 from app.schemas.session import TurnResponse
 from app.schemas.stream import PartialEvent, StatusEvent
@@ -70,38 +70,38 @@ class ConversationService:
         request: EstimateRequest,
         attachments: Sequence[ExtractedAttachment],
         prompt_version: str | None,
-    ) -> tuple[RenderedPrompt, list[ChatMessage], str]:
-        prompt = render(
-            request,
-            self.prompt_version if prompt_version is None else prompt_version,
-            metadata=session.metadata,
-            attachments=attachments,
-        )
-        messages = session.history.as_chat(prompt.user)
-        # Quotable text the model saw: this turn's transcript and attachments (un-neutralised, so
-        # verbatim quotes match), then the user turns still in the window. Never the system prompt,
-        # the metadata or the assistant turns: those are model output.
-        grounding_source = "\n\n".join(
-            [
-                request.transcription,
-                format_attachments(attachments),
-                *(m.content for m in messages[:-1] if m.role == "user"),
-            ]
-        )
-        return prompt, messages, grounding_source
+    ) -> tuple[RenderedPrompt, list[ChatMessage], str, str]:
+        """The prompt, the messages, this turn's client text and the grounding source.
+
+        Quotes are checked against client text the model saw, raw (not neutralised) so verbatim
+        quotes match: this turn's transcript and the attachments its version shows, then the
+        client text of the turns still in the window. Never the prompt's own wording, the
+        metadata or the assistant turns: those are ours or the model's.
+        """
+        version = self.prompt_version if prompt_version is None else prompt_version
+        prompt = render(request, version, metadata=session.metadata, attachments=attachments)
+        shown = attachments if renders_attachments(version) else ()
+        client_text = f"{request.transcription}\n\n{format_attachments(shown)}"
+        grounding_source = "\n\n".join([client_text, *session.history.sources])
+        return prompt, session.history.as_chat(prompt.user), client_text, grounding_source
 
     def _commit(
-        self, session: Session, prompt: RenderedPrompt, response: EstimateResponse
+        self, session: Session, prompt: RenderedPrompt, client_text: str, response: EstimateResponse
     ) -> TurnResponse:
-        session.history.append(prompt.user, render_compact(response.breakdown))
-        session.metadata, changes = merge_metadata(session.metadata, response.breakdown)
-        return TurnResponse(
+        compact = render_compact(response.breakdown)
+        metadata, changes = merge_metadata(session.metadata, response.breakdown)
+        turn = TurnResponse(
             **dict(response),
             session_id=session.id,
-            project_metadata=session.metadata,
+            project_metadata=metadata,
             metadata_changes=changes,
-            history_turns=session.history.turns,
+            history_turns=0,  # set below, once the turn is in
         )
+        # Plain assignments from here: the turn lands whole or not at all.
+        session.history.append(prompt.user, compact, source=client_text)
+        session.metadata = metadata
+        turn.history_turns = session.history.turns
+        return turn
 
     async def turn(
         self,
@@ -113,9 +113,11 @@ class ConversationService:
     ) -> TurnResponse:
         session = self._idle(session_id)
         async with session.lock:
-            prompt, messages, source = self._prepare(session, request, attachments, prompt_version)
+            prompt, messages, client_text, source = self._prepare(
+                session, request, attachments, prompt_version
+            )
             response = await self.estimation.run(prompt, messages, request, source, use_cache=False)
-            return self._commit(session, prompt, response)
+            return self._commit(session, prompt, client_text, response)
 
     async def turn_stream(
         self,
@@ -129,13 +131,15 @@ class ConversationService:
         as it was; either way the lock is released when the generator ends."""
         session = self._idle(session_id)
         async with session.lock:
-            prompt, messages, source = self._prepare(session, request, attachments, prompt_version)
+            prompt, messages, client_text, source = self._prepare(
+                session, request, attachments, prompt_version
+            )
             async with aclosing(
                 self.estimation.stream_run(prompt, messages, request, source, use_cache=False)
             ) as items:
                 async for item in items:
                     yield (
-                        self._commit(session, prompt, item)
+                        self._commit(session, prompt, client_text, item)
                         if isinstance(item, EstimateResponse)
                         else item
                     )

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, meta
 
 from app.attachments.extractor import ExtractedAttachment
 from app.context.examples import REFERENCE_ESTIMATIONS
@@ -96,6 +96,12 @@ def _neutral_metadata(metadata: ProjectMetadata) -> ProjectMetadata:
             "agreed_scope": _fact(metadata.agreed_scope or "") or None,
         }
     )
+
+
+def renders_attachments(version: str) -> bool:
+    """Whether this version's user message shows the attachments (v1 and v2 ignore them)."""
+    source = (PROMPTS_DIR / USE_CASE / _check(version) / "user.j2").read_text(encoding="utf-8")
+    return "attachments" in meta.find_undeclared_variables(_env.parse(source))
 
 
 @cache

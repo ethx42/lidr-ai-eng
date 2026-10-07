@@ -203,6 +203,17 @@ def test_earlier_versions_ignore_session_inputs(version: str) -> None:
     ) == render_estimation_prompt(request, version)
 
 
+@pytest.mark.parametrize("version", loader.available_versions())
+def test_renders_attachments_matches_the_rendered_user_message(version: str) -> None:
+    attached = ExtractedAttachment("a.txt", "text", "ATTACHED-TEXT", None)
+    _, user = render_estimation_prompt(typed_request(), version, attachments=[attached])
+    assert loader.renders_attachments(version) is ("ATTACHED-TEXT" in user)
+
+
+def test_v3_renders_attachments() -> None:
+    assert loader.renders_attachments("v3")
+
+
 def test_user_message_delimits_transcript() -> None:
     user = user_message("Client: build me an app", None)
     assert "<transcript>\nClient: build me an app\n</transcript>" in user

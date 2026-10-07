@@ -37,6 +37,15 @@ def test_size_cap_drops_only_as_many_old_pairs_as_needed() -> None:
     assert [m["content"][:2] for m in h.to_messages_list("S")[1:]] == ["u1", "a1", "u2", "a2"]
 
 
+def test_sources_slide_out_with_their_pairs() -> None:
+    h = ConversationHistory(max_turns=2, max_chars=100)
+    for i in range(3):
+        h.append(f"u{i}", f"a{i}", source=f"s{i}")
+    assert h.sources == ["s1", "s2"]
+    h.append("x" * 200, "y", source="big")
+    assert h.sources == ["big"]
+
+
 def test_as_chat_appends_the_new_user_message() -> None:
     h = ConversationHistory(max_turns=2)
     h.append("u1", "a1")

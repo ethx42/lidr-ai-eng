@@ -177,7 +177,7 @@ def render_compact(b: EnrichedBreakdown) -> str:
             f"Summary: {_inline(b.summary)}",
             "Tasks:",
             *(
-                f"{task.id} [{task.phase}] {_inline(task.name)} — "
+                f"{_inline(task.id)} [{task.phase}] {_inline(task.name)} — "
                 f"{_hours(task.likely_hours)} h likely"
                 for task in b.tasks
             ),
