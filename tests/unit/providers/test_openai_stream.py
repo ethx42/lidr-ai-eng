@@ -268,6 +268,52 @@ class TrackedBody(httpx.AsyncByteStream):
         self.closed = True
 
 
+class BrokenBody(TrackedBody):
+    """Delivers the first `after` events, then fails like a stalled or dropped connection."""
+
+    def __init__(self, body: str, after: int, error: Exception) -> None:
+        super().__init__(body)
+        self.chunks, self.error = self.chunks[:after], error
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self.chunks:
+            yield chunk
+        raise self.error
+
+
+def broken(after: int, error: Exception) -> Handler:
+    body = BrokenBody(fixture("completed"), after, error)
+    return lambda _: httpx.Response(200, headers=SSE_HEADERS, stream=body)
+
+
+@pytest.mark.parametrize(
+    "error,cause",
+    [
+        (httpx.ReadTimeout("stalled"), "APITimeoutError"),
+        (httpx.RemoteProtocolError("peer closed connection"), "APIConnectionError"),
+        (httpx.ReadError("connection reset"), "APIConnectionError"),
+    ],
+    ids=lambda v: type(v).__name__ if isinstance(v, Exception) else "",
+)
+@pytest.mark.parametrize("after,deltas", [(4, 0), (7, 3)], ids=["before-text", "after-text"])
+async def test_transport_failure_mid_body_is_unavailable(
+    after: int, deltas: int, error: Exception, cause: str
+) -> None:
+    # The SDK's `_iter_events` wraps body transport errors as APITimeoutError/APIConnectionError.
+    received: list[StreamEvent[EstimationBreakdown]] = []
+    with pytest.raises(UpstreamUnavailable) as info:
+        await collect(provider_for(broken(after, error)), received)
+    assert info.value.cause == cause
+    assert info.value.__cause__ is not None and info.value.__cause__.__cause__ is error
+    assert len(received) == deltas and all(isinstance(e, TextDelta) for e in received)
+
+
+async def test_httpx_stream_misuse_is_not_reported_as_a_protocol_error() -> None:
+    # httpx2.StreamError subclasses RuntimeError; it is a bug here, never a fallback trigger.
+    with pytest.raises(httpx.StreamClosed):
+        await collect(provider_for(broken(7, httpx.StreamClosed())))
+
+
 async def test_closing_the_generator_closes_the_upstream_stream() -> None:
     body = TrackedBody(fixture("completed"))
     provider = provider_for(lambda _: httpx.Response(200, headers=SSE_HEADERS, stream=body))

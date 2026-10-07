@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.config import Provider, ReasoningEffort
 from app.schemas.estimation import Usage
 from app.services.errors import (
+    QUOTA,
     InvalidModelOutput,
     LLMError,
     UpstreamError,
@@ -23,8 +24,6 @@ from app.services.errors import (
 )
 from app.services.providers.base import LLMResult, StreamEvent, T, TextDelta
 from app.services.providers.profiles import ModelProfile, request_params
-
-QUOTA = "insufficient_quota"
 
 
 @cache
@@ -169,6 +168,8 @@ class OpenAIProvider:
                             raise stream_error(event.code)
         except openai.APIError as exc:
             raise map_error(exc) from exc
+        except httpx2.StreamError:
+            raise  # a RuntimeError, but our misuse of the response, not the upstream's
         except RuntimeError as exc:
             # The SDK helper's state machine rejects out-of-order events (an event before
             # `response.created`, a content event before its output item).

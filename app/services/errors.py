@@ -1,3 +1,7 @@
+# The reason every provider gives exhausted credits or spend limits; the fallback router keys on it.
+QUOTA = "insufficient_quota"
+
+
 class LLMError(Exception):
     """Domain failure from an LLM provider, mapped to HTTP by the API layer."""
 

@@ -52,8 +52,8 @@ openapi:
 	uv run python -m scripts.export_openapi
 
 # Live, budget-guarded recordings (scripts/live_budget.py). SSE=<provider> records a raw SSE fixture
-# into tests/fixtures/sse/<provider>/: make record-cassettes SSE=openai
+# into tests/fixtures/sse/<provider>/: make record-cassettes SSE=openai|anthropic
 .PHONY: record-cassettes
 record-cassettes:
-	@[ -n "$(SSE)" ] || { echo "Usage: make record-cassettes SSE=openai" >&2; exit 2; }
+	@[ -n "$(SSE)" ] || { echo "Usage: make record-cassettes SSE=openai|anthropic" >&2; exit 2; }
 	uv run python -m scripts.record_sse_fixture $(SSE)

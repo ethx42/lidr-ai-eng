@@ -5,7 +5,7 @@ import pytest
 
 from app.config import Settings
 from app.context.examples import REFERENCE_ESTIMATIONS
-from app.services.providers.anthropic_provider import AnthropicProvider
+from app.services.providers.anthropic_provider import AnthropicProvider, _no_retry_on_spend_cap
 from app.services.providers.factory import build_provider
 from app.services.providers.openai_provider import OpenAIProvider, _no_retry_on_quota
 from app.services.providers.replay_provider import ReplayProvider
@@ -44,6 +44,7 @@ async def test_anthropic_selected() -> None:
     )
     assert isinstance(provider, AnthropicProvider)
     assert (provider.name, provider.model) == ("anthropic", "claude-haiku-4-5")
+    assert _no_retry_on_spend_cap in provider.client._client.event_hooks["response"]
     await provider.aclose()
 
 

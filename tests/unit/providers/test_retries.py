@@ -16,7 +16,7 @@ from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest, EstimationBreakdown
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, UpstreamRateLimited
 from app.services.llm_service import EstimationService
-from app.services.providers.anthropic_provider import AnthropicProvider
+from app.services.providers.anthropic_provider import AnthropicProvider, anthropic_http_client
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
 from tests.factories import breakdown
@@ -137,6 +137,40 @@ async def test_openai_quota_is_not_retried(
     client = AsyncOpenAI(api_key="k", max_retries=2, http_client=http)
     provider = OpenAIProvider(
         client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
+    )
+    with pytest.raises(expected):
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert len(calls) == attempts
+    await provider.aclose()
+
+
+SPEND_CAP_ERROR = {
+    "type": "error",
+    "error": {
+        "type": "rate_limit_error",
+        "message": "You have reached your API usage limits.",
+        "details": {"error_code": "enforced_spend_limit_reached"},
+    },
+}
+ANTHROPIC_RATE_ERROR = {"type": "error", "error": {"type": "rate_limit_error", "message": "slow"}}
+
+
+@pytest.mark.parametrize(
+    "body,expected,attempts",
+    [(SPEND_CAP_ERROR, UpstreamError, 1), (ANTHROPIC_RATE_ERROR, UpstreamRateLimited, 3)],
+    ids=["spend-cap-not-retried", "rate-limit-retried"],
+)
+async def test_anthropic_spend_cap_is_not_retried(
+    body: dict[str, Any], expected: type[Exception], attempts: int
+) -> None:
+    calls: list[httpx.Request] = []
+    http = anthropic_http_client(transport=httpx.MockTransport(always_429(body, calls)))
+    client = AsyncAnthropic(api_key="k", max_retries=2, http_client=http)
+    provider = AnthropicProvider(
+        client=client,
+        model="claude-haiku-4-5",
+        profile=get_profile("claude-haiku-4-5", "anthropic"),
+        **COMMON,
     )
     with pytest.raises(expected):
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")

@@ -3,7 +3,7 @@ from openai import AsyncOpenAI
 
 from app.config import Settings
 from app.context.examples import REFERENCE_ESTIMATIONS
-from app.services.providers.anthropic_provider import AnthropicProvider
+from app.services.providers.anthropic_provider import AnthropicProvider, anthropic_http_client
 from app.services.providers.base import LLMProvider
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
@@ -32,6 +32,7 @@ def build_provider(settings: Settings) -> LLMProvider:
         "max_retries": settings.llm_max_retries,
     }
     if settings.llm_provider == "anthropic":
-        return AnthropicProvider(client=AsyncAnthropic(**client_options), **common)  # type: ignore[arg-type]
+        anthropic_client = AsyncAnthropic(**client_options, http_client=anthropic_http_client())  # type: ignore[arg-type]  # mixed-value options dict
+        return AnthropicProvider(client=anthropic_client, **common)  # type: ignore[arg-type]  # mixed-value kwargs dict
     client = AsyncOpenAI(**client_options, http_client=openai_http_client())  # type: ignore[arg-type]
     return OpenAIProvider(client=client, **common)  # type: ignore[arg-type]
