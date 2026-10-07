@@ -75,6 +75,10 @@ async def service_stream(
     items = service.estimate_stream(body, refresh=refresh)
     try:
         yield items
+    except* anyio.BrokenResourceError:
+        # FastAPI's SSE keep-alive task was parked sending to the stream it has just closed: a
+        # client that left mid-send, not a server fault.
+        logger.info("client_disconnected")
     finally:
         with anyio.move_on_after(1, shield=True):  # bounded, and immune to the request's cancel
             await items.aclose()
