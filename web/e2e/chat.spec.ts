@@ -228,8 +228,13 @@ for (const colorScheme of ["light", "dark"] as const) {
       await pickSample(page);
       await settled(page.getByRole("form", { name: "New estimate" }));
       await expectAccessible(page, "sample picked");
+      // axe checks contrast in the state it finds: hovered, the primary button must keep 4.5:1 too
+      const estimateButton = page.getByRole("button", { name: "Estimate", exact: true });
+      await estimateButton.hover();
+      await settled(estimateButton);
+      await expectAccessible(page, "Estimate hovered");
 
-      await page.getByRole("button", { name: "Estimate", exact: true }).click();
+      await estimateButton.click();
       await expectPartial(page);
       await expectAccessible(page, "streaming");
 

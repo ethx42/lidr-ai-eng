@@ -115,7 +115,7 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
             aria-keyshortcuts={apple ? "Meta+Enter" : "Control+Enter"}
           >
             Estimate
-            {/* opacity-80 keeps 4.5:1 on the light primary (70 gave 4.1:1, flagged by axe in the e2e run) */}
+            {/* opacity-80 keeps 4.5:1 on the light primary, at rest and hovered (70 gave 4.1:1, flagged by axe in the e2e run) */}
             <kbd aria-hidden className="hidden font-sans text-xs opacity-80 sm:inline">
               {apple ? "⌘↵" : "Ctrl ↵"}
             </kbd>
