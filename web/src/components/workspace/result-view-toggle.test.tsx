@@ -1,7 +1,9 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { EstimateDocument, ResultViewToggle } from "./result-view-toggle";
+import { press } from "@/test/keyboard";
+import { EstimateDocument, type ResultView, ResultViewToggle } from "./result-view-toggle";
 
 describe("ResultViewToggle", () => {
   it("offers Structured and Document as one choice that always has a value", async () => {
@@ -13,6 +15,28 @@ describe("ResultViewToggle", () => {
     await user.click(screen.getByRole("radio", { name: "Structured" }));
     expect(onChange).not.toHaveBeenCalled();
     await user.click(screen.getByRole("radio", { name: "Document" }));
+    expect(onChange).toHaveBeenCalledWith("document");
+  });
+});
+
+describe("ResultViewToggle with the keyboard", () => {
+  // The ARIA radio group pattern: an arrow key moves focus and checks, so arrows switch the view.
+  it("checks the option an arrow key moves to", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const Toggle = () => {
+      const [value, setValue] = useState<ResultView>("structured");
+      const change = (view: ResultView) => {
+        onChange(view);
+        setValue(view);
+      };
+      return <ResultViewToggle value={value} onChange={change} />;
+    };
+    render(<Toggle />);
+    act(() => screen.getByRole("radio", { name: "Structured" }).focus());
+    await press(user, "ArrowRight");
+    expect(screen.getByRole("radio", { name: "Document" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Document" })).toBeChecked();
     expect(onChange).toHaveBeenCalledWith("document");
   });
 });

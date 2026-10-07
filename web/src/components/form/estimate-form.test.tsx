@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Sample } from "@/lib/samples";
+import { press } from "@/test/keyboard";
 import { stubPointer } from "@/test/pointer";
 import { EstimateForm, type EstimateFormHandle } from "./estimate-form";
 
@@ -89,6 +90,20 @@ describe("EstimateForm in detail", () => {
     await user.type(input, "Nightly sync.");
     await user.click(estimate);
     expect(onSubmit).toHaveBeenCalledWith(...body("Nightly sync.", { project_type: "data_pipeline", detail_level: "summary", output_format: "narrative" }));
+  });
+
+  // The ARIA radio group pattern: an arrow key moves focus and checks, as with native radios, so the option a screen
+  // reader announces as focused is the value the estimate runs with.
+  it("checks the option an arrow key moves to, and reports it", async () => {
+    const { onParamsChange, user } = setup();
+    act(() => screen.getByRole("radio", { name: "Medium" }).focus());
+    await press(user, "ArrowRight");
+    const detailed = screen.getByRole("radio", { name: "Detailed" });
+    expect(detailed).toHaveFocus();
+    expect(detailed).toBeChecked();
+    expect(onParamsChange).toHaveBeenLastCalledWith({ project_type: "web_saas", detail_level: "detailed", output_format: "phases_table", prompt_version: "" });
+    await press(user, "ArrowLeft");
+    expect(screen.getByRole("radio", { name: "Medium" })).toBeChecked();
   });
 
   it("keeps the prompt version behind Advanced, defaulting to the service's version until one is picked", async () => {
