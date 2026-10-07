@@ -39,7 +39,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - [x] Task 4: prompt_version query parameter (f5c4ba2)
 - [x] Task 5: Output-format layouts in the markdown renderer (bee99a6)
 - [x] Task 6: Prompt v2 and the comparison eval (51f550b)
-- [ ] Task 7: Web — typed form workspace with evidence-linked split view
+- [x] Task 7: Web — typed form workspace with evidence-linked split view (25cf774)
 - [ ] Task 8: E2E, accessibility and media
 - [ ] Task 9: Branch close-out
 - [ ] Review panel findings resolved
