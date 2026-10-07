@@ -1,6 +1,6 @@
 # Tech stack brief
 
-stack-fingerprint: ffa6b0153b8e
+stack-fingerprint: eeb6e31c4f82
 updated: 2026-10-07
 
 How the installed versions are meant to be used today. Read before writing code against them; update when you learn something new (`stack-grounding` skill). Installed versions win over memory and over docs for other versions.
