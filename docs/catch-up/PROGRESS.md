@@ -40,7 +40,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - [x] Task 5: Output-format layouts in the markdown renderer (bee99a6)
 - [x] Task 6: Prompt v2 and the comparison eval (51f550b)
 - [x] Task 7: Web — typed form workspace with evidence-linked split view (25cf774)
-- [ ] Task 8: E2E, accessibility and media
+- [x] Task 8: E2E, accessibility and media (207e3d9, 8b79b92, 8e5b6e0, 31874f6, c7381f6)
 - [ ] Task 9: Branch close-out
 - [ ] Review panel findings resolved
 - Gate:
