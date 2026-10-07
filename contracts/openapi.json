@@ -86,6 +86,13 @@
       },
       "ContextResponse": {
         "properties": {
+          "available_versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Versions",
+            "type": "array"
+          },
           "chain": {
             "items": {
               "type": "string"
@@ -115,6 +122,7 @@
         },
         "required": [
           "prompt_version",
+          "available_versions",
           "system_prompt",
           "references",
           "chain",
@@ -924,7 +932,55 @@
   "paths": {
     "/api/v1/context": {
       "get": {
+        "description": "The system prompt is rendered for the given enums (defaults: `web_saas`, `medium`, `phases_table`) and prompt version (default: the `PROMPT_VERSION` setting).",
         "operationId": "context_api_v1_context_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectType",
+              "default": "web_saas"
+            }
+          },
+          {
+            "in": "query",
+            "name": "detail_level",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DetailLevel",
+              "default": "medium"
+            }
+          },
+          {
+            "in": "query",
+            "name": "output_format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OutputFormat",
+              "default": "phases_table"
+            }
+          },
+          {
+            "description": "Prompt template version (`v1`, `v2`, \u2026); default: `PROMPT_VERSION`.",
+            "in": "query",
+            "name": "prompt_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Prompt template version (`v1`, `v2`, \u2026); default: `PROMPT_VERSION`.",
+              "title": "Prompt Version"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -935,6 +991,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Unknown enum value or prompt version."
           }
         },
         "summary": "Prompt, reference estimations and limits used for estimates",

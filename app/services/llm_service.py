@@ -176,6 +176,10 @@ class EstimationService:
             schema_name=EstimationBreakdown.__name__,
         )
 
+    def cache_key_for(self, request: EstimateRequest, prompt_version: str | None = None) -> str:
+        version = self.prompt_version if prompt_version is None else prompt_version
+        return self._cache_key(render(request, version))
+
     async def _lookup(
         self, key: str, *, version: str, refresh: bool, stream: bool
     ) -> tuple[EstimateResponse | None, CacheStatus]:

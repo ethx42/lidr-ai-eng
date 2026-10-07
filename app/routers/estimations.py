@@ -11,9 +11,24 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from app.config import Settings
 from app.context.examples import DENTAL_CLINIC, REFERENCE_ESTIMATIONS
 from app.observability import request_id_var
-from app.prompts.loader import DEFAULT_PARAMS, DEFAULT_VERSION, render_system
+from app.prompts.loader import (
+    DEFAULT_PARAMS,
+    DEFAULT_VERSION,
+    VERSION_PATTERN,
+    PromptParams,
+    available_versions,
+    render_system,
+)
 from app.schemas.context import ContextResponse, ReferenceView
-from app.schemas.estimation import CallMetrics, EstimateRequest, EstimateResponse, Usage
+from app.schemas.estimation import (
+    CallMetrics,
+    DetailLevel,
+    EstimateRequest,
+    EstimateResponse,
+    OutputFormat,
+    ProjectType,
+    Usage,
+)
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.errors import LLMError
 from app.services.estimation_math import enrich
@@ -62,6 +77,31 @@ Refresh = Annotated[
     bool,
     Query(description="Skip the cache lookup and regenerate; the fresh result replaces the entry."),
 ]
+PromptVersionQuery = Annotated[
+    str | None,
+    Query(description="Prompt template version (`v1`, `v2`, …); default: `PROMPT_VERSION`."),
+]
+
+
+def checked_prompt_version(settings: SettingsDep, prompt_version: PromptVersionQuery = None) -> str:
+    """The value names a template directory: only a listed version reaches the loader."""
+    if prompt_version is None:
+        return settings.prompt_version
+    versions = available_versions()
+    if VERSION_PATTERN.fullmatch(prompt_version) and prompt_version in versions:
+        return prompt_version
+    raise RequestValidationError(
+        [
+            {
+                "loc": ("query", "prompt_version"),
+                "msg": f"Unknown prompt version; available: {', '.join(versions)}.",
+                "type": "enum",
+            }
+        ]
+    )
+
+
+PromptVersionDep = Annotated[str, Depends(checked_prompt_version)]
 
 
 async def service_stream(
@@ -189,11 +229,27 @@ async def estimate_stream(items: ServiceStream) -> AsyncIterator[ServerSentEvent
         )
 
 
-@router.get("/context", summary="Prompt, reference estimations and limits used for estimates")
-async def context(service: ServiceDep, settings: SettingsDep) -> ContextResponse:
+@router.get(
+    "/context",
+    summary="Prompt, reference estimations and limits used for estimates",
+    description=(
+        "The system prompt is rendered for the given enums (defaults: `web_saas`, `medium`, "
+        "`phases_table`) and prompt version (default: the `PROMPT_VERSION` setting)."
+    ),
+    responses={422: error_response("Unknown enum value or prompt version.")},
+)
+async def context(
+    settings: SettingsDep,
+    prompt_version: PromptVersionDep,
+    project_type: ProjectType = DEFAULT_PARAMS.project_type,
+    detail_level: DetailLevel = DEFAULT_PARAMS.detail_level,
+    output_format: OutputFormat = DEFAULT_PARAMS.output_format,
+) -> ContextResponse:
+    params = PromptParams(project_type, detail_level, output_format)
     return ContextResponse(
-        prompt_version=service.prompt_version,
-        system_prompt=render_system(DEFAULT_PARAMS, service.prompt_version),
+        prompt_version=prompt_version,
+        available_versions=available_versions(),
+        system_prompt=render_system(params, prompt_version),
         references=[
             ReferenceView(
                 size=ref.size, meeting_summary=ref.meeting_summary, estimation=ref.estimation

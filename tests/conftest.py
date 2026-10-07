@@ -1,15 +1,28 @@
 import asyncio
 import contextlib
+import shutil
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import fakeredis
 import pytest
+from jinja2 import FileSystemLoader
 
+from app.prompts import loader
 from app.services.cache import RedisCache
 from app.services.errors import UpstreamUnavailable
 from app.services.llm_service import EstimationService
 from tests.factories import make_service
 from tests.fakes import FakeProvider, SlowFakeProvider
+
+
+@pytest.fixture
+def prompts_v99(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A second version without shipping one: v1's templates, also as v99, from a scratch dir."""
+    for version in ("v1", "v99"):
+        shutil.copytree(loader.PROMPTS_DIR / "estimation" / "v1", tmp_path / "estimation" / version)
+    monkeypatch.setattr(loader, "PROMPTS_DIR", tmp_path)
+    monkeypatch.setattr(loader, "_env", loader._env.overlay(loader=FileSystemLoader(tmp_path)))
 
 
 @pytest.fixture

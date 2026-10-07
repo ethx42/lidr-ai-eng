@@ -17,6 +17,7 @@ class ContextResponse(BaseModel):
     model_config = RESPONSE_CONFIG
 
     prompt_version: str
+    available_versions: list[str]
     system_prompt: str
     references: list[ReferenceView]
     chain: list[str]  # "provider:model", primary first

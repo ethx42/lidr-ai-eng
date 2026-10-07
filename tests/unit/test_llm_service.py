@@ -1,12 +1,8 @@
 import logging
-import shutil
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
-from jinja2 import FileSystemLoader
 
-from app.prompts import loader
 from app.prompts.loader import DEFAULT_VERSION, render_estimation_prompt
 from app.schemas.estimation import Usage
 from app.services.cache import NullCache
@@ -60,18 +56,12 @@ async def test_system_prompt_identical_across_requests() -> None:
     assert "Client: one" not in provider.calls[0]["system"]
 
 
-async def test_cache_key_follows_prompt_version(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+@pytest.mark.usefixtures("prompts_v99")
+async def test_cache_key_follows_prompt_version() -> None:
     provider = FakeProvider()
     request = typed_request("Client: one")
     await service(provider).estimate(request)
     await service(provider).estimate(request)
-    # A second version without shipping one: v1's templates, also served as v99, from a scratch dir.
-    for version in ("v1", "v99"):
-        shutil.copytree(loader.PROMPTS_DIR / "estimation" / "v1", tmp_path / "estimation" / version)
-    monkeypatch.setattr(loader, "PROMPTS_DIR", tmp_path)
-    monkeypatch.setattr(loader, "_env", loader._env.overlay(loader=FileSystemLoader(tmp_path)))
     await EstimationService(
         provider=provider,
         prompt_version="v99",

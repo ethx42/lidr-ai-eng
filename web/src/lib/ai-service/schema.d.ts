@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Prompt, reference estimations and limits used for estimates */
+        /**
+         * Prompt, reference estimations and limits used for estimates
+         * @description The system prompt is rendered for the given enums (defaults: `web_saas`, `medium`, `phases_table`) and prompt version (default: the `PROMPT_VERSION` setting).
+         */
         get: operations["context_api_v1_context_get"];
         put?: never;
         post?: never;
@@ -135,6 +138,8 @@ export interface components {
         };
         /** ContextResponse */
         ContextResponse: {
+            /** Available Versions */
+            available_versions: string[];
             /** Chain */
             chain: string[];
             /** Max Transcription Chars */
@@ -571,7 +576,13 @@ export type $defs = Record<string, never>;
 export interface operations {
     context_api_v1_context_get: {
         parameters: {
-            query?: never;
+            query?: {
+                project_type?: components["schemas"]["ProjectType"];
+                detail_level?: components["schemas"]["DetailLevel"];
+                output_format?: components["schemas"]["OutputFormat"];
+                /** @description Prompt template version (`v1`, `v2`, …); default: `PROMPT_VERSION`. */
+                prompt_version?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -586,6 +597,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ContextResponse"];
                 };
+            };
+            /** @description Unknown enum value or prompt version. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
