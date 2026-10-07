@@ -13,7 +13,6 @@ from app.context.examples import DENTAL_CLINIC, REFERENCE_ESTIMATIONS
 from app.observability import request_id_var
 from app.prompts.loader import (
     DEFAULT_PARAMS,
-    DEFAULT_VERSION,
     VERSION_PATTERN,
     PromptParams,
     available_versions,
@@ -145,7 +144,8 @@ def example_response() -> dict[str, Any]:
         grounding=grounding,
         model="gpt-4o-mini",
         provider="openai",
-        prompt_version=DEFAULT_VERSION,
+        # The code default, never the environment the contract is exported from.
+        prompt_version=Settings.model_fields["prompt_version"].default,
         usage=usage,
         metrics=CallMetrics(latency_ms=9800, ttft_ms=1150, cost_usd=cost_usd("gpt-4o-mini", usage)),
     ).model_dump(mode="json")

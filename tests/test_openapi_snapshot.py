@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from app.config import Settings
 from app.main import create_app
 from app.routers.estimations import example_response
 from app.schemas.context import ContextResponse, ReferenceView
@@ -54,6 +55,14 @@ def test_documented_example_keeps_every_field() -> None:
     assert operation["responses"]["200"]["content"]["application/json"]["example"] == (
         example_response()
     )
+
+
+def test_documented_example_names_the_default_prompt_version() -> None:
+    # The code default, never the environment the snapshot was exported from.
+    committed = json.loads(Path("contracts/openapi.json").read_text())
+    operation = committed["paths"]["/api/v1/estimate"]["post"]
+    example = operation["responses"]["200"]["content"]["application/json"]["example"]
+    assert example["prompt_version"] == Settings.model_fields["prompt_version"].default
 
 
 def test_stream_operation_documents_every_event_payload() -> None:
