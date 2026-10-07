@@ -28,7 +28,7 @@ from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
 from app.services.providers.factory import build_provider
-from app.sessions import InMemorySessionStore
+from app.sessions import InMemorySessionStore, SessionsFull
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +219,10 @@ def create_app(
     @app.exception_handler(SessionBusy)
     async def session_busy_handler(_: Request, exc: SessionBusy) -> JSONResponse:
         return JSONResponse(error_body(exc.code, exc.message), 409)
+
+    @app.exception_handler(SessionsFull)
+    async def sessions_full_handler(_: Request, exc: SessionsFull) -> JSONResponse:
+        return JSONResponse(error_body(exc.code, exc.message), 503)
 
     @app.exception_handler(AttachmentError)
     async def attachment_error_handler(_: Request, exc: AttachmentError) -> JSONResponse:

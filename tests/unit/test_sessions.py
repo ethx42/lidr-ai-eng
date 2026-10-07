@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from app.sessions import ConversationHistory, InMemorySessionStore, ProjectMetadata
+from app.sessions import ConversationHistory, InMemorySessionStore, ProjectMetadata, SessionsFull
 
 
 def test_window_keeps_last_n_pairs() -> None:
@@ -127,6 +127,67 @@ def test_store_evicts_least_recently_used_at_capacity() -> None:
     store.get(a.id)  # a becomes most recent
     store.create()  # evicts b
     assert store.get(b.id) is None and store.get(a.id) is not None
+
+
+def capped_store(max_sessions: int, clock: list[float] | None = None) -> InMemorySessionStore:
+    now = clock if clock is not None else [0.0]
+    return InMemorySessionStore(
+        max_turns=6,
+        max_history_chars=60_000,
+        ttl_seconds=10,
+        max_sessions=max_sessions,
+        clock=lambda: now[0],
+    )
+
+
+def test_a_flood_of_creates_never_evicts_a_conversation_while_an_empty_session_exists() -> None:
+    store = capped_store(max_sessions=3)
+    a, b = store.create(), store.create()
+    a.history.append("u", "a")
+    b.history.append("u", "a")
+    for _ in range(50):
+        store.create()  # each evicts the flood's oldest empty session
+    assert store.get(a.id) is a and store.get(b.id) is b
+
+
+def test_without_an_empty_session_the_least_recently_used_idle_one_goes() -> None:
+    store = capped_store(max_sessions=2)
+    a, b = store.create(), store.create()
+    a.history.append("u", "a")
+    b.history.append("u", "a")
+    store.get(a.id)  # b is now the least recently used
+    store.create()
+    assert store.get(b.id) is None and store.get(a.id) is a
+
+
+def test_an_expired_session_goes_before_a_live_empty_one() -> None:
+    now = [0.0]
+    store = capped_store(max_sessions=2, clock=now)
+    stale = store.create()
+    stale.history.append("u", "a")
+    now[0] = 5
+    live = store.create()
+    now[0] = 12  # stale expired at 10
+    store.create()
+    assert store.get(live.id) is live and store.get(stale.id) is None
+
+
+async def test_a_session_with_a_turn_in_flight_is_never_evicted() -> None:
+    store = capped_store(max_sessions=2)
+    busy, other = store.create(), store.create()  # busy: least recently used, and empty
+    other.history.append("u", "a")
+    async with busy.lock:
+        store.create()
+    assert store.get(busy.id) is busy and store.get(other.id) is None
+
+
+async def test_at_the_cap_with_every_turn_in_flight_create_raises() -> None:
+    store = capped_store(max_sessions=2)
+    a, b = store.create(), store.create()
+    async with a.lock, b.lock:
+        with pytest.raises(SessionsFull):
+            store.create()
+    assert store.get(a.id) is a and store.get(b.id) is b
 
 
 def test_metadata_empty() -> None:

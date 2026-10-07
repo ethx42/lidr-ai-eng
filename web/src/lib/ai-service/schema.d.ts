@@ -1150,6 +1150,13 @@ export interface operations {
                     "application/json": components["schemas"]["SessionCreated"];
                 };
             };
+            /** @description At the session cap with every session mid-turn (`sessions_full`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_session_sessions__session_id__get: {

@@ -174,7 +174,14 @@ TURN_ERRORS: dict[int | str, dict[str, Any]] = {  # Any: OpenAPI response object
 }
 
 
-@router.post("", status_code=201, summary="Start a conversational estimation session")
+@router.post(
+    "",
+    status_code=201,
+    summary="Start a conversational estimation session",
+    responses={
+        503: error_response("At the session cap with every session mid-turn (`sessions_full`).")
+    },
+)
 async def create_session(conversation: ConversationDep) -> SessionCreated:
     return SessionCreated(session_id=conversation.start().id)
 

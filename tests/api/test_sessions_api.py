@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.attachments.extractor import Attachment, AttachmentError, ExtractedAttachment
 from app.attachments.limits import AttachmentLimits
+from app.config import Settings
 from app.services import conversation as conversation_module
 from app.services.conversation import SessionBusy, SessionNotFound
 from tests.api.conftest import ClientFactory
@@ -88,6 +89,20 @@ def test_a_session_evicted_by_the_cap_is_404(make_client: ClientFactory) -> None
         client.post("/sessions")
         r = client.post(f"/sessions/{first}/estimate", data=FORM)
     assert r.status_code == 404 and r.json()["error"]["code"] == "session_not_found"
+
+
+ONE_SESSION = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="", max_sessions=1)
+
+
+@pytest.mark.parametrize("settings", [pytest.param(ONE_SESSION, id="max_sessions=1")])
+async def test_at_the_cap_with_every_turn_in_flight_create_is_503(
+    app: FastAPI, async_client: httpx2.AsyncClient
+) -> None:
+    sid = await new_session(async_client)
+    async with app.state.conversation.get(sid).lock:
+        r = await async_client.post("/sessions")
+    assert error_of(r)[:2] == (503, "sessions_full")
+    assert (await async_client.get(f"/sessions/{sid}")).status_code == 200
 
 
 @pytest.mark.parametrize("endpoint", TURN_ENDPOINTS)

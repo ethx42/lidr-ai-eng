@@ -7,9 +7,8 @@ seam for a Redis or Postgres implementation.
 
 Concurrency assumes one event loop and async endpoints: the store is touched only from that loop,
 never from a thread, so it needs no lock of its own, and each session's `asyncio.Lock` serialises
-its turns. Known limitation (accepted): the cap may evict a session while a turn is in flight
-(that takes `max_sessions` creates during one turn); the client still gets its answer, and its
-next turn is a 404, from which the UI recovers by creating a new session.
+its turns. The cap never evicts a session whose turn is in flight, and it takes sessions with no
+turns before conversations, so a flood of creates evicts its own empty sessions first.
 """
 
 import asyncio
@@ -18,6 +17,7 @@ import uuid
 from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import chain
 from typing import Protocol, TypeGuard, get_args
 
 from pydantic import BaseModel
@@ -162,14 +162,25 @@ class Session:
     lock: asyncio.Lock
 
 
+class SessionsFull(Exception):
+    """At the cap, and every session has a turn in flight."""
+
+    code = "sessions_full"
+    message = "Every session is in use. Try again shortly."
+
+
 class SessionStore(Protocol):
-    def create(self) -> Session: ...
+    def create(self) -> Session:
+        """Raises SessionsFull when there is no room and no session can be evicted."""
+        ...
 
     def get(self, session_id: str) -> Session | None: ...
 
 
 class InMemorySessionStore:
-    """LRU-ordered: `get` refreshes a session; idle sessions expire; the cap evicts the oldest."""
+    """LRU-ordered: `get` refreshes a session and idle sessions expire. At the cap, `create` evicts
+    an expired session, else the least recently used one with no turns, else the least recently
+    used one; never one whose turn is in flight (all of them in flight: SessionsFull)."""
 
     def __init__(
         self,
@@ -196,9 +207,20 @@ class InMemorySessionStore:
         self._sessions: OrderedDict[str, Session] = OrderedDict()
 
     def create(self) -> Session:
-        while len(self._sessions) >= self._max_sessions:
-            self._sessions.popitem(last=False)
         now = self._clock()
+        if len(self._sessions) >= self._max_sessions:
+            idle = [s for s in self._sessions.values() if not s.lock.locked()]
+            victim = next(
+                chain(
+                    (s for s in idle if now - s.last_used > self._ttl_seconds),
+                    (s for s in idle if s.history.turns == 0),
+                    idle,
+                ),
+                None,
+            )
+            if victim is None:
+                raise SessionsFull()
+            del self._sessions[victim.id]
         session = Session(
             id=str(uuid.uuid4()),
             history=ConversationHistory(self._max_turns, self._max_history_chars),

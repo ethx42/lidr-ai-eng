@@ -1728,6 +1728,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "description": "At the session cap with every session mid-turn (`sessions_full`)."
           }
         },
         "summary": "Start a conversational estimation session",

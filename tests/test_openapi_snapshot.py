@@ -79,6 +79,11 @@ def test_stream_operation_documents_every_event_payload() -> None:
     assert operation["responses"]["422"]
 
 
+def test_create_session_documents_a_full_store() -> None:
+    operation = create_app().openapi()["paths"]["/sessions"]["post"]
+    assert {"201", "503"} <= set(operation["responses"])
+
+
 def test_session_stream_operation_documents_every_event_payload() -> None:
     operation = create_app().openapi()["paths"][SESSION_TURN_PATHS[1]]["post"]
     content = operation["responses"]["200"]["content"]["text/event-stream"]
