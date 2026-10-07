@@ -6,14 +6,18 @@ Measures prompt quality against a golden set of transcriptions using the real co
 ## Requirements
 
 ### Requirement: Golden set
-The repository SHALL contain a golden set of at least three meeting transcriptions, including the course exercise transcription, one deliberately vague transcription, and one case that requests an explicit output language different from the transcription's language. A golden case MAY declare the `output_language` it is evaluated with.
+The repository SHALL contain a golden set of at least three meeting transcriptions, including the course exercise transcription, one deliberately vague transcription, and one case that requests an explicit output language different from the transcription's language. Every golden case SHALL declare in front matter the typed request it is evaluated with (`project_type`, `detail_level`, `output_format`) and whether its estimate must include frontend work (`expects_frontend`, `true` or `false`); a case MAY also declare the `output_language` it is evaluated with. A case whose front matter is missing, lacks one of these keys, or holds a value outside its enum SHALL stop the evaluation with an error naming the file.
 
 #### Scenario: Golden set present
 - **WHEN** the evaluation is started
-- **THEN** it runs over every transcription in the golden set
+- **THEN** it runs over every transcription in the golden set, each sent with the project type, detail level, and output format its front matter declares
+
+#### Scenario: Incomplete front matter
+- **WHEN** a golden case does not declare `project_type`
+- **THEN** the evaluation fails with an error naming the case's file and `project_type`
 
 ### Requirement: Explicitly invoked live evaluation
-The evaluation SHALL use the configured provider and model and SHALL run only when explicitly invoked, by a developer or by a dedicated evaluation gate. It SHALL never be part of the default quality gate (the local check command or the default CI workflow).
+The evaluation SHALL use the configured provider and model and SHALL run only when explicitly invoked, by a developer or by a dedicated evaluation gate. It SHALL never be part of the default quality gate (the local check command or the default CI workflow). It SHALL score the prompt version given by its `--prompt-version` option, or else the `PROMPT_VERSION` setting, and SHALL refuse an unknown version before any provider call or recorded spend.
 
 #### Scenario: Default quality gate
 - **WHEN** the default quality gate runs locally or in CI
@@ -23,8 +27,16 @@ The evaluation SHALL use the configured provider and model and SHALL run only wh
 - **WHEN** a developer or an evaluation gate invokes the evaluation with provider credentials available
 - **THEN** it runs over the golden set with the configured provider and model
 
+#### Scenario: Version chosen for the run
+- **WHEN** the evaluation runs with `--prompt-version v1` while `PROMPT_VERSION` names another version
+- **THEN** the report's prompt version is `v1`
+
+#### Scenario: Unknown version refused
+- **WHEN** the evaluation is invoked with an unknown prompt version, by option or by setting
+- **THEN** it exits with an error, no provider is called, and no spend is recorded
+
 ### Requirement: Automated checks
-For each golden transcription the evaluation SHALL record: schema validity, three-point ordering, task hours within bounds, coverage of non-build phases (QA, deployment, project management), presence of open questions for the vague transcription, whether the narrative is written in the expected language (the case's `output_language` when declared, otherwise the transcription's language), grounding score, ungrounded requirements, tasks without a valid basis, latency, and token usage (including cached input and cache write tokens). A case SHALL pass grounding only when every requirement is grounded and every task has a valid basis.
+For each golden transcription the evaluation SHALL record: schema validity, three-point ordering, task hours within bounds, coverage of non-build phases (QA, deployment, project management), presence of open questions for the vague transcription, frontend coverage (at least one `frontend` task) for cases that declare `expects_frontend: true`, whether the narrative is written in the expected language (the case's `output_language` when declared, otherwise the transcription's language), grounding score, ungrounded requirements, tasks without a valid basis, latency, and token usage (including cached input and cache write tokens). A case SHALL pass grounding only when every requirement is grounded and every task has a valid basis.
 
 #### Scenario: Fabricated requirement in eval
 - **WHEN** a golden case produces a requirement whose evidence is not in the transcription
@@ -37,6 +49,11 @@ For each golden transcription the evaluation SHALL record: schema validity, thre
 #### Scenario: Vague transcription
 - **WHEN** the vague transcription is evaluated
 - **THEN** the report records whether at least one open question and a confidence below `high` were produced
+
+#### Scenario: Frontend coverage
+- **WHEN** a case that declares `expects_frontend: true` produces an estimate without any `frontend` task
+- **THEN** its `covers_frontend` check fails
+- **AND** a case that declares `expects_frontend: false` records no `covers_frontend` check
 
 #### Scenario: Cache usage recorded
 - **WHEN** a case completes
@@ -58,8 +75,17 @@ Each evaluation run SHALL write a JSON report containing the prompt version, pro
 - **THEN** `score` is below 1 and above the case pass rate of that run
 
 ### Requirement: Versioned baseline
-The repository SHALL keep a committed baseline report of the evaluation, produced by an explicit command from a completed run, so that later prompt or model changes can be compared against it.
+The repository SHALL keep a committed baseline report of the evaluation, produced by an explicit command from a completed run, so that later prompt or model changes can be compared against it. A gate command SHALL compare a report with the baseline and fail when the report's score is below the baseline's score minus a tolerance (default 0.02), or when the report's model differs from the baseline's.
 
 #### Scenario: Baseline recorded
 - **WHEN** the developer records a baseline from a completed evaluation run
 - **THEN** the baseline file contains that run's `score`, prompt version, provider, and model
+
+#### Scenario: Report below the tolerance
+- **WHEN** the baseline scores 0.9615 and a report scores 0.9231, with the default tolerance
+- **THEN** the gate fails
+- **AND** a report scoring 0.9423 passes
+
+#### Scenario: Report from another model
+- **WHEN** a report from a different model scores higher than the baseline
+- **THEN** the gate still fails

@@ -129,15 +129,23 @@ Provider clients SHALL be created once at application startup and closed at shut
 - **THEN** every other provider is still closed and the failure is raised afterwards
 
 ### Requirement: Prompt cache routing
-On providers that accept a prompt-cache routing key, every request SHALL carry a key derived only from the prompt version, so requests sharing the byte-stable system prompt are routed to the same cache. The key SHALL contain no per-request or user data.
+On providers that accept a prompt-cache routing key, every request SHALL carry a key derived only from the version that rendered its prompt (`estimator-<version>`), so requests of one version, whose system prompts share the long static prefix that ends before the output-format and detail-level blocks (see `Cache-stable prompt prefix` in `prompt-context`), are routed to the same cache whatever their choices. The key SHALL contain no per-request or user data. On providers that cache by marked content instead, the system prompt SHALL be sent as its own block marked for caching.
 
 #### Scenario: Same key across requests
 - **WHEN** two estimation requests are served by OpenAI with the same prompt version
 - **THEN** both requests carry the same cache routing key, which includes the prompt version
 
 #### Scenario: Key changes with prompt version
-- **WHEN** the prompt version changes
-- **THEN** the cache routing key changes
+- **WHEN** one request is rendered from `v2` and another from `v1`
+- **THEN** they carry the routing keys `estimator-v2` and `estimator-v1`
+
+#### Scenario: Choices do not change the key
+- **WHEN** two requests of the same prompt version differ in project type, detail level, and output format
+- **THEN** both carry the same cache routing key
+
+#### Scenario: Anthropic system prompt marked for caching
+- **WHEN** an estimation is served by Anthropic
+- **THEN** the system prompt is sent as one text block with an ephemeral cache-control marker, followed by one user message
 
 #### Scenario: Streamed and blocking calls share the key
 - **WHEN** one blocking and one streamed estimation are served with the same prompt version

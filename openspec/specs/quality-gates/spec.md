@@ -93,11 +93,11 @@ The AI service's OpenAPI contract SHALL be committed, including the schemas of e
 - **THEN** the streaming operation's `200` response lists the `StatusEvent`, `PartialEvent`, `EstimateResponse`, and `ErrorEvent` schemas
 
 ### Requirement: Browser end-to-end tests
-The repository SHALL provide a command that runs browser end-to-end tests against the whole system started with Docker Compose in its offline configuration: the replay provider, no fallback, no response cache, and no API keys, so it makes no LLM calls. The tests SHALL cover streaming a sample estimate to completion, Stop and Regenerate, a reload restoring the completed turn, keyboard-only use, and a 375 px viewport without horizontal scrolling, and SHALL fail on any serious or critical accessibility violation, in the light and dark themes. The branch close gate SHALL run them.
+The repository SHALL provide a command that runs browser end-to-end tests against the whole system started with Docker Compose in its offline configuration: the replay provider, no fallback, no response cache, and no API keys, so it makes no LLM calls. The tests SHALL cover streaming a sample estimate from the typed form to completion, a requirement highlighting its quote in the transcript on hover and on keyboard focus, the Document view following the output format, Stop and Regenerate, keyboard-only use, a 375 px viewport (transcript and estimate as tabs) without horizontal scrolling, and short viewports keeping the estimate usable, and SHALL fail on any serious or critical accessibility violation, in the light and dark themes. The branch close gate SHALL run them.
 
 #### Scenario: Estimate streamed in the browser
-- **WHEN** the tests send a sample transcript
-- **THEN** a partial estimate renders before the totals, and the completed estimate shows its totals, its task table, and the call in the inspector
+- **WHEN** the tests send a sample transcript with the form's choices
+- **THEN** a partial estimate renders before the totals, and the completed estimate shows its totals, its tasks grouped by phase, and the call in the inspector
 
 #### Scenario: Accessibility violation
 - **WHEN** a page state the tests visit has a serious or critical accessibility violation
