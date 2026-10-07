@@ -77,9 +77,18 @@ class ConversationService:
             metadata=session.metadata,
             attachments=attachments,
         )
-        # The text the model saw in <transcript>, un-neutralised, so verbatim quotes still match.
-        grounding_source = f"{request.transcription}\n\n{format_attachments(attachments)}"
-        return prompt, session.history.as_chat(prompt.user), grounding_source
+        messages = session.history.as_chat(prompt.user)
+        # Quotable text the model saw: this turn's transcript and attachments (un-neutralised, so
+        # verbatim quotes match), then the user turns still in the window. Never the system prompt,
+        # the metadata or the assistant turns: those are model output.
+        grounding_source = "\n\n".join(
+            [
+                request.transcription,
+                format_attachments(attachments),
+                *(m.content for m in messages[:-1] if m.role == "user"),
+            ]
+        )
+        return prompt, messages, grounding_source
 
     def _commit(
         self, session: Session, prompt: RenderedPrompt, response: EstimateResponse

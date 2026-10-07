@@ -11,16 +11,16 @@ from app.attachments.limits import AttachmentLimits
 from app.schemas.session import TurnResponse
 from app.schemas.stream import PartialEvent, StatusEvent
 from app.services import conversation as conversation_module
+from app.services import llm_service
 from app.services.conversation import ConversationService, SessionBusy, SessionNotFound
 from app.services.errors import UpstreamUnavailable
-from app.services.providers.base import LLMProvider
 from app.services.providers.fallback import Cooldown, FallbackProvider
 from app.services.rendering import render_compact
 from app.sessions import ProjectMetadata
 from tests.factories import breakdown, typed_request
 from tests.fakes import FakeProvider, GatedFakeProvider, SlowFakeProvider, SpyCache
 
-MakeConversation = Callable[[LLMProvider], ConversationService]
+MakeConversation = Callable[..., ConversationService]
 SPEC_PDF = Path("tests/fixtures/attachments/spec.pdf").read_bytes()
 
 
@@ -53,6 +53,46 @@ async def test_attachment_text_reaches_prompt_and_grounding(conversation, fake_p
     )
     assert "ATTACHMENT-MARKER" in fake_provider.calls[0]["messages"][-1].content
     assert r.grounding.ungrounded_requirement_ids == []  # quote found in the attachment
+
+
+@pytest.mark.parametrize(("max_turns", "grounded"), [(6, True), (1, False)])
+async def test_quotes_from_earlier_turns_are_grounded_while_the_model_still_sees_them(
+    make_conversation: MakeConversation, max_turns: int, grounded: bool
+) -> None:
+    provider = FakeProvider()
+    conversation = make_conversation(provider, max_turns=max_turns)
+    s = conversation.start()
+    await conversation.turn(s.id, typed_request("Client: Payments must work offline."), [])
+    await conversation.turn(s.id, typed_request("Client: Add a loyalty card."), [])
+    provider.queue(breakdown(requirements=[("R1", "Offline payments", "must work offline")]))
+    r = await conversation.turn(s.id, typed_request("Client: And a gift shop."), [])
+    # With one turn kept, the first has slid out of the window: the model no longer saw it.
+    seen = " ".join(m.content for m in provider.calls[-1]["messages"])
+    assert ("must work offline" in seen) is grounded
+    assert r.grounding.ungrounded_requirement_ids == ([] if grounded else ["R1"])
+
+
+async def test_grounding_source_is_the_turn_then_the_windowed_user_turns(
+    conversation: ConversationService,
+    fake_provider: FakeProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sources: list[str] = []
+    check = llm_service.check_grounding
+    monkeypatch.setattr(
+        llm_service, "check_grounding", lambda b, source: sources.append(source) or check(b, source)
+    )
+    s = conversation.start()
+    fake_provider.queue(breakdown(project_name="Yoga Booking"))
+    r1 = await conversation.turn(s.id, typed_request("first transcript"), [])
+    notes = ExtractedAttachment("notes.txt", "text", "second notes", None)
+    await conversation.turn(s.id, typed_request("second transcript"), [notes])
+    first_user = fake_provider.calls[0]["messages"][-1].content
+    assert sources[1].startswith("second transcript\n\n--- attachment: notes.txt ---\nsecond notes")
+    assert first_user in sources[1]
+    # Never the system prompt, the metadata block or the model's own (assistant) turns.
+    assert "<project_metadata>" not in sources[1] and "Yoga Booking" not in sources[1]
+    assert render_compact(r1.breakdown) not in sources[1]
 
 
 async def test_concurrent_turn_on_same_session_is_rejected(

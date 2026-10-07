@@ -50,12 +50,12 @@ def spy_cache() -> SpyCache:
 
 
 @pytest.fixture
-def make_conversation(spy_cache: SpyCache) -> Callable[[LLMProvider], ConversationService]:
-    def build(provider: LLMProvider) -> ConversationService:
+def make_conversation(spy_cache: SpyCache) -> Callable[..., ConversationService]:
+    def build(provider: LLMProvider, max_turns: int = 6) -> ConversationService:
         return ConversationService(
             estimation=make_service(provider, spy_cache),
             store=InMemorySessionStore(
-                max_turns=6, max_history_chars=60_000, ttl_seconds=7200, max_sessions=1000
+                max_turns=max_turns, max_history_chars=60_000, ttl_seconds=7200, max_sessions=1000
             ),
             limits=AttachmentLimits(),
         )
