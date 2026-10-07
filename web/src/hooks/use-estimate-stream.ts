@@ -22,6 +22,7 @@ const partialOf = (state: StreamState) => (state.status === "streaming" ? state.
 const patch = (update: Update, fields: Partial<Omit<Streaming, "status">>) => update((s) => (s.status === "streaming" ? { ...s, ...fields } : s));
 
 // One state update per SSE frame; returns true once the terminal event (`result` or `error`) is applied.
+// A terminal frame whose payload is not an object is ignored like any malformed frame.
 const apply = (event: string | undefined, data: string, update: Update, requestId?: string) => {
   switch (event) {
     case "status": {
@@ -35,27 +36,39 @@ const apply = (event: string | undefined, data: string, update: Update, requestI
       return false;
     }
     case "result": {
-      const result = parse<Schemas["EstimateResponse"]>(data);
-      if (result) update(() => ({ status: "done", result, requestId }));
-      return Boolean(result);
+      const result = parse<Schemas["EstimateResponse"]>(data); // unchecked beyond this: the view reads it through guards
+      if (!isObject(result)) return false;
+      update(() => ({ status: "done", result, requestId }));
+      return true;
     }
     case "error": {
-      const error = parse<Schemas["ErrorEvent"]>(data);
-      if (error) update((s) => ({ status: "error", error: { code: error.code, message: error.message, retryable: error.retryable, requestId: error.request_id }, partial: partialOf(s) }));
-      return Boolean(error);
+      const error = parse<unknown>(data);
+      if (!isObject(error) || typeof error.code !== "string") return false;
+      const next: StreamError = {
+        code: error.code,
+        message: typeof error.message === "string" ? error.message : "",
+        retryable: error.retryable === true,
+        requestId: typeof error.request_id === "string" ? error.request_id : requestId,
+      };
+      update((s) => ({ status: "error", error: next, partial: partialOf(s) }));
+      return true;
     }
     default:
       return false;
   }
 };
 
+// After an abort, `update` ignores every failure below.
 const run = async (url: string, body: Schemas["EstimateRequest"], signal: AbortSignal, update: Update) => {
   const fail = (error: StreamError) => update((s) => ({ status: "error", error, partial: partialOf(s) }));
+  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body: JSON.stringify(body), signal }).catch(
+    () => null,
+  );
+  if (!res) return fail(streamInterrupted()); // network failure
+  if (!res.ok) return fail(await fromErrorResponse(res));
+  const requestId = res.headers.get("x-request-id") ?? undefined;
+  if (!res.body) return fail(streamInterrupted(requestId));
   try {
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body: JSON.stringify(body), signal });
-    if (!res.ok) return fail(await fromErrorResponse(res));
-    if (!res.body) return fail(streamInterrupted());
-    const requestId = res.headers.get("x-request-id") ?? undefined;
     // getReader() rather than `for await`: Safari < 27 and Next's TS lib lack ReadableStream async iteration
     const reader = res.body
       .pipeThrough(new TextDecoderStream())
@@ -66,9 +79,9 @@ const run = async (url: string, body: Schemas["EstimateRequest"], signal: AbortS
       if (done) break;
       if (apply(value.event, value.data, update, requestId)) return;
     }
-    fail(streamInterrupted()); // e.g. the AI service shut down mid-stream
+    fail(streamInterrupted(requestId)); // e.g. the AI service shut down mid-stream
   } catch {
-    fail(streamInterrupted()); // network drop or parser error; after an abort, `update` ignores it
+    fail(streamInterrupted(requestId)); // network drop or parser error
   }
 };
 
@@ -78,8 +91,6 @@ export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
   const [state, setState] = useState<StreamState>(IDLE);
   const latest = useRef<StreamState>(IDLE);
   const controllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => controllerRef.current?.abort(), []);
 
   // Every transition goes through here, so `current()` sees it before React renders it.
   const commit = useCallback((next: (state: StreamState) => StreamState) => {
@@ -108,6 +119,10 @@ export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
     controllerRef.current?.abort();
     commit((s) => (s.status === "streaming" ? { status: "cancelled", partial: s.partial } : s));
   }, [commit]);
+
+  // Unmount stops like the Stop button, so the state settles: Fast Refresh runs this cleanup but keeps the state, and a
+  // bare abort would leave it "streaming" with nothing left to end it.
+  useEffect(() => stop, [stop]);
 
   return { state, start, stop, current };
 };
