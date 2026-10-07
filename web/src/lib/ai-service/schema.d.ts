@@ -567,7 +567,10 @@ export interface operations {
     };
     estimate_api_v1_estimate_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Skip the cache lookup and regenerate; the fresh result replaces the entry. */
+                refresh?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -829,7 +832,10 @@ export interface operations {
     };
     estimate_stream_api_v1_estimate_stream_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Skip the cache lookup and regenerate; the fresh result replaces the entry. */
+                refresh?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -874,7 +880,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string;
+                        [key: string]: string | string[];
                     };
                 };
             };
