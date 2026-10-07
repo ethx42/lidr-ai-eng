@@ -260,8 +260,16 @@ test.describe("estimate", () => {
     await sendSample(page);
     await expectResult(page);
     await showDocument(page);
-    const table = estimatePane(page).getByRole("region", { name: "Task breakdown" });
+    // The table's region is named by the server's heading above it.
+    const table = estimatePane(page).getByRole("region").filter({ has: page.getByRole("table") });
     await expect(table).toHaveCount(1);
+    const [tag, heading, labelledByIt] = await table.evaluate((region) => {
+      const above = region.previousElementSibling;
+      return [above?.tagName, above?.textContent?.trim(), Boolean(above?.id) && region.getAttribute("aria-labelledby") === above?.id];
+    });
+    expect(tag, "the element above the table").toMatch(/^H[1-6]$/);
+    expect(labelledByIt, "the region is aria-labelledby the heading above it").toBe(true);
+    await expect(table).toHaveAccessibleName(String(heading));
     await expect(table.getByRole("columnheader")).toHaveText(["Phase", "Tasks", "Expected h", "Range h"]);
     await expect(table.getByRole("row")).not.toHaveCount(1);
     // A tab stop only while it scrolls sideways: the table fits the pane at 1280 px, not a 320 px window.
@@ -269,7 +277,7 @@ test.describe("estimate", () => {
     expect(await table.evaluate(scrolls)).toBe(false);
     await expect(table).not.toHaveAttribute("tabindex");
     await page.setViewportSize({ width: 320, height: 800 });
-    const narrow = page.getByRole("region", { name: "Task breakdown" });
+    const narrow = page.getByRole("region", { name: heading, exact: true });
     await expect(narrow).toHaveAttribute("tabindex", "0");
     expect(await narrow.evaluate(scrolls)).toBe(true);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -285,7 +293,7 @@ test.describe("estimate", () => {
     const paragraphs = estimatePane(page).locator("p").filter({ hasText: /— \d+ tasks?, [\d.,]+ h expected \(/ });
     await expect(paragraphs.first()).toBeVisible();
     for (const phase of await paragraphs.locator("strong").allTextContents()) expect(PHASES).toContain(phase);
-    await expect(estimatePane(page).getByRole("region", { name: "Task breakdown" })).toHaveCount(0);
+    await expect(estimatePane(page).getByRole("region").filter({ has: page.getByRole("table") })).toHaveCount(0);
     await expect(estimatePane(page).getByRole("table")).toHaveCount(0);
   });
 
@@ -409,10 +417,13 @@ test.describe("375 px wide", () => {
     await expectNoHorizontalScroll(page);
     await shot(page, "mobile");
 
-    // Evidence pins its requirement and opens the Transcript tab at its quote, which stays highlighted after hover and
-    // focus have left the requirement (the last grounded one, so its quote sits low and must be scrolled into view).
-    const pinned = estimate(page).getByRole("listitem").filter({ has: page.getByRole("button", { name: /^Evidence for / }) }).filter({ hasNotText: "Quote not found in the transcript" }).last();
-    const evidence = pinned.getByRole("button", { name: /^Evidence for / });
+    // Evidence on a quote marked in the transcript pins its requirement and opens the Transcript tab at the quote, which
+    // stays highlighted after hover and focus have left the requirement (the last one, so its quote sits low and must be
+    // scrolled into view). Every quote of the recorded run is grounded; the run on other choices below has flagged ones.
+    const requirements = estimate(page).getByRole("listitem").filter({ has: page.getByRole("button", { name: /^Evidence for / }) });
+    const flagged = requirements.filter({ hasText: "Quote not found in the transcript" });
+    await expect(flagged).toHaveCount(0);
+    const evidence = requirements.last().getByRole("button", { name: /^Evidence for / });
     const id = (await evidence.getAttribute("aria-label"))?.replace("Evidence for ", "") ?? "";
     await evidence.click();
     await expect(tabs.getByRole("tab", { name: "Transcript" })).toHaveAttribute("aria-selected", "true");
@@ -434,6 +445,15 @@ test.describe("375 px wide", () => {
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
     await expect(trigger).toBeFocused();
+
+    // A quote not found in the transcript has no mark to open the transcript at: its Evidence shows the model's quote
+    // and the Estimate tab stays. Other choices stream a synthesised estimate whose quotes are not from the sample.
+    await choose(page, "Output format", "Narrative");
+    await estimateButton(page).click();
+    await expectResult(page, { timeout: 45_000 });
+    await flagged.first().getByRole("button", { name: /^Evidence for / }).click();
+    await expect(page.locator("[data-slot=hover-card-content]")).toContainText("Quote given by the model, not found in the transcript");
+    await expect(tabs.getByRole("tab", { name: "Estimate" })).toHaveAttribute("aria-selected", "true");
   });
 });
 

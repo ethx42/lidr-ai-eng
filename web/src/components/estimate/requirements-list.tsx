@@ -9,10 +9,12 @@ import { Empty, Section } from "./section";
 
 type Requirement = NonNullable<EstimateModel["requirements"]>[number];
 type FocusHandler = (id: string | null) => void;
-type PinHandler = (id: string) => void;
+// The action that pins a requirement (below 768 px), or undefined when it has no mark in the transcript to show.
+type PinFor = (id: string) => (() => void) | undefined;
 
 // Radix opens a hover card on mouse hover and keyboard focus but ignores touch (and cancels the tap), so touch opens it explicitly.
-// With `onPin` (below 768 px, where the transcript sits behind a tab) the button shows the quote in the transcript instead.
+// With `onPin` (below 768 px, where the transcript sits behind a tab, and for a quote marked there) the button shows the
+// quote in the transcript instead.
 const Evidence = ({ id, quote, ungrounded, onPin }: { id?: string; quote: string; ungrounded: boolean; onPin?: () => void }) => {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
@@ -42,9 +44,9 @@ const Evidence = ({ id, quote, ungrounded, onPin }: { id?: string; quote: string
   );
 };
 
-type RowProps = { requirement: Requirement; ungrounded: boolean; active: boolean; onFocusChange?: FocusHandler; onPin?: PinHandler };
+type RowProps = { requirement: Requirement; ungrounded: boolean; active: boolean; onFocusChange?: FocusHandler; pinFor?: PinFor };
 
-const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onFocusChange, onPin }: RowProps) => {
+const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onFocusChange, pinFor }: RowProps) => {
   const enter = () => id && onFocusChange?.(id);
   const leave = () => id && onFocusChange?.(null);
   return (
@@ -68,7 +70,7 @@ const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onF
           )}
         </div>
         {evidence ? (
-          <Evidence id={id} quote={evidence} ungrounded={ungrounded} onPin={id && onPin ? () => onPin(id) : undefined} />
+          <Evidence id={id} quote={evidence} ungrounded={ungrounded} onPin={id ? pinFor?.(id) : undefined} />
         ) : (
           <Pending className="mt-1 w-16" />
         )}
@@ -83,10 +85,10 @@ type Props = {
   ungrounded: Set<string>;
   activeRequirement?: string;
   onRequirementFocus?: FocusHandler;
-  onRequirementPin?: PinHandler;
+  pinFor?: PinFor;
 };
 
-export const RequirementsList = ({ items, streaming, ungrounded, activeRequirement, onRequirementFocus, onRequirementPin }: Props) => {
+export const RequirementsList = ({ items, streaming, ungrounded, activeRequirement, onRequirementFocus, pinFor }: Props) => {
   const requirements = received(items, streaming);
   return (
     <Section title="Requirements">
@@ -103,7 +105,7 @@ export const RequirementsList = ({ items, streaming, ungrounded, activeRequireme
               ungrounded={requirement.id !== undefined && ungrounded.has(requirement.id)}
               active={requirement.id !== undefined && requirement.id === activeRequirement}
               onFocusChange={onRequirementFocus}
-              onPin={onRequirementPin}
+              pinFor={pinFor}
             />
           ))}
         </ul>

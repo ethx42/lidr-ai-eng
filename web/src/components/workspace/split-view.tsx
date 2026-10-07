@@ -7,8 +7,8 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 export type SplitTab = "transcript" | "estimate";
-// `description`: one line under the heading, cut short (whole on hover) when the pane is too narrow; `aside`: controls
-// at the right.
+// `description`: under the heading; side by side one line, cut short (whole on hover) when the pane is too narrow, and
+// below 768 px wrapped, since a cut line's title is out of reach by touch and keyboard. `aside`: controls at the right.
 type Pane = { label: string; description?: string; aside?: ReactNode; children: ReactNode };
 type Props = { transcript: Pane; estimate: Pane; tab: SplitTab; onTabChange: (tab: SplitTab) => void; className?: string; ref?: Ref<HTMLDivElement> };
 
@@ -30,15 +30,20 @@ const SplitPane = ({ value, pane, wide }: { value: SplitTab; pane: Pane; wide: b
       {...(wide ? { role: "group", "aria-labelledby": headingId, tabIndex: undefined } : {})}
       className="flex h-full min-h-0 flex-col focus-visible:-outline-offset-2! max-md:data-[state=inactive]:hidden"
     >
-      {/* One fixed height for both panes' headers, which fits the heading over its description and the result view
-          toggle: side by side their rules line up, and nothing below moves when the toggle arrives with the result. */}
-      <div className={cn("flex h-11 shrink-0 items-center gap-3 border-b px-4 sm:px-6", !pane.aside && !pane.description && "max-md:hidden")}>
+      {/* Side by side, one fixed height for both panes' headers, which fits the heading over its description and the
+          result view toggle: their rules line up, and nothing below moves when the toggle arrives with the result. */}
+      <div
+        className={cn(
+          "flex min-h-11 shrink-0 items-center gap-3 border-b px-4 py-1 sm:px-6 md:h-11 md:py-0",
+          !pane.aside && !pane.description && "max-md:hidden",
+        )}
+      >
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 id={headingId} className="text-sm font-semibold max-md:hidden">
             {pane.label}
           </h2>
           {pane.description && (
-            <p title={pane.description} className="truncate text-xs text-muted-foreground">
+            <p title={pane.description} className="text-xs text-muted-foreground md:truncate">
               {pane.description}
             </p>
           )}

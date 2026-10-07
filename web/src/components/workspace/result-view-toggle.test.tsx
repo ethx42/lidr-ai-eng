@@ -44,7 +44,15 @@ describe("ResultViewToggle with the keyboard", () => {
 describe("EstimateDocument", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // The server's documents hold one table, the task breakdown (app/services/rendering.py).
+  it("names each table's region by the heading above it", () => {
+    render(<EstimateDocument markdown={"### Phases\n\n| Phase | Tasks |\n|---|---:|\n| backend | 3 |\n\n### Line items\n\n| ID | Task |\n|---|---|\n| T1 | API |\n"} />);
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    const regions = screen.getAllByRole("region");
+    expect(regions.map((region) => region.getAttribute("aria-labelledby"))).toEqual(headings.map((heading) => heading.id));
+    expect(screen.getByRole("region", { name: "Phases" })).toContainElement(screen.getByRole("cell", { name: "backend" }));
+    expect(screen.getByRole("region", { name: "Line items" })).toContainElement(screen.getByRole("cell", { name: "API" }));
+  });
+
   it("renders the server's markdown with the table in a region named after it, a tab stop only while it scrolls sideways", () => {
     const observers: (() => void)[] = [];
     vi.stubGlobal(

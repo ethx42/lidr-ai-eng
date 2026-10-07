@@ -26,6 +26,7 @@ const context = {
 };
 const tooLong = { error: { code: "invalid_request", message: "Transcription exceeds 50000 characters.", details: [{ type: "string_too_long" }] }, request_id: "req-422" };
 const DEFAULTS = { project_type: "web_saas", detail_level: "medium", output_format: "phases_table" };
+const DESCRIPTION = "Web SaaS, medium detail, phases table, prompt v1";
 
 const encoder = new TextEncoder();
 const frame = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -409,6 +410,13 @@ describe("Workspace", () => {
     const split = transcriptPane().closest("[data-slot=split-view]");
     expect(split).toHaveClass("flex-1", "md:short:h-dvh", "md:short:flex-none");
     expect(input).toHaveClass("max-h-32"); // compact once a run sits below the form
+    // Side by side both pane headers keep one height, so their rules line up; below 768 px the run description wraps
+    // instead of being cut short (a cut line's title is out of reach by touch and keyboard).
+    const description = screen.getByText(DESCRIPTION);
+    expect(description).toHaveClass("md:truncate");
+    expect(description).not.toHaveClass("truncate");
+    expect(description.parentElement?.parentElement).toHaveClass("min-h-11", "md:h-11");
+    expect(description.parentElement?.parentElement).not.toHaveClass("h-11");
   });
 
   it("below 768 px, shows the transcript and the estimate as tabs, opening Estimate when a run starts", async () => {
@@ -518,6 +526,28 @@ describe("Workspace", () => {
     resize(true); // later, the phone turns to landscape
     await pastOpenDelay();
     expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+  });
+
+  it("below 768 px, Evidence for a quote not found in the transcript shows the model's quote instead of pinning", async () => {
+    stubPointer("fine", { wide: false });
+    const { user, input } = setup();
+    await run(user, input);
+    await finish(0); // the grounding report flags R3: no mark to show
+    await user.click(screen.getByRole("button", { name: "Evidence for R3" }));
+    expect(screen.getByRole("tab", { name: "Estimate", selected: true })).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote given by the model, not found in the transcript"));
+  });
+
+  it("ignores a pin side by side, where hover and focus link requirements to quotes", async () => {
+    const resize = viewport(false);
+    const { user, input } = setup();
+    await run(user, input);
+    await finish(0);
+    await user.click(screen.getByRole("button", { name: "Evidence for R2" }));
+    expect(mark("R2")).toHaveAttribute("data-active");
+    resize(true);
+    expect(transcriptPane().querySelector("mark[data-active]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).not.toHaveAttribute("data-active");
   });
 
   it("keeps the run's panes, focus and scroll when the viewport crosses 768 px mid-run", async () => {

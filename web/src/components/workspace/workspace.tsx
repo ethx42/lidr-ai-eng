@@ -22,7 +22,7 @@ import type { components } from "@/lib/ai-service/schema";
 import { toUserMessage } from "@/lib/errors";
 import { readEstimate, readGrounding } from "@/lib/estimate/read";
 import type { StreamState } from "@/lib/estimate/types";
-import type { EvidenceQuote } from "@/lib/evidence";
+import { type EvidenceQuote, evidenceFinder } from "@/lib/evidence";
 import { finePointer, scrollBehavior } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { type ResultView, ResultViewToggle } from "./result-view-toggle";
@@ -111,6 +111,12 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const kept = run ? keptFor(state, run.kept) : undefined;
   const shown = kept ?? state;
   const quotes = useMemo(() => quotesOf(shown), [shown]);
+  const transcript = run?.body.transcription ?? "";
+  const find = useMemo(() => evidenceFinder(transcript), [transcript]);
+  // The requirements whose quote is marked in the transcript: only they can be pinned; any other keeps its hover card.
+  const marked = useMemo(() => new Set(find(quotes).map(({ id }) => id)), [find, quotes]);
+  // Side by side, hover and focus link requirements to quotes; a pin made below 768 px waits until it is narrow again.
+  const shownPin = wide ? null : pinned;
   // A stopped or failed stream never replaces the last finished call.
   const lastCall = state.status === "done" ? state : finished;
   // The estimate's own live regions are silent inside a hidden tab panel, so how the run ends is announced from here.
@@ -205,7 +211,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                 label: "Transcript",
                 description: describe(run),
                 children: (
-                  <TranscriptPane key={run.id} ref={transcriptRef} transcript={run.body.transcription} quotes={quotes} active={activeRequirement} pinned={pinned} />
+                  <TranscriptPane key={run.id} ref={transcriptRef} transcript={transcript} quotes={quotes} active={activeRequirement} pinned={shownPin} />
                 ),
               }}
               estimate={{
@@ -221,9 +227,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                       onEditTranscript={() => formRef.current?.edit(run.body.transcription)}
                       stopRef={stopRef}
                       view={view}
-                      activeRequirement={activeRequirement ?? pinned?.id}
+                      activeRequirement={activeRequirement ?? shownPin?.id}
                       onRequirementFocus={setActiveRequirement}
-                      onRequirementPin={wide ? undefined : pin}
+                      pinFor={wide ? undefined : (id) => (marked.has(id) ? () => pin(id) : undefined)}
                     />
                   </div>
                 ),

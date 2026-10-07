@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentProps, useCallback, useState } from "react";
+import { type ComponentProps, useCallback, useId, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Segmented } from "@/components/form/segmented";
@@ -15,13 +15,28 @@ export const ResultViewToggle = ({ value, onChange }: { value: ResultView; onCha
   <Segmented label="Result view" hideLabel options={VIEWS} labels={LABELS} value={value} onChange={onChange} />
 );
 
-// The server's documents hold one table, the task breakdown (app/services/rendering.py), and its region is named so. A
-// table wider than the pane (line items have eight columns) scrolls on its own, and only then is the region a tab stop,
-// so keyboard users can scroll it; one that fits adds no stop. Watches the region and the table, whose width follows
-// its text.
+// Headings carry ids, so the region around a table can be named by the heading above it.
+const headingWithId = (Tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") =>
+  function Heading({ children }: ComponentProps<"h2">) {
+    const id = useId();
+    return <Tag id={id}>{children}</Tag>;
+  };
+const HEADINGS = { h1: headingWithId("h1"), h2: headingWithId("h2"), h3: headingWithId("h3"), h4: headingWithId("h4"), h5: headingWithId("h5"), h6: headingWithId("h6") };
+
+const headingAbove = (element: Element) => {
+  let above = element.previousElementSibling;
+  while (above && !/^H[1-6]$/.test(above.tagName)) above = above.previousElementSibling;
+  return above;
+};
+
+// A table sits in a region named by the heading above it ("Task breakdown" in the server's documents). A table wider
+// than the pane (line items have eight columns) scrolls on its own, and only then is the region a tab stop, so keyboard
+// users can scroll it; one that fits adds no stop. Watches the region and the table, whose width follows its text.
 const ScrollTable = ({ children }: ComponentProps<"table">) => {
   const [scrolls, setScrolls] = useState(false);
+  const [headingId, setHeadingId] = useState<string>();
   const observe = useCallback((region: HTMLDivElement) => {
+    setHeadingId(headingAbove(region)?.id || undefined);
     const observer = new ResizeObserver(() => setScrolls(region.scrollWidth > region.clientWidth));
     observer.observe(region);
     if (region.firstElementChild) observer.observe(region.firstElementChild);
@@ -31,7 +46,7 @@ const ScrollTable = ({ children }: ComponentProps<"table">) => {
     <div
       ref={observe}
       role="region"
-      aria-label="Task breakdown"
+      {...(headingId ? { "aria-labelledby": headingId } : { "aria-label": "Table" })}
       tabIndex={scrolls ? 0 : undefined}
       className="overflow-x-auto rounded-md border focus-visible:-outline-offset-2!"
     >
@@ -53,7 +68,7 @@ const DOCUMENT = [
 // would load its URL the moment it renders. HTML shows as text; images are dropped and links keep only their text.
 export const EstimateDocument = ({ markdown }: { markdown: string }) => (
   <div className={DOCUMENT}>
-    <Markdown remarkPlugins={[remarkGfm]} disallowedElements={["img", "a"]} unwrapDisallowed components={{ table: ScrollTable }}>
+    <Markdown remarkPlugins={[remarkGfm]} disallowedElements={["img", "a"]} unwrapDisallowed components={{ ...HEADINGS, table: ScrollTable }}>
       {markdown}
     </Markdown>
   </div>
