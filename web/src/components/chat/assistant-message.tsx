@@ -23,6 +23,7 @@ type Props = {
   view?: ResultView; // "document" shows a completed estimate as the server's markdown
   activeRequirement?: string;
   onRequirementFocus?: (id: string | null) => void;
+  onRequirementPin?: (id: string) => void;
 };
 
 // A regenerate that was stopped or failed shows the estimate it would have replaced.
@@ -63,7 +64,7 @@ const DoneActions = ({ state, onRegenerate }: { state: Done; onRegenerate?: () =
 
 const isComposing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229; // Safari reports it only via 229
 
-export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript, stopRef, view = "structured", activeRequirement, onRequirementFocus }: Props) => {
+export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript, stopRef, view = "structured", activeRequirement, onRequirementFocus, onRequirementPin }: Props) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const previous = useRef(state.status);
   const focusWithin = useRef(false); // focus was last inside this message, or one of its actions was used
@@ -151,6 +152,7 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
               completed={state.status === "done"}
               activeRequirement={activeRequirement}
               onRequirementFocus={onRequirementFocus}
+              onRequirementPin={onRequirementPin}
             />
           )}
           <AiDisclosure />

@@ -9,19 +9,21 @@ import { Empty, Section } from "./section";
 
 type Requirement = NonNullable<EstimateModel["requirements"]>[number];
 type FocusHandler = (id: string | null) => void;
+type PinHandler = (id: string) => void;
 
 // Radix opens a hover card on mouse hover and keyboard focus but ignores touch (and cancels the tap), so touch opens it explicitly.
-const Evidence = ({ id, quote, ungrounded }: { id?: string; quote: string; ungrounded: boolean }) => {
+// With `onPin` (below 768 px, where the transcript sits behind a tab) the button shows the quote in the transcript instead.
+const Evidence = ({ id, quote, ungrounded, onPin }: { id?: string; quote: string; ungrounded: boolean; onPin?: () => void }) => {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
   return (
-    <HoverCard open={open} onOpenChange={setOpen} openDelay={200} closeDelay={150}>
+    <HoverCard open={open && !onPin} onOpenChange={setOpen} openDelay={200} closeDelay={150}>
       <HoverCardTrigger asChild>
         <button
           type="button"
           aria-label={id ? `Evidence for ${id}` : "Evidence"}
           aria-describedby={descriptionId}
-          onClick={() => setOpen(true)}
+          onClick={() => (onPin ? onPin() : setOpen(true))}
           onPointerDown={(event) => event.pointerType === "touch" && setOpen(true)}
           className="inline-flex h-6 items-center gap-1 rounded-sm px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
         >
@@ -38,7 +40,9 @@ const Evidence = ({ id, quote, ungrounded }: { id?: string; quote: string; ungro
   );
 };
 
-const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onFocusChange }: { requirement: Requirement; ungrounded: boolean; active: boolean; onFocusChange?: FocusHandler }) => {
+type RowProps = { requirement: Requirement; ungrounded: boolean; active: boolean; onFocusChange?: FocusHandler; onPin?: PinHandler };
+
+const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onFocusChange, onPin }: RowProps) => {
   const enter = () => id && onFocusChange?.(id);
   const leave = () => id && onFocusChange?.(null);
   return (
@@ -61,7 +65,11 @@ const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onF
             </p>
           )}
         </div>
-        {evidence ? <Evidence id={id} quote={evidence} ungrounded={ungrounded} /> : <Pending className="mt-1 w-16" />}
+        {evidence ? (
+          <Evidence id={id} quote={evidence} ungrounded={ungrounded} onPin={id && onPin ? () => onPin(id) : undefined} />
+        ) : (
+          <Pending className="mt-1 w-16" />
+        )}
       </div>
     </li>
   );
@@ -73,9 +81,10 @@ type Props = {
   ungrounded: Set<string>;
   activeRequirement?: string;
   onRequirementFocus?: FocusHandler;
+  onRequirementPin?: PinHandler;
 };
 
-export const RequirementsList = ({ items, streaming, ungrounded, activeRequirement, onRequirementFocus }: Props) => {
+export const RequirementsList = ({ items, streaming, ungrounded, activeRequirement, onRequirementFocus, onRequirementPin }: Props) => {
   const requirements = received(items, streaming);
   return (
     <Section title="Requirements">
@@ -92,6 +101,7 @@ export const RequirementsList = ({ items, streaming, ungrounded, activeRequireme
               ungrounded={requirement.id !== undefined && ungrounded.has(requirement.id)}
               active={requirement.id !== undefined && requirement.id === activeRequirement}
               onFocusChange={onRequirementFocus}
+              onPin={onRequirementPin}
             />
           ))}
         </ul>

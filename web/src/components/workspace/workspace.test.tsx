@@ -463,6 +463,47 @@ describe("Workspace", () => {
     await waitFor(() => expect(runStatus()).toHaveTextContent("The AI service is unavailable right now. Try again in a moment."));
   });
 
+  // Below 768 px the transcript sits behind a tab, and reaching it ends the hover or focus that linked a requirement.
+  it("below 768 px, Evidence pins its requirement and opens the transcript at its quote, until the next pin or run", async () => {
+    stubPointer("fine", { wide: false });
+    const { user, input, estimate } = setup();
+    await run(user, input);
+    await finish(0);
+    const scrolled = vi.mocked(Element.prototype.scrollIntoView);
+    scrolled.mockClear();
+    const evidence = (id: string) => screen.getByRole("button", { name: `Evidence for ${id}` });
+
+    await user.click(evidence("R2"));
+    expect(screen.getByRole("tab", { name: "Transcript", selected: true })).toBeInTheDocument();
+    expect(transcriptPane()).toHaveFocus(); // the Evidence button is hidden now
+    expect(mark("R2")).toHaveAttribute("data-active");
+    // `main`, not the pane, scrolls below 768 px, so the quote is brought into view through every scrolling ancestor
+    expect(scrolled.mock.contexts).toEqual([mark("R2")]);
+    expect(scrolled).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull(); // the quote shows in the transcript instead
+
+    await user.click(screen.getByRole("tab", { name: "Estimate" }));
+    expect(evidence("R2").closest("li")).toHaveAttribute("data-active"); // hover and focus have left; the pin stays
+    await user.click(screen.getByRole("tab", { name: "Transcript" }));
+    expect(mark("R2")).toHaveAttribute("data-active");
+
+    await user.click(screen.getByRole("tab", { name: "Estimate" }));
+    await user.click(evidence("R1"));
+    expect(mark("R1")).toHaveAttribute("data-active");
+    expect(mark("R2")).not.toHaveAttribute("data-active");
+
+    await user.click(estimate);
+    await finish(1);
+    expect(transcriptPane().querySelector("mark[data-active]")).toBeNull();
+
+    await user.click(evidence("R2"));
+    await user.click(screen.getByRole("tab", { name: "Estimate" }));
+    await user.click(screen.getByRole("button", { name: "Regenerate" }));
+    await finish(2);
+    expect(mark("R2")).toBeInTheDocument();
+    expect(transcriptPane().querySelector("mark[data-active]")).toBeNull(); // the new attempt numbers its own requirements
+  });
+
   it("keeps the run's panes, focus and scroll when the viewport crosses 768 px mid-run", async () => {
     const resize = viewport(true);
     const { user, input } = setup();

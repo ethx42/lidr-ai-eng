@@ -27,7 +27,7 @@ import { finePointer, scrollBehavior } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { type ResultView, ResultViewToggle } from "./result-view-toggle";
 import { SHORT, type SplitTab, SplitView, WIDE } from "./split-view";
-import { TranscriptPane } from "./transcript-pane";
+import { type Pin, TranscriptPane } from "./transcript-pane";
 
 type Done = Extract<StreamState, { status: "done" }>;
 // The one run the workspace shows (spec §6.5: a form, not a thread). `kept`: the completed estimate a Regenerate that
@@ -95,8 +95,11 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const [tab, setTab] = useState<SplitTab>("estimate");
   // The stream state when the estimate went out of sight (the Transcript tab below 768 px): only a later change is news.
   const [hiddenAt, setHiddenAt] = useState<StreamState | null>(null);
+  // Hovered or focused; `pinned` (below 768 px) outlives both, until the next pin or run.
   const [activeRequirement, setActiveRequirement] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<Pin | null>(null);
   const formRef = useRef<EstimateFormHandle>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
   const stopRef = useRef<HTMLButtonElement>(null);
   const splitRef = useRef<HTMLDivElement>(null);
@@ -118,6 +121,17 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
     setHiddenAt(current());
   };
 
+  // Below 768 px the transcript sits behind a tab, and reaching it ends the hover or focus that links a requirement to
+  // its quote. So Evidence pins the requirement there and opens the transcript at its quote; focus moves to the
+  // transcript, since the tab switch hides the button.
+  const pin = (id: string) => {
+    flushSync(() => {
+      setPinned({ id });
+      showTab("transcript");
+    });
+    transcriptRef.current?.focus({ preventScroll: true });
+  };
+
   // `current()` rather than the rendered state: a result that arrived but is not rendered yet still counts as finished.
   const settleLast = () => {
     const latest = current();
@@ -136,6 +150,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
       setView("structured");
       setTab("estimate");
       setActiveRequirement(null);
+      setPinned(null);
       start(body, { promptVersion });
     });
     if (resultRef.current) resultRef.current.scrollTop = 0;
@@ -156,6 +171,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
     const latest = settleLast();
     setRun({ ...run, kept: latest.status === "done" ? latest : run.kept });
     setView("structured");
+    setPinned(null); // the new attempt numbers its own requirements
     if (resultRef.current) resultRef.current.scrollTop = 0;
     start(run.body, { refresh: true, promptVersion: run.promptVersion });
   };
@@ -188,7 +204,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
               transcript={{
                 label: "Transcript",
                 aside: <p className="text-xs text-muted-foreground">{describe(run)}</p>,
-                children: <TranscriptPane key={run.id} transcript={run.body.transcription} quotes={quotes} active={activeRequirement} />,
+                children: (
+                  <TranscriptPane key={run.id} ref={transcriptRef} transcript={run.body.transcription} quotes={quotes} active={activeRequirement} pinned={pinned} />
+                ),
               }}
               estimate={{
                 label: "Estimate",
@@ -207,8 +225,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                       onEditTranscript={() => formRef.current?.edit(run.body.transcription)}
                       stopRef={stopRef}
                       view={view}
-                      activeRequirement={activeRequirement ?? undefined}
+                      activeRequirement={activeRequirement ?? pinned?.id}
                       onRequirementFocus={setActiveRequirement}
+                      onRequirementPin={wide ? undefined : pin}
                     />
                   </div>
                 ),

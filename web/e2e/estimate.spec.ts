@@ -386,6 +386,17 @@ test.describe("375 px wide", () => {
     await expectNoHorizontalScroll(page);
     await shot(page, "mobile");
 
+    // Evidence pins its requirement and opens the Transcript tab at its quote, which stays highlighted after hover and
+    // focus have left the requirement (the last grounded one, so its quote sits low and must be scrolled into view).
+    const pinned = estimate(page).getByRole("listitem").filter({ has: page.getByRole("button", { name: /^Evidence for / }) }).filter({ hasNotText: "Quote not found in the transcript" }).last();
+    const evidence = pinned.getByRole("button", { name: /^Evidence for / });
+    const id = (await evidence.getAttribute("aria-label"))?.replace("Evidence for ", "") ?? "";
+    await evidence.click();
+    await expect(tabs.getByRole("tab", { name: "Transcript" })).toHaveAttribute("aria-selected", "true");
+    await expect(transcriptPane(page)).toBeFocused();
+    await expectHighlighted(page, id);
+    await expectNoHorizontalScroll(page);
+
     const trigger = page.getByRole("button", { name: "Inspector" });
     await trigger.click();
     const sheet = page.getByRole("dialog", { name: "Inspector" });
