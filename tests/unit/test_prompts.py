@@ -7,6 +7,7 @@ import pytest
 from app.attachments.extractor import ExtractedAttachment
 from app.context.examples import REFERENCE_ESTIMATIONS
 from app.prompts import loader
+from app.prompts.cache_prefix import split_system
 from app.prompts.loader import (
     DEFAULT_LANGUAGE,
     DEFAULT_PARAMS,
@@ -17,7 +18,6 @@ from app.prompts.loader import (
     render,
     render_estimation_prompt,
     render_system,
-    split_system,
 )
 from app.schemas.estimation import DetailLevel, OutputFormat, ProjectType
 from app.sessions import ProjectMetadata

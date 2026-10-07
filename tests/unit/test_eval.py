@@ -233,6 +233,18 @@ async def test_a_frontend_task_covers_frontend() -> None:
     assert check_response(frontend_case(True), response)["covers_frontend"] is True
 
 
+async def test_summary_tasks_may_exceed_80_likely_hours() -> None:
+    # v3's summary level lets coarse tasks pass 80 h; the 4 h floor still applies.
+    coarse = breakdown(tasks=[task("T1", (80, 120, 160), ["R1"]), *FULL.tasks[1:]])
+    response = await make_service(FakeProvider(result=coarse)).estimate(typed_request())
+    summary = GoldenCase("x", TRANSCRIPT, detail_level=DetailLevel.SUMMARY)
+    assert check_response(summary, response)["hours_within_bounds"] is True
+    assert check_response(GoldenCase("x", TRANSCRIPT), response)["hours_within_bounds"] is False
+    tiny = breakdown(tasks=[task("T1", (1, 2, 3), ["R1"]), *FULL.tasks[1:]])
+    response = await make_service(FakeProvider(result=tiny)).estimate(typed_request())
+    assert check_response(summary, response)["hours_within_bounds"] is False
+
+
 async def test_fabricated_requirement_fails_grounding() -> None:
     fabricated = breakdown(
         requirements=[

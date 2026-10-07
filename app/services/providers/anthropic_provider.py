@@ -11,7 +11,7 @@ from anthropic.types import Message, TextBlockParam
 from pydantic import BaseModel, TypeAdapter
 
 from app.config import Provider, ReasoningEffort
-from app.prompts.loader import split_system
+from app.prompts.cache_prefix import split_system
 from app.schemas.estimation import Usage
 from app.services.errors import (
     QUOTA,

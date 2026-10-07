@@ -33,9 +33,6 @@ DEFAULT_LANGUAGE = (
 DELIMITER_TAG = re.compile(
     r"<\s*(/?)\s*(transcript|output_language|project_metadata)\b[^>]*>", re.IGNORECASE
 )
-# Every version's system prompt is the same for every request up to here (the provider-side
-# cache prefix); the enum blocks and v3's session metadata follow.
-STATIC_END = "</reference_estimations>\n"
 
 _env = Environment(
     loader=FileSystemLoader(PROMPTS_DIR),
@@ -80,13 +77,6 @@ def _check(version: str) -> str:
 
 def neutralize(text: str) -> str:
     return DELIMITER_TAG.sub(r"[\1\2]", text)
-
-
-def split_system(system: str) -> tuple[str, str]:
-    """(static prefix, tail). A system prompt without the boundary is all prefix."""
-    end = system.find(STATIC_END)
-    cut = len(system) if end < 0 else end + len(STATIC_END)
-    return system[:cut], system[cut:]
 
 
 def _fact(value: str) -> str:

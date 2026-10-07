@@ -91,6 +91,19 @@ def test_app_imports_are_direct_runtime_dependencies() -> None:
     assert not undeclared, f"imported by app/ but not direct runtime dependencies: {undeclared}"
 
 
+def test_the_anthropic_provider_does_not_load_the_prompt_stack() -> None:
+    # It needs only the cache boundary; the loader pulls in sessions and the document parsers.
+    code = (
+        "import sys, app.services.providers.anthropic_provider; "
+        "print(sorted({'app.prompts.loader', 'app.sessions', 'pypdf', 'docx', 'lxml'} "
+        "& set(sys.modules)))"
+    )
+    result = subprocess.run(  # noqa: S603  # fixed argv: this interpreter and a literal
+        [sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, check=True
+    )
+    assert result.stdout.strip() == "[]"
+
+
 def test_uv_version_pinned_and_ci_never_relocks() -> None:
     assert pyproject()["tool"]["uv"].get("required-version")  # type: ignore[index]
     ci = (ROOT / ".github/workflows/ci.yml").read_text()

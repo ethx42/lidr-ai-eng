@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import math
 import re
 import sys
 import time
@@ -134,7 +135,9 @@ def check_response(case: GoldenCase, response: EstimateResponse | None) -> dict[
         return dict.fromkeys(names, False)
 
     b, g = response.breakdown, response.grounding
-    low, high = LIKELY_HOURS_BOUNDS
+    low, cap = LIKELY_HOURS_BOUNDS
+    # v3's summary level lets coarse tasks pass the cap to keep a medium breakdown's total effort.
+    high = math.inf if case.detail_level == DetailLevel.SUMMARY else cap
     checks = {
         "schema_valid": True,
         "three_point_order": all(
