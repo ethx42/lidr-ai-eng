@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.services.cache import NullCache, ResponseCache
 from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import LLMProvider
 from tests.fakes import FakeProvider
@@ -17,11 +18,17 @@ ClientFactory = Callable[..., Any]
 @pytest.fixture
 def make_client() -> ClientFactory:
     @contextmanager
-    def factory(provider: LLMProvider | None = None, **values: Any) -> Iterator[TestClient]:
+    def factory(
+        provider: LLMProvider | None = None, cache: ResponseCache | None = None, **values: Any
+    ) -> Iterator[TestClient]:
         values = {"openai_api_key": "test-key", "llm_fallbacks": ""} | values
         settings = Settings(_env_file=None, **values)
         fake = provider or FakeProvider()
-        app = create_app(settings, provider_factory=lambda _: fake)
+        app = create_app(
+            settings,
+            provider_factory=lambda _: fake,
+            cache_factory=lambda _: cache or NullCache(),
+        )
         with TestClient(app, raise_server_exceptions=False) as client:
             client.fake = fake  # type: ignore[attr-defined]
             yield client

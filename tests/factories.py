@@ -1,9 +1,19 @@
 from typing import Any
 
-from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.prompts.loader import PROMPT_VERSION, load_prompt
+from app.schemas.estimation import (
+    CallMetrics,
+    EstimateRequest,
+    EstimateResponse,
+    EstimationBreakdown,
+    Usage,
+)
+from app.services.cache import NullCache, ResponseCache
+from app.services.estimation_math import enrich
+from app.services.grounding import check_grounding
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
+from app.services.rendering import render_markdown
 
 TRANSCRIPT = (
     "Client: We need a booking app for our “yoga studio”.\n"
@@ -70,7 +80,28 @@ def request(**overrides: object) -> EstimateRequest:
     return EstimateRequest.model_validate({"transcription": TRANSCRIPT} | overrides)
 
 
-def make_service(provider: LLMProvider) -> EstimationService:
+def response_fixture() -> EstimateResponse:
+    parsed = breakdown()
+    enriched = enrich(parsed, weekly_capacity_hours=30, hourly_rate=None)
+    grounding = check_grounding(parsed, TRANSCRIPT)
+    return EstimateResponse(
+        estimation=render_markdown(enriched, grounding),
+        breakdown=enriched,
+        grounding=grounding,
+        model="fake-model",
+        provider="openai",
+        prompt_version=PROMPT_VERSION,
+        usage=Usage(input_tokens=1200, output_tokens=800),
+        metrics=CallMetrics(latency_ms=42),
+    )
+
+
+def make_service(provider: LLMProvider, cache: ResponseCache | None = None) -> EstimationService:
     return EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=cache or NullCache(),
+        cache_scope="openai:fake-model",
     )

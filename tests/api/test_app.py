@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.main import create_app
 from app.observability import JsonFormatter
+from app.services.cache import NullCache
 from tests.api.conftest import ClientFactory
 from tests.fakes import FakeProvider
 
@@ -88,6 +89,20 @@ def test_provider_created_once_and_closed_on_shutdown(make_client: ClientFactory
     assert len(created) == 1
     assert len(provider.calls) == 2
     assert provider.closed
+
+
+def test_cache_closed_on_shutdown(make_client: ClientFactory) -> None:
+    class ClosingCache(NullCache):
+        closed = False
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    cache = ClosingCache()
+    with make_client(cache=cache) as client:
+        assert client.post("/api/v1/estimate", json={"transcription": "Client: one"}).is_success
+        assert not cache.closed
+    assert cache.closed
 
 
 def test_unhandled_error_returns_json_500_with_request_id(

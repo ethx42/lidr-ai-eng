@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     llm_fallbacks: str = "anthropic:claude-haiku-4-5"
     llm_cooldown_failures: int = Field(default=3, gt=0)
     llm_cooldown_seconds: float = Field(default=30, ge=0)
+    # Unset: no response cache (NullCache). Secret: the URL can carry a password.
+    redis_url: SecretStr | None = None
+    cache_ttl_seconds: int = Field(default=86_400, gt=0)
 
     @property
     def chain(self) -> list[tuple[Provider, str]]:

@@ -4,7 +4,7 @@ from functools import cache
 from typing import Annotated, Any
 
 import anyio
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
@@ -58,17 +58,21 @@ def checked_request(body: EstimateRequest, settings: SettingsDep) -> EstimateReq
 
 
 CheckedRequest = Annotated[EstimateRequest, Depends(checked_request)]
+Refresh = Annotated[
+    bool,
+    Query(description="Skip the cache lookup and regenerate; the fresh result replaces the entry."),
+]
 
 
 async def service_stream(
-    body: CheckedRequest, service: ServiceDep
+    body: CheckedRequest, service: ServiceDep, refresh: Refresh = False
 ) -> AsyncIterator[AsyncGenerator[StreamItem]]:
     """Owns the service stream's lifetime. FastAPI iterates the endpoint generator in a producer
     task that it cancels but never closes: when a slow reader disconnects, that task is cancelled
     on a full buffer while both generators sit at a `yield`. This request-scoped teardown runs
     after that cancellation, in the request's context, so the upstream stream closes (and the
     call is logged with its request id) now instead of at garbage collection."""
-    items = service.estimate_stream(body)
+    items = service.estimate_stream(body, refresh=refresh)
     try:
         yield items
     finally:
@@ -119,8 +123,10 @@ def error_response(description: str) -> dict[str, Any]:
         503: error_response("Provider timeout, connection failure, or 5xx."),
     },
 )
-async def estimate(body: CheckedRequest, service: ServiceDep) -> EstimateResponse:
-    return await service.estimate(body)
+async def estimate(
+    body: CheckedRequest, service: ServiceDep, refresh: Refresh = False
+) -> EstimateResponse:
+    return await service.estimate(body, refresh=refresh)
 
 
 STREAM_EVENT_REFS = [

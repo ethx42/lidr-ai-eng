@@ -5,6 +5,7 @@ import pytest
 
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest
+from app.services.cache import NullCache
 from app.services.errors import (
     Attempt,
     InvalidModelOutput,
@@ -20,7 +21,12 @@ from tests.fakes import FakeProvider
 
 def service(provider: LLMProvider, rate: float | None = None) -> EstimationService:
     return EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=rate
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=rate,
+        cache=NullCache(),
+        cache_scope="",
     )
 
 
@@ -58,7 +64,12 @@ async def test_cache_key_follows_prompt_version() -> None:
     await service(provider).estimate(request)
     bumped = replace(load_prompt(), version="v99")
     await EstimationService(
-        provider=provider, prompt=bumped, weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=bumped,
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     ).estimate(request)
     keys = [call["cache_key"] for call in provider.calls]
     assert keys[0] == keys[1] == f"estimator-{load_prompt().version}"

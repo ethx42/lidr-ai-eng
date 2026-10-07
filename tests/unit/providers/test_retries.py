@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 from app.observability import CLIENT_LOGGERS, configure_logging
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, UpstreamRateLimited
 from app.services.llm_service import EstimationService
 from app.services.providers.anthropic_provider import AnthropicProvider, anthropic_http_client
@@ -327,7 +328,12 @@ async def test_failed_call_logs_cause_without_upstream_detail(
 ) -> None:
     provider = build(lambda _: httpx.Response(status, json=body))
     service = EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     with caplog.at_level(logging.INFO), pytest.raises(LLMError):
         await service.estimate(EstimateRequest(transcription="Client: we need a booking app."))

@@ -18,6 +18,7 @@ from app.observability import configure_logging, request_id_var
 from app.prompts.loader import load_prompt
 from app.routers import estimations
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
+from app.services.cache import ResponseCache, build_cache, cache_scope
 from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
@@ -91,23 +92,28 @@ class RequestIdMiddleware:
 def create_app(
     settings: Settings | None = None,
     provider_factory: Callable[[Settings], LLMProvider] = build_provider,
+    cache_factory: Callable[[Settings], ResponseCache] = build_cache,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         resolved = settings or get_settings()
         configure_logging(resolved.log_level)
         provider = provider_factory(resolved)
+        cache = cache_factory(resolved)
         app.state.settings = resolved
         app.state.service = EstimationService(
             provider=provider,
             prompt=load_prompt(),
             weekly_capacity_hours=resolved.weekly_capacity_hours,
             hourly_rate=resolved.blended_hourly_rate,
+            cache=cache,
+            cache_scope=cache_scope(resolved),
         )
         try:
             yield
         finally:
             await provider.aclose()
+            await cache.aclose()
 
     app = FastAPI(
         title="CAG Software Estimator",

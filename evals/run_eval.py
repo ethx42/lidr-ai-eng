@@ -15,6 +15,7 @@ from typing import Any
 from app.config import Settings
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EnrichedBreakdown, EstimateRequest, EstimateResponse
+from app.services.cache import NullCache, cache_scope
 from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
@@ -219,11 +220,14 @@ async def main(
     # Primary only: a fallback would mix two models' answers into one score.
     resolved = settings or Settings(llm_fallbacks="")
     provider = provider_factory(resolved)
+    # Never cached: every case must reach the model being scored.
     service = EstimationService(
         provider=provider,
         prompt=load_prompt(),
         weekly_capacity_hours=resolved.weekly_capacity_hours,
         hourly_rate=resolved.blended_hourly_rate,
+        cache=NullCache(),
+        cache_scope=cache_scope(resolved),
     )
     try:
         report = await run_cases(

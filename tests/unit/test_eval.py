@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.config import Settings
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimationBreakdown
+from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMResult
@@ -72,7 +73,12 @@ class ScriptedProvider(FakeProvider):
 async def run(outcomes: list[EstimationBreakdown | Exception], names: list[str]) -> dict[str, Any]:
     provider = ScriptedProvider(outcomes)
     service = EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     cases = [GoldenCase(name, TRANSCRIPT) for name in names]
     return await run_cases(service, cases, provider="openai", model="fake-model")
@@ -195,6 +201,8 @@ async def test_unknown_expected_language_fails_check() -> None:
         prompt=load_prompt(),
         weekly_capacity_hours=30,
         hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     case = GoldenCase("x", "Stripe. SAP. OK.")
     report = await run_cases(service, [case], provider="openai", model="fake-model")
@@ -227,7 +235,12 @@ async def test_matching_narrative_language_passes_check() -> None:
 async def test_explicit_output_language_is_sent_and_checked() -> None:
     provider = ScriptedProvider([SPANISH_NARRATIVE])
     service = EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     case = GoldenCase("x", TRANSCRIPT, output_language="Spanish")
     report = await run_cases(service, [case], provider="openai", model="fake-model")

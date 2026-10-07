@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 
+import fakeredis
 import httpx2
 import pytest
 import uvicorn
@@ -13,6 +14,7 @@ from starlette.types import Message
 
 from app.config import Settings
 from app.main import create_app
+from app.services.cache import RedisCache
 from tests.factories import TRANSCRIPT
 from tests.fakes import SlowFakeProvider, TickingFakeProvider
 
@@ -21,9 +23,14 @@ async def test_client_disconnect_closes_upstream(
     unused_tcp_port: int,
     slow_fake: SlowFakeProvider,
     settings: Settings,
+    redis_client: fakeredis.FakeAsyncRedis,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    app = create_app(settings=settings, provider_factory=lambda _: slow_fake)
+    app = create_app(
+        settings=settings,
+        provider_factory=lambda _: slow_fake,
+        cache_factory=lambda _: RedisCache(redis_client, ttl_seconds=60),
+    )
     server = uvicorn.Server(
         uvicorn.Config(app, host="127.0.0.1", port=unused_tcp_port, log_level="error")
     )
@@ -51,6 +58,7 @@ async def test_client_disconnect_closes_upstream(
         await task
     [record] = [rec for rec in caplog.records if rec.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "cancelled"
+    assert await redis_client.keys("estimate:*") == []
 
 
 async def test_slow_client_disconnect_closes_upstream_in_the_request_context(
