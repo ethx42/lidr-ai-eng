@@ -6,18 +6,22 @@
 
 **Architecture:** The request gains three brief-mandated enums; `app/prompts/loader.py` renders `app/prompts/estimation/<version>/{system,user,examples}.j2` per request; enum-dependent blocks sit at the end of the system prompt so the static prefix stays provider-cacheable; the web form sends typed params and shows a split view with evidence highlighting.
 
-**Tech Stack:** Python 3.12, FastAPI 0.141.1, Pydantic 2.13, Jinja2 3.x, pytest; Next.js + shadcn/ui (as set up in session 3).
+**Tech Stack:** Python 3.12, FastAPI 0.141.1, Pydantic 2.13, Jinja2 3.1.6 (`.claude/stack.md` "Jinja2"), pytest; Next.js + shadcn/ui (as set up in session 3).
 
 **Spec:** `docs/catch-up/spec.md` §6 (and §3, §4, §8, §9). Brief: `~/Downloads/Sesion 4 ✍️ Ejercicio - del chat a la interfaz de producto 🔴 _ AI Engineering 2026_09.pdf`.
 
 ## Global Constraints
 
-- Branch `pre-session-04`, cut from the final commit of `pre-session-03`. Never commit to `main`, never force-push.
-- English everywhere, prompts included. Conventional commits, one per task, `make check` green before each commit.
+- Branch `pre-session-04`, cut from the final commit of `pre-session-03`. Never commit to `main`, never force-push, never `git reset --hard`, never `rm -rf`.
+- English everywhere, prompts included. Conventional commits, one per task (stated exception: Task 9 commits each review fix), `make check` green before each commit.
+- The `docs/catch-up/HANDOFF.md` "Rules every agent follows" apply to every task: never delete, skip, xfail or weaken a test (updating test setup or expected values for a deliberate contract change is not weakening; keep every assertion whose behaviour still exists, and name in the commit body any test removed because its behaviour was removed by design); `Any`, `# type: ignore`, `as any`, `@ts-expect-error` and lint disables only with a one-line justification on the same line.
+- Generated files (`contracts/openapi.json`, `web/src/lib/ai-service/schema.d.ts`) only through `make openapi` and `make web-types`. Since session 3, `make check` also runs the web checks, including `check:types`, so every task that changes the contract runs `make openapi && make web-types` before `make check`.
+- `tests/test_structure.py` requires every third-party module imported by `app/` to be a direct runtime dependency (`uv add`); web dependencies with `pnpm add` inside `web/`.
+- Never read, print or commit `.env`. `.env.example` is read with `git show HEAD:.env.example` and rewritten via a shell heredoc.
 - Enum values exactly: `mobile_app, web_saas, internal_tool, data_pipeline`; `summary, medium, detailed`; `phases_table, line_items, narrative`.
 - Brief-mandated paths kept verbatim: `app/prompts/loader.py`, `app/prompts/estimation/v1/{system,user,examples}.j2`, `tests/prompts/test_estimation_v1.py`, function `render_estimation_prompt(request, version="v1") -> tuple[str, str]`.
 - Jinja `Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, autoescape=False)`.
-- Tests never call real LLMs. Live calls only via `make eval` / `make smoke-live` / `make record-cassettes`, which go through the spend guard (`LIVE_BUDGET_USD`, default 5, ledger `docs/catch-up/spend.jsonl`).
+- Tests never call real LLMs. Live calls only via `make eval` / `make smoke-live` / `make record-cassettes`, which go through the spend guard (`LIVE_BUDGET_USD`, default 5, ledger `docs/catch-up/spend.jsonl`). Live models: `gpt-4o-mini` (and `claude-haiku-4-5`) only; live commands in this plan pin `LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini` on the make command line so `.env` cannot change the model.
 - `transcription` stays the field name and the response stays structured (spec D8).
 
 ## Review Focus
@@ -26,7 +30,23 @@
 2. A transcript containing `</transcript>` or `<output_language>` must be neutralised exactly as M1 does — test in Task 2.
 3. `?prompt_version=../v1` or an unknown version must be a 422, never a filesystem lookup outside `app/prompts/estimation/` — test in Task 4.
 4. Two requests that differ only in enums must still share a long system-prompt prefix (provider cache hit rate) — test in Task 2.
-5. A cached response from session 3 must not be served for a request with different enums or prompt version — test in Task 3.
+5. A cached response from session 3 must not be served for a request with different enums or prompt version — test in Task 3 (enums) and Task 6 (version; `v2` exists only from Task 6).
+
+## Execution order and tracks
+
+Thin end-to-end slice first, then deepen (see `HANDOFF.md`):
+
+1. Slice (sequential, main checkout): Task 1 → 2 → 3 → 4. Task 2's live eval gate runs here.
+2. Two parallel tracks in separate git worktrees, both branching from the Task 4 commit, merged back into `pre-session-04` with `git merge --no-ff`:
+   - **Track A (AI service):** Tasks 5 → 6.
+   - **Track W (web):** Task 7.
+3. Join (sequential): Tasks 8 → 9.
+
+Track rules:
+- Setup in each worktree: `uv sync` and `make web-install` (`make check` runs the web checks in both tracks). `.env` is absent in worktrees: run Track A's live steps (Task 6 Steps 3–4) with `UV_ENV_FILE=<main checkout>/.env make …` (never copy, read or print the file).
+- Neither track edits `docs/catch-up/PROGRESS.md`; the orchestrator ticks tasks with the track commit's SHA.
+- Ownership: Track A owns `app/**`, `tests/**`, `evals/**`, `scripts/**`, `pyproject.toml`, `uv.lock`, `.env.example`, `contracts/openapi.json`, `tests/cassettes/**`, `docs/catch-up/spend.jsonl` and `README.md` (Task 6 eval table); Track W owns `web/**` only. Neither edits `Makefile`. `.claude/stack.md`: Track A appends only inside "Catch-up additions", Track W only inside the web section.
+- The contract is frozen after the slice (Tasks 5–6 do not change it); after merging both tracks run `make openapi && make web-types`, then `make check`, and commit regenerated files if they changed.
 
 ---
 
@@ -35,16 +55,20 @@
 **Files:**
 - Modify: `app/schemas/estimation.py` (add enums, extend `EstimateRequest`)
 - Modify: `evals/golden/*.md` (front matter), `evals/run_eval.py` (`GoldenCase` fields, request building)
-- Modify: `tests/factories.py`, any test building `EstimateRequest`
-- Test: `tests/unit/test_schemas.py`, `tests/unit/test_eval.py`
+- Modify: `tests/factories.py`, any test building `EstimateRequest` or posting a JSON request body (`tests/unit/**`, `tests/api/**`, the session 3 stream, context and cache tests)
+- Modify: `scripts/record_cassettes.py` (session 3 builds `EstimateRequest(transcription=text)`; mypy checks `scripts/`) and `scripts/smoke_live.py` if it builds one: pass the defaults `web_saas` / `medium` / `phases_table`
+- Modify: web callers that build an `EstimateRequest` (session 3 `web/src/hooks/use-thread.ts` and any test fixture typed as `EstimateRequest`): send `project_type: "web_saas"`, `detail_level: "medium"`, `output_format: "phases_table"`, so `pnpm typecheck` passes and the chat keeps working until Task 7 replaces it
+- Generated: `contracts/openapi.json`, `web/src/lib/ai-service/schema.d.ts`
+- Test: `tests/unit/test_schemas.py` (existing file: add the tests below and merge the imports), `tests/unit/test_eval.py`
 
 **Interfaces:**
 - Produces: `ProjectType`, `DetailLevel`, `OutputFormat` (`StrEnum`), `EstimateRequest.project_type|detail_level|output_format` (required), `GoldenCase.project_type|detail_level|output_format|expects_frontend`.
+- Produces (test helpers in `tests/factories.py`): `REQUEST_DEFAULTS = {"project_type": "web_saas", "detail_level": "medium", "output_format": "phases_table"}`; `request(**overrides)` now merges `REQUEST_DEFAULTS`; `request_body(**overrides) -> dict[str, object]` = `{"transcription": TRANSCRIPT, **REQUEST_DEFAULTS, **overrides}` (JSON body for API tests); `typed_request(transcription: str = TRANSCRIPT, **overrides: object) -> EstimateRequest` (positional transcript; used by Task 3 and session 5).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-# tests/unit/test_schemas.py
+# tests/unit/test_schemas.py (add)
 import pytest
 from pydantic import ValidationError
 
@@ -123,17 +147,17 @@ Add to `EstimateRequest` (keep `extra="forbid"`, update the `json_schema_extra` 
     output_format: OutputFormat = Field(description="Layout of the rendered estimate.")
 ```
 
-Golden cases: add to each file's front matter (create front matter where missing): `project_type`, `detail_level: medium`, `output_format: phases_table`, `expects_frontend` (`true` when the transcript asks for a client-facing surface: app, portal, website, panel; `false` otherwise). Values per case: 01 course meeting → read the transcript and decide; 02 clinic portal → `web_saas`, `true`; 03 vague marketplace → `web_saas`, `true`; 04 injection-es → read and decide; 05 explicit-language → read and decide. Extend `GoldenCase` and `parse_case` to read them (required; missing key = parse error naming the file), and build `EstimateRequest(transcription=…, output_language=…, project_type=…, detail_level=…, output_format=…)` in `evaluate_case`.
+Golden cases: add to each file's front matter (create front matter where missing): `project_type`, `detail_level: medium`, `output_format: phases_table`, `expects_frontend` (`true` when the transcript asks for a client-facing surface: app, portal, website, panel; `false` otherwise). Values per case: 01 course meeting → `mobile_app`, `true` (orchestrator ruling; re-check against the transcript and note any change); 02 clinic portal → `web_saas`, `true`; 03 vague marketplace → `web_saas`, `true`; 04 injection-es → `mobile_app`, `true`; 05 explicit-language → `web_saas`, `true` (orchestrator ruling; re-check against the transcripts and note any change). Extend `GoldenCase` (keyword fields with defaults `web_saas` / `medium` / `phases_table` and `expects_frontend: bool = False`, so the existing `GoldenCase(name, transcript)` test helpers keep working) and `parse_case` (all four keys required in front matter; a missing key is a parse error naming the file; `expects_frontend` parses `true`/`false`), and build `EstimateRequest(transcription=…, output_language=…, project_type=…, detail_level=…, output_format=…)` in `evaluate_case`. Code under `scripts/` passes enum members (`ProjectType.WEB_SAAS`), not strings: the pydantic mypy plugin runs with `init_typed = true`.
 
 - [ ] **Step 4: Run all tests, fix callers**
 
 Run: `uv run pytest -q`
-Expected: PASS after updating every `EstimateRequest(...)` construction (factories, API tests, eval tests) to pass the three fields.
+Expected: PASS after updating every `EstimateRequest(...)` construction and every JSON request body (`json={"transcription": ...}` becomes `json=request_body(...)`) in factories, unit, API, eval and script code to pass the three fields.
 
 - [ ] **Step 5: Regenerate the contract and commit**
 
 ```bash
-make openapi
+make openapi && make web-types
 make check
 git add -A && git commit -m "feat(api): typed estimation request with project type, detail level and output format"
 ```
@@ -146,8 +170,9 @@ git add -A && git commit -m "feat(api): typed estimation request with project ty
 - Create: `app/prompts/estimation/v1/system.j2`, `user.j2`, `examples.j2`
 - Rewrite: `app/prompts/loader.py`
 - Delete: `app/prompts/v1/`, `app/prompts/v2/`, `app/prompts/v3/`, `app/prompts/v4/`
-- Modify: `pyproject.toml` (`jinja2` runtime dependency via `uv add jinja2`), `app/services/llm_service.py`, `app/main.py`, `evals/run_eval.py`
-- Test: `tests/prompts/__init__.py`, `tests/prompts/test_estimation_v1.py` (brief path), `tests/unit/test_prompts.py` (keep only what still applies)
+- Modify: `pyproject.toml` (`jinja2` runtime dependency via `uv add "jinja2>=3.1.6"`), `app/config.py` (`prompt_version: str = "v1"`), `.env.example` (`PROMPT_VERSION=v1`), `app/services/llm_service.py`, `app/main.py`, `app/routers/estimations.py` (`example_response()` uses `DEFAULT_VERSION`; the session 3 context endpoint renders via `render_system` with the default params), `evals/run_eval.py`, `scripts/record_cassettes.py` and `scripts/smoke_live.py` (wherever they build system/user strings, through `render(...)` with `settings.prompt_version`, so cassette keys match what the service sends), and every caller of the removed `load_prompt` / `build_user_message` / `PROMPT_VERSION` / `PromptBundle` (`grep -rnE "load_prompt|build_user_message|PROMPT_VERSION|PromptBundle" app tests evals scripts`: at least `tests/conftest.py`, `tests/unit/test_llm_service.py`, `tests/unit/providers/test_retries.py`, `tests/unit/test_eval.py`, plus session 3's service, cache and context tests); `tests/unit/test_config.py` (`PROMPT_VERSION` in `ENV_VARS`)
+- Create: `scripts/eval_gate.py`
+- Test: `tests/prompts/__init__.py`, `tests/prompts/test_estimation_v1.py` (brief path), `tests/unit/test_prompts.py` (ported, see Step 5), `tests/unit/test_eval_gate.py`
 
 **Interfaces:**
 - Consumes: Task 1 enums; `REFERENCE_ESTIMATIONS` from `app/context/examples.py`.
@@ -163,9 +188,14 @@ git add -A && git commit -m "feat(api): typed estimation request with project ty
 
 ```python
 # tests/prompts/test_estimation_v1.py
-import pytest
+import logging
+import os
 
-from app.prompts.loader import render_estimation_prompt
+import pytest
+from jinja2 import UndefinedError
+
+from app.prompts import loader
+from app.prompts.loader import render, render_estimation_prompt
 from app.schemas.estimation import EstimateRequest
 
 
@@ -225,7 +255,7 @@ def test_unknown_version_fails_loudly() -> None:
 def test_enum_blocks_come_after_the_static_prefix() -> None:
     a, _ = render_estimation_prompt(request(detail_level="summary", output_format="narrative"))
     b, _ = render_estimation_prompt(request(detail_level="detailed", output_format="line_items"))
-    shared = len(next(iter([a[: i] for i in range(min(len(a), len(b)), 0, -1) if a[:i] == b[:i]]), ""))
+    shared = len(os.path.commonprefix([a, b]))
     assert shared >= 0.9 * min(len(a), len(b))
 
 
@@ -235,9 +265,20 @@ def test_references_are_rendered_from_the_typed_source() -> None:
     system, _ = render_estimation_prompt(request())
     for ref in REFERENCE_ESTIMATIONS:
         assert ref.estimation.model_dump_json() in system
-```
 
-(If the shared-prefix comprehension is too slow, replace it with `os.path.commonprefix([a, b])`.)
+
+def test_missing_template_variable_fails_loudly() -> None:
+    with pytest.raises(UndefinedError):
+        loader._env.get_template("estimation/v1/user.j2").render(transcript="x")
+
+
+def test_render_logs_version_and_hash_but_never_content(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="app.prompts.loader"):
+        rendered = render(request())
+    [record] = [r for r in caplog.records if r.getMessage() == "prompt_rendered"]
+    assert record.fields == {"prompt_version": "v1", "prompt_sha256": rendered.sha256}
+    assert "UNIQUE-MARKER-12345" not in caplog.text
+```
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -423,10 +464,10 @@ Match the project's logging helper convention (`extra={"fields": ...}` is what `
 
 - [ ] **Step 5: Wire the service, app and evals**
 
-- `EstimationService` no longer takes a `PromptBundle`; it takes `prompt_version: str` and calls `render(request, version)` per request (also in `estimate_stream`). `prompt_cache_key=f"estimator-{version}"` stays. Cache key (session 3) uses `RenderedPrompt.sha256`, so enum or version changes miss the cache.
-- `app/main.py`: pass `prompt_version=DEFAULT_VERSION` (settings field `prompt_version`, env `PROMPT_VERSION`, default `v1`, validated against `available_versions()` at startup).
-- `evals/run_eval.py`: `--prompt-version` CLI flag (default from settings); report `prompt_version` from it; evals use `NullCache`.
-- Delete `app/prompts/v1..v4`; update or delete tests that referenced them.
+- `EstimationService` no longer takes a `PromptBundle`; it takes `prompt_version: str` and calls `render(request, version)` per request (also in `estimate_stream`). The provider routing key stays `f"estimator-{version}"` but is now computed per request from the rendered version (session 3 set `self.prompt_cache_key` once in `__init__`). The Redis key calls session 3's `cache_key(prompt_version=rendered.version, system=rendered.system, user=rendered.user, scope=self.cache_scope, schema_name=...)`, so enum or version changes miss the cache. `llm_call` logs and `EstimateResponse.prompt_version` use the rendered version.
+- `app/main.py`: pass `prompt_version=settings.prompt_version` (settings field `prompt_version`, env `PROMPT_VERSION`, default `v1`). Validate it in the lifespan, not in a `Settings` validator (`app.schemas` imports `app.config`, so importing the loader from config would be circular): unknown version → startup error naming `PROMPT_VERSION`; then call `render_estimation_prompt` once per available version with a placeholder request using the default enums, so template errors fail at startup (`.claude/stack.md` Jinja gotcha 13).
+- `evals/run_eval.py`: `--prompt-version` CLI flag (default `settings.prompt_version`); report `prompt_version` from it; evals use `NullCache`.
+- Delete `app/prompts/v1..v4` (D9). Port `tests/unit/test_prompts.py` to the new API, keeping every assertion whose behaviour still exists: the parametrized delimiter-forging attacks, output-language injection and `<>` fallback, evidence reminder only with an explicit language, default language, references in the system prompt, no request data in the system prompt, stable rendering, and the pinned hash (re-pinned for `estimation/v1` rendered with the default params; the comment now says a changed template needs a new version directory). Remove only `test_previous_versions_kept` (old versions removed by D9) and change expected values that name `v4` to `v1` (`test_version`, `test_eval.py`'s report-name and `prompt_version` assertions).
 
 - [ ] **Step 6: Run tests**
 
@@ -436,16 +477,16 @@ Expected: PASS.
 - [ ] **Step 7: Eval gate for the port (live, ~US$0.02)**
 
 ```bash
-make eval PROMPT_VERSION=v1 REPORT=evals/reports/estimation-v1-port.json
-uv run python scripts/eval_gate.py --report evals/reports/estimation-v1-port.json --baseline evals/baseline.json --tolerance 0.02
+make eval LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini PROMPT_VERSION=v1 REPORT=evals/reports/estimation-v1-port.json
+uv run python -m scripts.eval_gate --report evals/reports/estimation-v1-port.json --baseline evals/baseline.json --tolerance 0.02
 ```
 
-Create `scripts/eval_gate.py` in this step: loads both JSON reports, prints `score`, `checks_passed/checks_run`, `case_pass_rate` side by side, exits 1 when `report.score < baseline.score - tolerance`. If the gate fails, compare failing checks case by case, fix the template (not the checks), re-run (max 3 runs). When it passes: `make eval-baseline REPORT=evals/reports/estimation-v1-port.json`.
+Make passes command-line variables to the recipe environment, so `Settings()` reads `PROMPT_VERSION`, `LLM_PROVIDER` and `LLM_MODEL` from them (verified with GNU Make 3.81). `scripts/eval_gate.py` (test-first, before the live run: `tests/unit/test_eval_gate.py` covers pass, fail below tolerance and fail on model mismatch with `tmp_path` reports): loads both JSON reports, prints `score`, `checks_passed/checks_run`, `case_pass_rate`, `provider/model` side by side, exits 1 when `report.score < baseline.score - tolerance` or when the two reports' `model` differ (the baseline is `gpt-4o-mini`). If the gate fails, compare failing checks case by case, fix the template (not the checks), re-run (max 3 runs). When it passes: `make eval-baseline REPORT=evals/reports/estimation-v1-port.json`. (`evals/reports/*.json` is gitignored; record the numbers in the commit body and, in Task 9, in the README.)
 
 - [ ] **Step 8: Commit**
 
 ```bash
-make openapi && make check
+make openapi && make web-types && make check
 git add -A && git commit -m "feat(prompts): versioned Jinja2 estimation prompt v1 with template tests and eval gate"
 ```
 
@@ -454,17 +495,19 @@ git add -A && git commit -m "feat(prompts): versioned Jinja2 estimation prompt v
 ### Task 3: Context endpoint and cache isolation for typed params
 
 **Files:**
-- Modify: `app/routers/estimations.py` (context endpoint params), `app/services/llm_service.py`
-- Test: `tests/api/test_context.py`, `tests/unit/test_cache_key.py`
+- Modify: `app/routers/estimations.py` (context endpoint params, prompt-version dependency), `app/schemas/context.py` (session 3's `ContextResponse` gains `available_versions`), `app/services/llm_service.py`, `contracts/openapi.json`, `web/src/lib/ai-service/schema.d.ts` (generated)
+- Test: `tests/api/test_context.py` (session 3 file: add), `tests/unit/test_cache_key.py` (new)
 
 **Interfaces:**
-- Consumes: `render_system`, `PromptParams`, `available_versions`, session 3 `cache_key(...)`.
-- Produces: `GET /api/v1/context?project_type=&detail_level=&output_format=&prompt_version=` → `ContextResponse{prompt_version, available_versions: list[str], system_prompt, references, chain}`.
+- Consumes: `render_system`, `PromptParams`, `available_versions`, `VERSION_PATTERN`, session 3 `cache_key(...)`, `typed_request` (Task 1), fixtures `client` (`tests/api/conftest.py`) and `service_with_fake` (`tests/conftest.py`).
+- Produces: `GET /api/v1/context?project_type=&detail_level=&output_format=&prompt_version=` → `ContextResponse{prompt_version, available_versions: list[str], system_prompt, references, chain, max_transcription_chars}` (session 3's fields kept; `available_versions` added).
+- Produces: `checked_prompt_version(settings: SettingsDep, prompt_version: str | None = Query(None)) -> str` and alias `PromptVersionDep = Annotated[str, Depends(checked_prompt_version)]`: `None` → `settings.prompt_version`; anything that fails `VERSION_PATTERN.fullmatch` or is not in `available_versions()` → `RequestValidationError` with `loc=("query", "prompt_version")` (422 `invalid_request`). Task 4 reuses it.
+- Produces: `EstimationService.cache_key_for(request: EstimateRequest, prompt_version: str | None = None) -> str` (renders the prompt and calls session 3's `cache_key`; `None` → the service's configured version).
 
 - [ ] **Step 1: Failing tests**
 
 ```python
-# tests/api/test_context.py
+# tests/api/test_context.py (add)
 def test_context_renders_system_prompt_for_params(client) -> None:
     r = client.get("/api/v1/context", params={"project_type": "web_saas", "detail_level": "detailed", "output_format": "narrative"})
     assert r.status_code == 200
@@ -480,49 +523,56 @@ def test_context_defaults_are_medium_phases_table(client) -> None:
 ```
 
 ```python
-# tests/unit/test_cache_key.py (add)
-def test_cache_key_changes_with_enums(service_factory) -> None:
-    a = service_factory().cache_key_for(typed_request(output_format="phases_table"))
-    b = service_factory().cache_key_for(typed_request(output_format="narrative"))
+# tests/unit/test_cache_key.py (new)
+from tests.factories import typed_request
+
+
+def test_cache_key_changes_with_enums(service_with_fake) -> None:
+    a = service_with_fake.cache_key_for(typed_request(output_format="phases_table"))
+    b = service_with_fake.cache_key_for(typed_request(output_format="narrative"))
     assert a != b
 ```
 
-Use the fixtures that exist in `tests/api/conftest.py`; add a `typed_request` factory to `tests/factories.py`. `cache_key_for(request) -> str` is a small public method on `EstimationService` added in this task (it renders the prompt and calls session 3's `cache_key`).
+- [ ] **Step 2: Run, see failure; Step 3: implement** — context query params default to `web_saas`/`medium`/`phases_table` and the configured version (`PromptVersionDep`, so after Task 6 the inspector shows the version the estimates actually use); `prompt_version` in the response is the resolved version.
 
-- [ ] **Step 2: Run, see failure; Step 3: implement** — context query params default to `web_saas`/`medium`/`phases_table`/`DEFAULT_VERSION`; unknown version → 422 via `RequestValidationError` with `loc=("query","prompt_version")`.
-
-- [ ] **Step 4: `make openapi && make check`, commit** `feat(api): context endpoint renders the prompt for typed params`
+- [ ] **Step 4: `make openapi && make web-types && make check`, commit** `feat(api): context endpoint renders the prompt for typed params`
 
 ---
 
 ### Task 4: `prompt_version` query parameter
 
 **Files:**
-- Modify: `app/routers/estimations.py` (`/estimate`, `/estimate/stream`)
+- Modify: `app/routers/estimations.py` (`/estimate`, `/estimate/stream`), `app/services/llm_service.py`, `contracts/openapi.json`, `web/src/lib/ai-service/schema.d.ts` (generated)
 - Test: `tests/api/test_prompt_version.py`
 
 **Interfaces:**
-- Produces: optional query `prompt_version: str | None` on both estimate endpoints; `EstimationService.estimate(request, *, prompt_version: str | None = None)` and the same keyword on `estimate_stream`.
+- Consumes: `PromptVersionDep` (Task 3), `request_body` (Task 1).
+- Produces: optional query `prompt_version` on both estimate endpoints (next to session 3's `refresh`); `EstimationService.estimate(request, *, prompt_version: str | None = None)` and the same keyword on `estimate_stream`, alongside whatever keyword session 3 added for `refresh` (`None` → the configured version).
 
 - [ ] **Step 1: Failing tests**
 
 ```python
 import pytest
 
+from tests.factories import request_body
 
+PATHS = ["/api/v1/estimate", "/api/v1/estimate/stream"]
+
+
+@pytest.mark.parametrize("path", PATHS)
 @pytest.mark.parametrize("bad", ["v999", "../v1", "v1/../../x", "V1", ""])
-def test_bad_prompt_version_is_422(client, typed_body, bad) -> None:
-    r = client.post("/api/v1/estimate", params={"prompt_version": bad}, json=typed_body)
+def test_bad_prompt_version_is_422_json(client, path, bad) -> None:
+    r = client.post(path, params={"prompt_version": bad}, json=request_body())
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "invalid_request"
 
 
-def test_prompt_version_is_echoed(client, typed_body) -> None:
-    r = client.post("/api/v1/estimate", params={"prompt_version": "v1"}, json=typed_body)
+def test_prompt_version_is_echoed(client) -> None:
+    r = client.post("/api/v1/estimate", params={"prompt_version": "v1"}, json=request_body())
     assert r.json()["prompt_version"] == "v1"
 ```
 
-- [ ] **Step 2–4:** validate with `VERSION_PATTERN.fullmatch` **and** membership in `available_versions()` inside a dependency that runs before the stream starts (same pattern as the transcription length check from session 3). Commit `feat(api): select the prompt version per request`.
+- [ ] **Step 2–4:** both endpoints take `prompt_version: PromptVersionDep` (the dependency runs before the stream starts, same pattern as session 3's `CheckedRequest`) and pass it to the service. `make openapi && make web-types && make check`. Commit `feat(api): select the prompt version per request`.
 
 ---
 
@@ -538,27 +588,30 @@ def test_prompt_version_is_echoed(client, typed_body) -> None:
 - [ ] **Step 1: Failing tests**
 
 ```python
+# tests/unit/test_rendering.py (add; reuses the module's GROUNDED report and the factories it already imports)
 from app.schemas.estimation import OutputFormat
 
+ENRICHED = enrich(breakdown(), weekly_capacity_hours=30, hourly_rate=None)  # T1 backend, T2 qa
 
-def test_phases_table_rolls_up_by_phase(enriched, grounding) -> None:
-    md = render_markdown(enriched, grounding, OutputFormat.PHASES_TABLE)
+
+def test_phases_table_rolls_up_by_phase() -> None:
+    md = render_markdown(ENRICHED, GROUNDED, OutputFormat.PHASES_TABLE)
     assert "| Phase | Tasks | Expected h | Range h |" in md
-    backend = [t for t in enriched.tasks if t.phase == "backend"]
+    backend = [t for t in ENRICHED.tasks if t.phase == "backend"]
     assert f"| backend | {len(backend)} |" in md
 
 
-def test_narrative_has_no_tables(enriched, grounding) -> None:
-    md = render_markdown(enriched, grounding, OutputFormat.NARRATIVE)
+def test_narrative_has_no_tables() -> None:
+    md = render_markdown(ENRICHED, GROUNDED, OutputFormat.NARRATIVE)
     assert "|---" not in md
     assert "**Backend**" in md
 
 
-def test_line_items_is_the_default_layout(enriched, grounding) -> None:
-    assert render_markdown(enriched, grounding) == render_markdown(enriched, grounding, OutputFormat.LINE_ITEMS)
+def test_line_items_is_the_default_layout() -> None:
+    assert render_markdown(ENRICHED, GROUNDED) == render_markdown(ENRICHED, GROUNDED, OutputFormat.LINE_ITEMS)
 ```
 
-Use existing fixtures/factories for `enriched` and `grounding` (see `tests/unit/test_rendering.py`).
+There are no `enriched`/`grounding` fixtures; the module already has `GROUNDED` and the `render(...)` helper, and `enrich`, `breakdown` are imported there.
 
 - [ ] **Step 2–4:** implement; the service passes `request.output_format`. Grounding ⚠ marks appear in all layouts. Commit `feat(rendering): phases table, line items and narrative layouts`.
 
@@ -568,11 +621,11 @@ Use existing fixtures/factories for `enriched` and `grounding` (see `tests/unit/
 
 **Files:**
 - Create: `app/prompts/estimation/v2/{system,user,examples}.j2`
-- Modify: `evals/run_eval.py` (new check), `README.md` eval table
-- Test: `tests/prompts/test_estimation_v2.py`, `tests/unit/test_eval.py`
+- Modify: `evals/run_eval.py` (new check), `README.md` eval table, `evals/baseline.json`, `tests/cassettes/*.json` (re-recorded), `docs/catch-up/spend.jsonl`; if v2 wins: `app/config.py` and `.env.example` (`PROMPT_VERSION` default `v2`) and the tests that assert the default version
+- Test: `tests/prompts/test_estimation_v2.py`, `tests/unit/test_eval.py`, `tests/unit/test_cache_key.py` (add)
 
 **Interfaces:**
-- Consumes: `GoldenCase.expects_frontend`.
+- Consumes: `GoldenCase.expects_frontend`; `check_response` (`evals/run_eval.py`); `response_fixture()` (session 3, `tests/factories.py`: an `EstimateResponse` over `breakdown()`, whose tasks are `backend` and `qa` only); `cache_key_for` (Task 3).
 - Produces: eval check `covers_frontend` (only for cases with `expects_frontend: true`): `any(t.phase == "frontend" for t in b.tasks)`.
 
 - [ ] **Step 1: Failing tests**
@@ -591,26 +644,39 @@ def test_v2_adds_the_frontend_coverage_rule() -> None:
 ```
 
 ```python
-# tests/unit/test_eval.py (add)
-def test_covers_frontend_only_checked_when_expected(make_case, make_response) -> None:
-    checks = check_response(make_case(expects_frontend=True), make_response(phases=["backend", "qa", "devops", "project_management"]))
-    assert checks["covers_frontend"] is False
-    assert "covers_frontend" not in check_response(make_case(expects_frontend=False), make_response(phases=["backend"]))
+# tests/unit/test_eval.py (add; import check_response from evals.run_eval, response_fixture from tests.factories)
+def frontend_case(expects_frontend: bool) -> GoldenCase:
+    return GoldenCase("x", TRANSCRIPT, expects_frontend=expects_frontend)
+
+
+def test_covers_frontend_only_checked_when_expected() -> None:
+    no_frontend = response_fixture()  # backend + qa tasks only
+    assert check_response(frontend_case(True), no_frontend)["covers_frontend"] is False
+    assert "covers_frontend" not in check_response(frontend_case(False), no_frontend)
+    assert check_response(frontend_case(True), None)["covers_frontend"] is False
 ```
 
-- [ ] **Step 2: Implement** — copy v1 templates to v2 (update the include path to `estimation/v2/examples.j2`); in `<rules>` add: `- Every client-facing surface the client mentions (mobile app, web app, customer portal, staff or admin panel, website) gets at least one frontend task of its own, even when the backend does most of the work.` Add `covers_frontend` to `check_response` (and to the `response is None` branch when expected).
+```python
+# tests/unit/test_cache_key.py (add)
+def test_cache_key_changes_with_prompt_version(service_with_fake) -> None:
+    request = typed_request()
+    assert service_with_fake.cache_key_for(request, "v1") != service_with_fake.cache_key_for(request, "v2")
+```
+
+- [ ] **Step 2: Implement** — copy v1 templates to v2 (update the include path to `estimation/v2/examples.j2`); change nothing else, so the eval delta measures only the new rule. The ported v1 text already says "Give every client-facing surface …" in `<method>` step 5 (lower-case "every"); the test relies on the capitalised rule sentence appearing only in v2. In `<rules>` add: `- Every client-facing surface the client mentions (mobile app, web app, customer portal, staff or admin panel, website) gets at least one frontend task of its own, even when the backend does most of the work.` Add `covers_frontend` to `check_response` (and to the `response is None` branch when expected).
 
 - [ ] **Step 3: Live comparison (~US$0.04)**
 
 ```bash
-make eval PROMPT_VERSION=v1 REPORT=evals/reports/estimation-v1.json
-make eval PROMPT_VERSION=v2 REPORT=evals/reports/estimation-v2.json
-uv run python scripts/eval_gate.py --report evals/reports/estimation-v2.json --baseline evals/reports/estimation-v1.json --tolerance 0.0
+# Track A worktree: prefix each live command with UV_ENV_FILE=<main checkout>/.env
+make eval LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini PROMPT_VERSION=v1 REPORT=evals/reports/estimation-v1.json
+make eval LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini PROMPT_VERSION=v2 REPORT=evals/reports/estimation-v2.json
+uv run python -m scripts.eval_gate --report evals/reports/estimation-v2.json --baseline evals/reports/estimation-v1.json --tolerance 0.0
 ```
 
-If v2 ≥ v1: set `PROMPT_VERSION` default to `v2` in settings and `.env.example`, `make eval-baseline REPORT=evals/reports/estimation-v2.json`. Otherwise keep v1 as default and record why. Add both rows to the README eval table with the observed numbers and what changed.
+v1 is re-run because the new `covers_frontend` check changes the check set. If v2's overall score ≥ v1's − 0.02 **and** v2's `covers_frontend` pass rate ≥ v1's (orchestrator ruling: v2 is the intended fix, so a tie promotes it, a regression does not): set `PROMPT_VERSION` default to `v2` in settings and `.env.example`, `make eval-baseline REPORT=evals/reports/estimation-v2.json`. Otherwise keep v1 as default, `make eval-baseline REPORT=evals/reports/estimation-v1.json` (the baseline must carry the same check set as later runs), and record why. Add both rows to the README eval table with the observed numbers and what changed.
 
-- [ ] **Step 4: Re-record cassettes for the new prompt (~US$0.01)** — `make record-cassettes` (the rendered prompt changed, so session 3 cassettes no longer match; the replay provider falls back to synthetic streams until re-recorded). Cassettes record with default enums (`web_saas`, `medium`, `phases_table`); the e2e test uses those values.
+- [ ] **Step 4: Re-record cassettes for the new prompt (~US$0.01)** — `make record-cassettes LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini` (with the `UV_ENV_FILE` prefix). Task 2 made session 3's cassettes stale (the rendered prompt changed), so the replay provider has been synthesising streams since then. The recorder (updated in Tasks 1–2) renders each sample with `typed_request`-style defaults (`web_saas`, `medium`, `phases_table`, no `output_language`) and `settings.prompt_version` after this task's default change, so the keys match what the web form sends by default in the e2e. Delete cassettes whose key no longer matches any sample.
 
 - [ ] **Step 5: `make check`, commit** `feat(prompts): v2 adds explicit frontend coverage, measured by a new eval check`
 
@@ -619,14 +685,14 @@ If v2 ≥ v1: set `PROMPT_VERSION` default to `v2` in settings and `.env.example
 ### Task 7: Web — typed form workspace with evidence-linked split view
 
 **Files:**
-- Modify: `web/src/app/page.tsx` (form workspace replaces chat), `web/src/app/api/estimate/stream/route.ts` (forward `prompt_version` query), `web/src/app/api/context/route.ts` (forward enum query params)
-- Create: `web/src/components/form/estimate-form.tsx`, `web/src/components/form/estimate-form-schema.ts`, `web/src/components/workspace/split-view.tsx`, `web/src/components/workspace/transcript-pane.tsx`, `web/src/lib/evidence.ts`
-- Remove: chat-only components no longer used (`web/src/components/chat/*` except what the form reuses)
-- Test: `web/src/components/form/estimate-form.test.tsx`, `web/src/lib/evidence.test.ts`, `web/src/components/workspace/transcript-pane.test.tsx`
+- Modify: `web/src/app/page.tsx` (form workspace replaces chat; keeps the inspector), `web/src/lib/ai-service/proxy.ts` + `web/src/app/api/estimate/stream/route.ts` (query allowlist adds `prompt_version` next to session 3's `refresh=true`), `web/src/app/api/context/route.ts` (forwards only `project_type`, `detail_level`, `output_format`, `prompt_version`; the AI service validates them), `web/src/hooks/use-estimate-stream.ts` (`promptVersion` option), `web/src/components/inspector/*` (context fetched with the form's current params)
+- Create: `web/src/components/form/estimate-form.tsx`, `web/src/components/form/estimate-form-schema.ts`, `web/src/components/workspace/split-view.tsx`, `web/src/components/workspace/transcript-pane.tsx`, `web/src/components/workspace/result-view-toggle.tsx`, `web/src/lib/evidence.ts`
+- Remove: chat-only code with no remaining use (`thread.tsx`, `user-message.tsx`, `composer.tsx` (replaced by the form), `use-thread.ts` and its sessionStorage history: the form keeps one run, by design of spec §6.5). Keep and reuse `sample-picker.tsx`, `error-card.tsx`, `ai-disclosure.tsx` and the assistant-message actions (Stop, Esc, Copy as markdown, Regenerate with `refresh`, "Stopped" state) in the result pane, with their tests; port every assertion of a removed component's test whose behaviour still exists (counter and limit, ⌘↵, empty-input explanation) to the new components' tests.
+- Test: `web/src/components/form/estimate-form.test.tsx`, `web/src/lib/evidence.test.ts`, `web/src/components/workspace/transcript-pane.test.tsx`, `web/src/app/api/estimate/stream/route.test.ts` (add: `?prompt_version=v2&refresh=true` reaches upstream, `?foo=1` does not), `web/src/app/api/context/route.test.ts` (new: the four params are forwarded, others dropped), `web/src/hooks/use-estimate-stream.test.ts` (add: `promptVersion` appends `prompt_version`)
 
 **Interfaces:**
-- Consumes: generated types `components["schemas"]["EstimateRequest"]`, `ProjectType`, `DetailLevel`, `OutputFormat`, `ContextResponse` from `web/src/lib/ai-service/schema.d.ts`; `useEstimateStream` (session 3) — extend its `start(body, { promptVersion })` signature; `EstimateView` (session 3).
-- Produces: `estimateFormSchema` (zod) whose inferred type `satisfies` the generated `EstimateRequest`; `findEvidenceRanges(transcript: string, quotes: {id: string; evidence: string}[]): {id: string; start: number; end: number}[]`.
+- Consumes: generated types `components["schemas"]["EstimateRequest"]`, `ProjectType`, `DetailLevel`, `OutputFormat`, `ContextResponse` from `web/src/lib/ai-service/schema.d.ts`; `useEstimateStream` (session 3) — its options become `start(body: EstimateRequest, opts?: { refresh?: boolean; promptVersion?: string })` (`refresh` kept); `EstimateView` with `activeRequirement` / `onRequirementFocus` (session 3); `StatusSteps`, `ErrorCard`, `toUserMessage`, the inspector (session 3).
+- Produces: `estimateFormSchema` (zod) checked against the generated `EstimateRequest` at compile time (see Step 2); `EstimateForm({ onSubmit(body: EstimateRequest, opts: { promptVersion: string }): void; versions: string[]; defaultVersion: string; maxChars?: number })` (`maxChars` from `/api/context` `max_transcription_chars`, 50,000 until it loads, as in session 3); `findEvidenceRanges(transcript: string, quotes: {id: string; evidence: string}[]): {id: string; start: number; end: number}[]`, matching the way the server grounds quotes (`app/services/grounding.py::normalize`: NFKC, typographic quotes and dashes, case-insensitive, whitespace runs collapsed, quote-edge characters `" \"'.,;:!?-()[]` trimmed) and mapping the match back to offsets in the original transcript, so every requirement the server marks grounded gets a mark.
 
 - [ ] **Step 1: Failing unit tests**
 
@@ -647,6 +713,15 @@ describe("findEvidenceRanges", () => {
     expect(findEvidenceRanges("a b a b", [{ id: "R1", evidence: "a b" }])[0]).toMatchObject({ start: 0, end: 3 });
     expect(findEvidenceRanges("abc", [{ id: "R1", evidence: "" }])).toEqual([]);
   });
+  it("matches like the server's grounding check: case, typography, whitespace, quote edges", () => {
+    const t = "Client: We need a booking app for our “yoga studio”.\nPM:  Mobile   first, launch soon.";
+    const [r1, r2] = findEvidenceRanges(t, [
+      { id: "R1", evidence: "\"Yoga Studio\"" },
+      { id: "R2", evidence: "mobile first," },
+    ]);
+    expect(r1).toEqual({ id: "R1", start: t.indexOf("yoga studio"), end: t.indexOf("yoga studio") + "yoga studio".length });
+    expect(r2).toEqual({ id: "R2", start: t.indexOf("Mobile"), end: t.indexOf("first") + "first".length });
+  });
 });
 ```
 
@@ -661,7 +736,7 @@ describe("EstimateForm", () => {
   it("submits typed params with brief enum values", async () => {
     const onSubmit = vi.fn();
     render(<EstimateForm onSubmit={onSubmit} versions={["v1", "v2"]} defaultVersion="v2" />);
-    await userEvent.type(screen.getByLabelText(/transcript/i), "Client: we need a booking app for our studios.");
+    await userEvent.type(screen.getByRole("textbox", { name: /transcript/i }), "Client: we need a booking app for our studios.");
     await userEvent.click(screen.getByRole("radio", { name: /mobile app/i }));
     await userEvent.click(screen.getByRole("radio", { name: /detailed/i }));
     await userEvent.click(screen.getByRole("button", { name: /estimate/i }));
@@ -681,32 +756,35 @@ describe("EstimateForm", () => {
 ```
 
 - [ ] **Step 2: Implement**
-  - Form (shadcn form primitives + `ToggleGroup` as radio groups with visible labels; defaults `web_saas` / `medium` / `phases_table`; transcript textarea with counter against the server limit, "Load sample" menu, `.txt` upload; "Advanced" disclosure with the prompt-version select fed by `/api/context` `available_versions`; one primary button "Estimate"; ⌘↵ submits).
-  - `estimateFormSchema` in zod; add `const _check: z.infer<typeof estimateFormSchema> satisfies EstimateRequest` style compile-time assertion (or a type-level test) so enum drift breaks `pnpm typecheck`.
-  - Split view (`ResizablePanelGroup`): left `TranscriptPane` renders the submitted transcript with `<mark data-req="R1">` ranges from `findEvidenceRanges`; right `EstimateView`. Hover or keyboard focus on a requirement sets `activeRequirement`; the pane scrolls the mark into view (`scrollIntoView({block: "center", behavior: prefersReducedMotion ? "auto" : "smooth"})`) and applies the active style. Ungrounded requirements show ⚠ and no mark.
+  - Result view toggle (orchestrator ruling, so the `output_format` choice has a visible effect): `ResultViewToggle` with "Structured | Document" (`ToggleGroup type="single"`, default Structured); Document renders `result.estimation` (the server's per-`output_format` markdown: phase table / task table / prose) with a small markdown renderer (e.g. `react-markdown` + `remark-gfm` for tables; no raw HTML); available once a result exists. Test: switching to Document shows the narrative prose for a `narrative` result and a table for `phases_table`.
+  - Form (shadcn `field` primitives installed in session 3 + react-hook-form/zod per `.claude/stack.md` "Form pattern"; `ToggleGroup type="single"` as radio groups with visible labels; defaults `web_saas` / `medium` / `phases_table`; transcript textarea with counter against `maxChars`, "Load sample" menu (session 3 samples), `.txt` upload; "Advanced" disclosure with the prompt-version select fed by `/api/context` `available_versions`, defaulting to its `prompt_version`; one primary button "Estimate"; ⌘↵ submits). No `output_language` field: the body omits it (an empty string would fail server validation).
+  - `estimateFormSchema` in zod. Compile-time drift check (valid TS, no unused-variable lint): type the option lists against the generated enums, e.g. `const PROJECT_TYPES = ["mobile_app", "web_saas", "internal_tool", "data_pipeline"] as const satisfies readonly ProjectType[]`, and the labels as `Record<ProjectType, string>` (same for `DetailLevel`, `OutputFormat`); the submit handler builds an `EstimateRequest`-typed body from the parsed values. Adding or removing a value on the server then breaks `pnpm typecheck`.
+  - Result pane: session 3's `StatusSteps`, progressive `EstimateView`, Stop (button and Esc), Copy as markdown, Regenerate (`start(lastBody, { refresh: true, promptVersion })`), `ErrorCard` keeping partial content, "Stopped" state and `AiDisclosure`. The inspector fetches `/api/context` with the form's current enums and prompt version, so it shows the system prompt the next estimate will use.
+  - Split view (`ResizablePanelGroup`, prop `orientation`, not `direction`): left `TranscriptPane` renders the submitted transcript with `<mark data-req="R1">` ranges from `findEvidenceRanges`; right `EstimateView`. Hover or keyboard focus on a requirement sets `activeRequirement`; the pane scrolls the mark into view (`scrollIntoView({block: "center", behavior: prefersReducedMotion ? "auto" : "smooth"})`) and applies the active style. Ungrounded requirements show ⚠ and no mark.
   - Mobile (< 768 px): tabs "Transcript | Estimate" instead of the split.
-- [ ] **Step 3: `pnpm -C web test && pnpm -C web typecheck && pnpm -C web lint`**, then `make check`; commit `feat(web): typed estimate form and evidence-linked split view`.
+- [ ] **Step 3: `pnpm -C web test && pnpm -C web typecheck && pnpm -C web lint`**, then `make check`; commit `feat(web): typed estimate form and evidence-linked split view`. (The session 3 e2e spec drives the removed chat; it is replaced in Task 8 and is not part of `make check`.)
 
 ---
 
 ### Task 8: E2E, accessibility and media
 
 **Files:**
-- Modify: `web/e2e/estimate.spec.ts` (form flow), `docs/media/session-04/*`
+- Replace: session 3's `web/e2e/chat.spec.ts` with `web/e2e/estimate.spec.ts` (`git mv`, then rewrite for the form flow)
+- Create: `docs/media/session-04/*`
 - Test: the e2e spec itself
 
-- [ ] **Step 1: Update the e2e** — with the stack up on the replay provider (`make e2e`): load sample → choose `web_saas`/`medium`/`phases_table` → Estimate → partial content appears before the result → result shows phase rollup → hovering requirement `R1` highlights a `<mark>` in the transcript pane → `axe` reports zero serious/critical violations → stop button during streaming leaves a "Stopped" state with partial content kept.
-- [ ] **Step 2: Capture media** — screenshots (form, streaming, result split view, dark theme) and a GIF of the flow into `docs/media/session-04/`; link them in the README.
-- [ ] **Step 3: `make e2e`**, commit `test(e2e): form flow, evidence highlight and accessibility`.
+- [ ] **Step 1: Update the e2e** — with the stack up on the replay provider (`make e2e`; Task 6's cassettes match the default params and prompt version): load sample → choose `web_saas`/`medium`/`phases_table` → Estimate → partial content appears before the result → result shows tasks grouped by phase, and Copy as markdown puts the `phases_table` layout (`| Phase | Tasks | Expected h | Range h |`) on the clipboard → hovering the first requirement without ⚠ highlights its `<mark>` in the transcript pane, and focusing it with the keyboard does the same → stop button during streaming leaves a "Stopped" state with partial content kept. Keep session 3's remaining checks, adapted to the form: keyboard only (Tab to the transcript, ⌘/Ctrl+Enter submits, Esc stops); `@axe-core/playwright` on empty, streaming and result states with zero serious/critical violations in light and dark themes; at 375 px the workspace shows the "Transcript | Estimate" tabs, the inspector opens as a sheet, and there is no horizontal scroll. Drop only the chat-only checks (multi-turn thread, reload restores turns), whose behaviour Task 7 removed by design.
+- [ ] **Step 2: Capture media** — screenshots (form, streaming, result split view, dark theme, mobile) and a GIF of the flow into `docs/media/session-04/` (point session 3's media helper at the new directory; media is written only when `MEDIA=1`, so the plain `make e2e` inside `make gate` never dirties tracked files); link them in the README.
+- [ ] **Step 3: `MEDIA=1 make e2e`**, commit `test(e2e): form flow, evidence highlight and accessibility`.
 
 ---
 
 ### Task 9: Branch close-out
 
-**Files:** `README.md`, `openspec/specs/{estimation-api,prompt-context,prompt-evaluation,configuration}/spec.md`, `docs/takeaways/session-04.md`, `docs/catch-up/PROGRESS.md`
+**Files:** `README.md`, `openspec/specs/{estimation-api,prompt-context,prompt-evaluation,configuration,llm-providers}/spec.md`, `docs/takeaways/session-04.md`, `docs/catch-up/PROGRESS.md`
 
-- [ ] **Step 1: README** — "Session 4" section: brief checklist mapped to evidence (form → web form; `app/schemas.py` → `app/schemas/estimation.py` and why; Jinja paths; loader signature; endpoint refactor with system/user as separate messages; template tests and how to run them: `uv run pytest tests/prompts -q`); how to run everything (`make up`, `make dev`, `make check`, `make e2e`); eval table rows for v1 port and v2; media links.
-- [ ] **Step 2: Specs (OpenSpec-lite)** — update requirements and scenarios in place: typed request and enums, `prompt_version` query, context endpoint params, versioned Jinja prompts and template tests, `covers_frontend` eval check. `make specs` green.
+- [ ] **Step 1: README** — "Session 4" section: brief checklist mapped to evidence (form → web form; `app/schemas.py` → `app/schemas/estimation.py` and why; the brief's `EstimationRequest.description` / `EstimationResponse{text}` → `EstimateRequest.transcription` and the structured `EstimateResponse` (spec D8); `<project_description>` → `<transcript>`; Jinja paths; loader signature; endpoint refactor with system/user as separate messages; template tests and how to run them: `uv run pytest tests/prompts -q`; bonus items: `v2` + `?prompt_version`, rendered-prompt logging); how to run everything (`make up`, `make dev`, `make check`, `make e2e`); eval table rows for v1 port and v2; media links.
+- [ ] **Step 2: Specs (OpenSpec-lite)** — update requirements and scenarios in place: typed request and enums, `prompt_version` query and `PROMPT_VERSION` setting, context endpoint params and `available_versions`, versioned Jinja prompts and template tests (old `v1..v4` removed, D9), output-format markdown layouts, `prompt_rendered` log, prompt-cache routing with the enum-dependent blocks at the end of the system prompt (`llm-providers` currently says "byte-stable system prompt"), `covers_frontend` eval check. `make specs` green.
 - [ ] **Step 3: Gates** — run spec §9 items 2–4: `docker compose up --build --wait`; `make e2e`; live eval already done in Task 6; review panel via the Workflow tool per `HANDOFF.md`; fix confirmed findings (each fix: test first, commit).
 - [ ] **Step 4: Takeaways** — `docs/takeaways/session-04.md` per spec §6.6 and §9 item 7 (concept, why, trade-offs, alternatives with greater benefit and when to switch; 6–8 quiz questions with answers in `<details>`), passed through the `humanizer` skill. Must answer the brief's four learning objectives explicitly, with evidence from this branch (e.g. the shared-prefix test, the eval delta v1 → v2).
 - [ ] **Step 5: Push, gate and record** — update `PROGRESS.md` (tasks, commits, spend, findings) and commit; `git push -u origin pre-session-04`; `make gate BRANCH=pre-session-04` (must print `GATE PASS pre-session-04 <sha>`); `git log -1 --oneline origin/pre-session-04`; `cat docs/catch-up/PROGRESS.md`; PushNotification "pre-session-04 pushed: <one-line result>".

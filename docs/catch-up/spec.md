@@ -90,7 +90,7 @@ class LLMProvider(Protocol):
     name: Provider
     model: str
     async def generate(self, *, system: str, user: str, schema: type[T], cache_key: str) -> LLMResult[T]: ...
-    def stream(self, *, system: str, user: str, schema: type[T], cache_key: str) -> AsyncIterator[StreamEvent]: ...
+    def stream(self, *, system: str, user: str, schema: type[T], cache_key: str) -> AsyncGenerator[StreamEvent]: ...  # a generator, so callers can aclose() it
     async def aclose(self) -> None: ...
 ```
 
@@ -131,7 +131,7 @@ class CallMetrics(BaseModel):
 | Event | Data (Pydantic model) | Rules |
 |---|---|---|
 | `status` | `{phase: "calling_llm" \| "fallback" \| "validating" \| "cache_hit", provider?, model?}` | Informational, any number. |
-| `partial` | `{seq: int, breakdown: dict}` (partial `EstimationBreakdown`, possibly incomplete) | Only after the first delta; emitted when the parsed snapshot changed, at most every 100 ms; `seq` strictly increasing. |
+| `partial` | `{seq: int, breakdown: dict}` (partial `EstimationBreakdown`, possibly incomplete) | Only after the first delta; emitted when the parsed snapshot changed, at most every 100 ms plus one unthrottled final flush before the terminal event; `seq` strictly increasing. |
 | `result` | `EstimateResponse` | Terminal. |
 | `error` | `{code, message, retryable: bool, request_id}` | Terminal. Codes match the HTTP error taxonomy. |
 
@@ -151,7 +151,7 @@ The existing one-record-per-LLM-call rule stays (`llm_call`, no transcript or ke
 
 ### 4.7 Context endpoint
 
-`GET /api/v1/context` returns `{prompt_version, system_prompt, references: [...], chain: ["provider:model", …], max_transcription_chars}` for the UI inspector. From session 4 it accepts the same enum query parameters as the estimate request (the system prompt depends on them) and `prompt_version`.
+`GET /api/v1/context` returns `{prompt_version, system_prompt, references: [...], chain: ["provider:model", …], max_transcription_chars}` for the UI inspector. From session 4 it accepts the same enum query parameters as the estimate request (the system prompt depends on them) and `prompt_version`, and also returns `available_versions`; when `prompt_version` is omitted the default is `PROMPT_VERSION` (settings).
 
 ## 5. Branch `pre-session-03`: conversational interface with streaming
 
@@ -160,7 +160,7 @@ Brief: React chat that sends a transcript, keeps the conversation visible, strea
 ### 5.1 AI service
 
 1. Provider streaming for OpenAI and Anthropic (§4.1) with recorded-fixture unit tests (mock transport SSE bodies): deltas, final parse, incomplete/truncated, refusal, mid-stream error mapping, close-on-cancel.
-2. `PartialSnapshotter`: accumulates deltas, `jiter` partial parse, change detection, 100 ms throttle; never raises on malformed partials.
+2. `PartialSnapshotter`: takes the accumulated text (the caller accumulates deltas), `jiter` partial parse, change detection, 100 ms throttle; never raises on malformed partials.
 3. `FallbackProvider` + cooldown (§4.2); settings refactor (`key_for(provider)`; chain validation).
 4. `pricing.py` + `CallMetrics` (§4.3).
 5. `ResponseCache` (§4.5) with `RedisCache` (`redis.asyncio`) and `NullCache`; tests with `fakeredis`.
@@ -202,7 +202,7 @@ Brief deliverable branch name: `pre-session-04`. Learning objectives to defend: 
 - **Block order for prompt caching:** static content first (role, rules, references), enum-dependent blocks (`output_format`, `detail_level`) last. A test asserts that two different enum combinations share the same long prefix.
 - `detail_level` and `output_format` change both the instructions (as the brief's tests require) and the markdown layout rendered in code (`phases_table` = phase rollup table, `line_items` = task table, `narrative` = prose per phase).
 - Transcript delimiter neutralisation is kept (prompt-injection defence).
-- Endpoints accept `?prompt_version=v1|v2` (422 for unknown versions); `prompt_rendered` log (§4.6).
+- Endpoints accept `?prompt_version=v1|v2` (422 for unknown versions; omitted → `PROMPT_VERSION` setting); `prompt_rendered` log (§4.6).
 
 ### 6.3 Tests
 
@@ -210,7 +210,7 @@ Brief deliverable branch name: `pre-session-04`. Learning objectives to defend: 
 
 ### 6.4 Prompt `v2` and the eval gate
 
-- `v1` (faithful port) must score ≥ `evals/baseline.json` − 0.02 on `gpt-4o-mini`; then becomes the new baseline.
+- `v1` (faithful port) must score ≥ `evals/baseline.json` − 0.02 on `gpt-4o-mini`; the baseline is then re-recorded (after the `covers_frontend` check is added) from the winning version.
 - `v2` is a deliberate change that fixes the M1 carry-over "estimates skip frontend tasks for client-facing surfaces": an explicit coverage rule, plus a new eval check (frontend task present when the transcript mentions a client-facing surface). The v1 vs v2 comparison goes in the README eval table and the takeaways.
 
 ### 6.5 Web

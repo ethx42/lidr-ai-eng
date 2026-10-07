@@ -7,10 +7,10 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 ## pre-session-03
 
 - [x] Plan audited (51 plan defects fixed; rulings in Notes)
-- [ ] Task 1: Bootstrap — gate, spend guard, agent guide
-- [ ] Task 2: Streaming contract, pricing and call metrics
-- [ ] Task 3: Partial snapshots from streamed JSON
-- [ ] Task 4: Replay provider
+- [x] Task 1: Bootstrap — gate, spend guard, agent guide (1f2e518)
+- [x] Task 2: Streaming contract, pricing and call metrics (ebac836)
+- [x] Task 3: Partial snapshots from streamed JSON (a1df623)
+- [x] Task 4: Replay provider (9103f21)
 - [ ] Task 5: Streaming service, SSE endpoint and context endpoint
 - [ ] Task 6: Web scaffold, design tokens and typed client
 - [ ] Task 7: BFF route handlers
@@ -32,7 +32,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 
 ## pre-session-04
 
-- [ ] Plan audited
+- [x] Plan audited (early, ~40 plan defects fixed; rulings in Notes)
 - [ ] Task 1: Typed request contract
 - [ ] Task 2: Jinja2 prompt loader and estimation/v1
 - [ ] Task 3: Context endpoint and cache isolation for typed params
@@ -47,7 +47,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 
 ## pre-session-05
 
-- [ ] Plan audited
+- [x] Plan audited (early, 30 plan defects fixed; rulings in Notes)
 - [ ] Task 1: Messages-based provider interface
 - [ ] Task 2: Session state — app/sessions.py
 - [ ] Task 3: Output schema technologies and the metadata merge
@@ -65,4 +65,11 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - Ruling: Regenerate bypasses the exact-match cache (`?refresh=true`), so it really produces a new answer.
 - Ruling: the composer's limit comes from `/api/v1/context` (`max_transcription_chars`), not a hard-coded constant.
 - Ruling: baseline `make check` failed because ruff 0.16 formats Python blocks inside `docs/**/*.md`; Task 1 excludes `docs` from ruff.
+- Ruling: replay pacing knob is `REPLAY_DELAY_SCALE` (0 = instant, 1 = as recorded); "speed = 2" reading as slower was a trap.
+- Ruling: provider `stream()` is typed `AsyncGenerator` (so callers can `aclose()` it under mypy strict); spec §4.1 updated.
+- S4/S5 plans audited early (2026-10-07) against the S3/S4 plans' end states, in parallel with S3 work; re-check interfaces at each branch start.
+- Ruling (S4): skip the brief's optional `reference_projects` bonus (README notes it).
+- Ruling (S4): result pane gets a "Structured | Document" toggle so `output_format` has a visible effect.
+- Ruling (S4): v2 becomes the default if its score ≥ v1 − 0.02 and its `covers_frontend` pass rate ≥ v1's.
+- Ruling (S5): session endpoints use `estimation/v3`; single-shot keeps the S4 default; S4 evidence highlighting stays inside each turn card; e2e on synthetic replay; the replay GIF gets a caption.
 

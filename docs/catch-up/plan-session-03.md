@@ -139,7 +139,7 @@ class LLMProvider(Protocol):
     name: Provider
     model: str
     async def generate(self, *, system: str, user: str, schema: type[T], cache_key: str) -> LLMResult[T]: ...
-    def stream(self, *, system: str, user: str, schema: type[T], cache_key: str) -> AsyncIterator[StreamEvent[T]]: ...
+    def stream(self, *, system: str, user: str, schema: type[T], cache_key: str) -> AsyncGenerator[StreamEvent[T]]: ...
     async def aclose(self) -> None: ...
 
 # app/schemas/estimation.py
@@ -317,11 +317,11 @@ def test_empty_whitespace_and_non_object_snapshots_are_ignored() -> None:
 
 **Files:**
 - Create: `app/services/providers/replay_provider.py`, `tests/cassettes/.gitkeep`
-- Modify: `app/config.py` (`replay_cassette_dir: Path = Path("tests/cassettes")`, `replay_speed: float = Field(default=1.0, ge=0)`; `replay` needs no API key), `app/services/providers/factory.py`
+- Modify: `app/config.py` (`replay_cassette_dir: Path = Path("tests/cassettes")`, `replay_delay_scale: float = Field(default=1.0, ge=0)`; `replay` needs no API key), `app/services/providers/factory.py`
 - Test: `tests/unit/providers/test_replay_provider.py`
 
 **Interfaces:**
-- Produces: `ReplayProvider(*, cassette_dir: Path, fallback: Sequence[EstimationBreakdown], speed: float, chunk_chars: int = 24, chunk_delay: float = 0.02, model: str = "replay")` with `name = "replay"` (its results report `model="replay"`, so `cost_usd` is `None` and the UI shows "n/a"); `cassette_key(system: str, user: str) -> str` = `sha256(f"{system}\x00{user}")` hex (session 4's `RenderedPrompt.sha256` must use the same formula); cassette file `tests/cassettes/<key>.json`:
+- Produces: `ReplayProvider(*, cassette_dir: Path, fallback: Sequence[EstimationBreakdown], delay_scale: float, chunk_chars: int = 24, chunk_delay: float = 0.02, model: str = "replay")` with `name = "replay"` (its results report `model="replay"`, so `cost_usd` is `None` and the UI shows "n/a"); `cassette_key(system: str, user: str) -> str` = `sha256(f"{system}\x00{user}")` hex (session 4's `RenderedPrompt.sha256` must use the same formula); cassette file `tests/cassettes/<key>.json`:
 
 ```json
 {"key": "<sha>", "provider": "openai", "model": "gpt-4o-mini", "recorded_at": "2026-10-06T23:00:00Z",
@@ -342,7 +342,7 @@ async def test_replays_cassette_text_and_timing(tmp_path) -> None:
         "usage": {"input_tokens": 10, "output_tokens": 5, "cached_input_tokens": 0, "cache_write_tokens": 0},
         "chunks": [[0, breakdown_json[:20]], [10, breakdown_json[20:]]],
     }))
-    p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], speed=0)
+    p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], delay_scale=0)
     events = [e async for e in p.stream(system="S", user="U", schema=EstimationBreakdown, cache_key="k")]
     deltas = [e for e in events if isinstance(e, TextDelta)]
     assert "".join(d.text for d in deltas) == breakdown_json
@@ -352,19 +352,19 @@ async def test_replays_cassette_text_and_timing(tmp_path) -> None:
 
 
 async def test_synthesises_a_stream_without_cassette(tmp_path) -> None:
-    p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], speed=0)
+    p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], delay_scale=0)
     events = [e async for e in p.stream(system="S", user="other", schema=EstimationBreakdown, cache_key="k")]
     assert len([e for e in events if isinstance(e, TextDelta)]) > 3
     assert isinstance(events[-1], LLMResult)
 
 
 async def test_generate_returns_the_same_parsed_result(tmp_path) -> None:
-    p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], speed=0)
+    p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], delay_scale=0)
     result = await p.generate(system="S", user="U", schema=EstimationBreakdown, cache_key="k")
     assert result.parsed == breakdown()
 ```
 
-- [ ] **Step 2: Implement** — fallback chosen by `int(key, 16) % len(fallback)` (deterministic); synthetic chunks of `chunk_chars` with `chunk_delay * speed` sleeps; cassette sleeps are `(t_i - t_{i-1}) / 1000 * speed`; usage zeros for synthetic; the factory builds `ReplayProvider` for `LLM_PROVIDER=replay` with `fallback=[ref.estimation for ref in REFERENCE_ESTIMATIONS]`.
+- [ ] **Step 2: Implement** — fallback chosen by `int(key, 16) % len(fallback)` (deterministic); synthetic chunks of `chunk_chars` with `chunk_delay * delay_scale` sleeps; cassette sleeps are `(t_i - t_{i-1}) / 1000 * delay_scale` (0 = instant, 1 = as recorded, 2 = twice as slow; env `REPLAY_DELAY_SCALE`); usage zeros for synthetic; the factory builds `ReplayProvider` for `LLM_PROVIDER=replay` with `fallback=[ref.estimation for ref in REFERENCE_ESTIMATIONS]`.
 - [ ] **Step 3: `make check`; commit** `feat(providers): replay provider for deterministic streams`
 
 ---
@@ -806,7 +806,7 @@ export function toUserMessage(error: StreamError): { title: string; action: "ret
 - [ ] **Step 3: Implement**
 
 ```python
-async def stream(self, *, system: str, user: str, schema: type[T], cache_key: str) -> AsyncIterator[StreamEvent[T]]:
+async def stream(self, *, system: str, user: str, schema: type[T], cache_key: str) -> AsyncGenerator[StreamEvent[T]]:
     start = time.perf_counter()
     terminal = None
     try:
