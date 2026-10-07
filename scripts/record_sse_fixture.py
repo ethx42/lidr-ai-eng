@@ -220,7 +220,7 @@ def save(provider: str, events: list[Event]) -> Path:
 
 
 async def record_openai() -> None:
-    settings = Settings(llm_provider="openai", llm_model=OPENAI_MODEL)
+    settings = Settings(llm_provider="openai", llm_model=OPENAI_MODEL, llm_fallbacks="")
     ensure_budget(ESTIMATE_USD["openai"])
     body = openai_body(SYSTEM, TRANSCRIPT, temperature=settings.llm_temperature)
     headers = {"Authorization": f"Bearer {settings.api_key}"}
@@ -246,7 +246,7 @@ async def record_openai() -> None:
 
 
 async def record_anthropic() -> None:
-    settings = Settings(llm_provider="anthropic", llm_model=ANTHROPIC_MODEL)
+    settings = Settings(llm_provider="anthropic", llm_model=ANTHROPIC_MODEL, llm_fallbacks="")
     ensure_budget(ESTIMATE_USD["anthropic"])
     body = anthropic_body(SYSTEM, TRANSCRIPT, temperature=settings.llm_temperature)
     headers = {"x-api-key": settings.api_key, "anthropic-version": ANTHROPIC_VERSION}

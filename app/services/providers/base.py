@@ -29,9 +29,12 @@ class TextDelta:
 
 @dataclass(frozen=True)
 class ProviderSwitch:
+    """Sent before a call to any provider but the primary (`attempt` counts calls, from 1)."""
+
     provider: Provider
     model: str
-    cause: str | None
+    cause: str | None  # why the previous candidate was left: its error, or "cooldown"
+    attempt: int
 
 
 # A stream yields deltas (and switches before the first delta), then exactly one LLMResult.

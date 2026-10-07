@@ -17,6 +17,9 @@ ENV_VARS = [
     "BLENDED_HOURLY_RATE",
     "REPLAY_CASSETTE_DIR",
     "REPLAY_DELAY_SCALE",
+    "LLM_FALLBACKS",
+    "LLM_COOLDOWN_FAILURES",
+    "LLM_COOLDOWN_SECONDS",
 ]
 
 
@@ -32,6 +35,7 @@ def load() -> Settings:
 
 def test_defaults_with_only_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
     settings = load()
     assert settings.llm_provider == "openai"
     assert settings.llm_model == "gpt-4o-mini"
@@ -49,8 +53,10 @@ def test_defaults_with_only_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_replay_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "replay")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
     settings = load()
     assert settings.llm_provider == "replay"
+    assert settings.chain == [("replay", "replay")]  # replay ignores LLM_MODEL
     assert settings.replay_cassette_dir == Path("tests/cassettes")
     assert settings.replay_delay_scale == 1.0
 
@@ -84,6 +90,7 @@ def test_unsupported_provider_names_variable(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_empty_optional_values_are_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
     monkeypatch.setenv("LLM_REASONING_EFFORT", "")
     monkeypatch.setenv("BLENDED_HOURLY_RATE", "")
     settings = load()
@@ -94,6 +101,7 @@ def test_empty_optional_values_are_unset(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_keys_masked_in_repr_and_str(monkeypatch: pytest.MonkeyPatch) -> None:
     secret = "test-super-secret-value"
     monkeypatch.setenv("OPENAI_API_KEY", secret)
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
     settings = load()
     assert secret not in repr(settings)
     assert secret not in str(settings)
@@ -102,9 +110,18 @@ def test_keys_masked_in_repr_and_str(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.openai_api_key.get_secret_value() == secret
 
 
+def test_startup_errors_never_echo_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    secret = "test-super-secret-value"
+    monkeypatch.setenv("OPENAI_API_KEY", secret)  # the default fallback's key is missing
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY") as info:
+        load()
+    assert secret not in str(info.value) and secret not in repr(info.value)
+
+
 @pytest.mark.parametrize("level", ["none", "minimal", "low", "medium", "high", "xhigh", "max"])
 def test_all_sdk_effort_levels_accepted(monkeypatch: pytest.MonkeyPatch, level: str) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
     monkeypatch.setenv("LLM_REASONING_EFFORT", level)
     assert load().llm_reasoning_effort == level
 
@@ -113,4 +130,87 @@ def test_invalid_effort_names_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
     monkeypatch.setenv("LLM_REASONING_EFFORT", "extreme")
     with pytest.raises(ValidationError, match="llm_reasoning_effort"):
+        load()
+
+
+def both_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
+
+
+def test_default_chain_falls_back_to_claude_haiku(monkeypatch: pytest.MonkeyPatch) -> None:
+    both_keys(monkeypatch)
+    settings = load()
+    assert settings.llm_fallbacks == "anthropic:claude-haiku-4-5"
+    assert (settings.llm_cooldown_failures, settings.llm_cooldown_seconds) == (3, 30)
+    assert settings.chain == [("openai", "gpt-4o-mini"), ("anthropic", "claude-haiku-4-5")]
+    keys = [settings.key_for(p) for p in ("openai", "anthropic", "replay")]
+    assert keys == ["test-openai", "test-anthropic", ""]
+
+
+def test_chain_parses_comma_separated_provider_model_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    both_keys(monkeypatch)
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("LLM_MODEL", "claude-sonnet-4-5")
+    monkeypatch.setenv(
+        "LLM_FALLBACKS", " openai:gpt-4.1-mini , anthropic:claude-haiku-4-5,replay:replay"
+    )
+    assert load().chain == [
+        ("anthropic", "claude-sonnet-4-5"),
+        ("openai", "gpt-4.1-mini"),
+        ("anthropic", "claude-haiku-4-5"),
+        ("replay", "replay"),
+    ]
+
+
+def test_missing_fallback_key_names_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY") as info:
+        load()
+    assert "LLM_FALLBACKS=none" in str(info.value)  # says how to run without a fallback
+
+
+@pytest.mark.parametrize("value", ["none", "None", " NONE "])
+def test_none_disables_fallback(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", value)
+    assert load().chain == [("openai", "gpt-4o-mini")]
+
+
+def test_empty_init_value_disables_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    assert Settings(_env_file=None, llm_fallbacks="").chain == [("openai", "gpt-4o-mini")]
+
+
+def test_empty_env_value_keeps_the_default_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    both_keys(monkeypatch)
+    monkeypatch.setenv("LLM_FALLBACKS", "")
+    assert load().chain == [("openai", "gpt-4o-mini"), ("anthropic", "claude-haiku-4-5")]
+
+
+@pytest.mark.parametrize("value", ["acme:model-1", "anthropic", "anthropic:", ":gpt-4o-mini", ","])
+def test_unknown_or_malformed_fallback_fails_at_startup(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    both_keys(monkeypatch)
+    monkeypatch.setenv("LLM_FALLBACKS", value)
+    with pytest.raises(ValidationError, match="LLM_FALLBACKS"):
+        load()
+
+
+def test_replay_in_the_chain_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "replay:replay")
+    assert load().chain == [("openai", "gpt-4o-mini"), ("replay", "replay")]
+
+
+@pytest.mark.parametrize(
+    ("var", "value"), [("LLM_COOLDOWN_FAILURES", "0"), ("LLM_COOLDOWN_SECONDS", "-1")]
+)
+def test_invalid_cooldown_rejected(monkeypatch: pytest.MonkeyPatch, var: str, value: str) -> None:
+    both_keys(monkeypatch)
+    monkeypatch.setenv(var, value)
+    with pytest.raises(ValidationError, match=var.lower()):
         load()

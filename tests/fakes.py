@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.config import Provider
 from app.schemas.estimation import EstimationBreakdown, Usage
+from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import LLMResult, StreamEvent, TextDelta
 from tests.factories import breakdown
 
@@ -14,7 +15,8 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class FakeProvider:
-    """Offline LLMProvider: returns a canned breakdown or raises a configured error."""
+    """Offline LLMProvider: returns a canned breakdown or raises a configured error, either before
+    anything is streamed (`error`) or after `stream_error_after_chunks` deltas (`stream_error`)."""
 
     def __init__(
         self,
@@ -22,11 +24,15 @@ class FakeProvider:
         error: Exception | None = None,
         name: Provider = "openai",
         model: str = "fake-model",
+        stream_error_after_chunks: int | None = None,
+        stream_error: Exception | None = None,
     ) -> None:
         self.name = name
         self.model = model
         self.result = result or breakdown()
         self.error = error
+        self.stream_error_after_chunks = stream_error_after_chunks
+        self.stream_error = stream_error
         self.calls: list[dict[str, Any]] = []
         self.closed = False
         self.closed_streams = 0
@@ -69,7 +75,9 @@ class FakeProvider:
         cuts = [len(text) * i // 3 for i in range(4)]
         finished = False
         try:
-            for start, end in pairwise(cuts):
+            for sent, (start, end) in enumerate(pairwise(cuts)):
+                if self.stream_error and sent == self.stream_error_after_chunks:
+                    raise self.stream_error
                 yield TextDelta(text=text[start:end], snapshot=text[:end])
             yield result
             finished = True
@@ -122,3 +130,44 @@ class TickingFakeProvider(SlowFakeProvider):
         finally:
             self.closed_streams += 1
             self.stream_closed.set()
+
+
+class SlowToFailProvider(FakeProvider):
+    """Raises UpstreamUnavailable after `delay` seconds, before any output: a timed-out primary."""
+
+    def __init__(self, delay: float = 0.06, **kwargs: Any) -> None:
+        super().__init__(error=UpstreamUnavailable(), **kwargs)
+        self.delay = delay
+
+    async def generate(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> LLMResult[T]:
+        await asyncio.sleep(self.delay)
+        return await super().generate(system=system, user=user, schema=schema, cache_key=cache_key)
+
+    async def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncGenerator[StreamEvent[T]]:
+        await asyncio.sleep(self.delay)
+        async for event in super().stream(
+            system=system, user=user, schema=schema, cache_key=cache_key
+        ):
+            yield event
+
+
+class SlowToFinishProvider(FakeProvider):
+    """Streams its deltas at once, then takes `delay` seconds before the final result."""
+
+    def __init__(self, delay: float = 0.03, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.delay = delay
+
+    async def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncGenerator[StreamEvent[T]]:
+        async for event in super().stream(
+            system=system, user=user, schema=schema, cache_key=cache_key
+        ):
+            if isinstance(event, LLMResult):
+                await asyncio.sleep(self.delay)
+            yield event

@@ -136,14 +136,16 @@ def create_app(
         return JSONResponse(error_body("invalid_request", "Invalid request.", details=details), 422)
 
     @app.get("/health", tags=["health"])
-    async def health(request: Request) -> dict[str, str]:
+    async def health(request: Request) -> dict[str, str | list[str]]:
         s: Settings = request.app.state.settings
+        (provider, model), *_ = s.chain
         return {
             "status": "ok",
             "version": __version__,
             "environment": s.app_env,
-            "provider": s.llm_provider,
-            "model": s.llm_model,
+            "provider": provider,
+            "model": model,
+            "chain": [f"{p}:{m}" for p, m in s.chain],
         }
 
     return app

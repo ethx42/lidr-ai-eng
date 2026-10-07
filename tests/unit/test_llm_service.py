@@ -5,14 +5,20 @@ import pytest
 
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest
-from app.services.errors import UpstreamUnavailable
+from app.services.errors import (
+    Attempt,
+    InvalidModelOutput,
+    UpstreamRateLimited,
+    UpstreamUnavailable,
+)
 from app.services.llm_service import EstimationService
-from app.services.providers.base import LLMResult, T
+from app.services.providers.base import LLMProvider, LLMResult, T
+from app.services.providers.fallback import Cooldown, FallbackProvider
 from tests.factories import TRANSCRIPT, breakdown, request
 from tests.fakes import FakeProvider
 
 
-def service(provider: FakeProvider, rate: float | None = None) -> EstimationService:
+def service(provider: LLMProvider, rate: float | None = None) -> EstimationService:
     return EstimationService(
         provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=rate
     )
@@ -124,3 +130,60 @@ async def test_response_reports_the_provider_that_served(
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     fields = record.fields  # type: ignore[attr-defined]
     assert (fields["provider"], fields["model"]) == ("anthropic", "claude-haiku-4-5")
+
+
+def logged(caplog: pytest.LogCaptureFixture) -> list[tuple[str, tuple[object, ...]]]:
+    keys = ("provider", "model", "attempt", "fallback", "stream", "prompt_version", "outcome")
+    return [
+        (r.getMessage(), tuple(r.fields.get(k) for k in keys))
+        for r in caplog.records
+        if r.name == "app.llm"
+    ]
+
+
+async def test_a_fallback_logs_one_record_per_attempt(caplog: pytest.LogCaptureFixture) -> None:
+    primary = FakeProvider(error=UpstreamUnavailable(), model="gpt-4o-mini")
+    secondary = FakeProvider(name="anthropic", model="claude-haiku-4-5")
+    with caplog.at_level(logging.INFO):
+        await service(FallbackProvider([primary, secondary], Cooldown())).estimate(request())
+    assert logged(caplog) == [
+        ("llm_fallback", ("openai", "gpt-4o-mini", 1, False, False, "v4", "upstream_unavailable")),
+        ("llm_call", ("anthropic", "claude-haiku-4-5", 2, True, False, "v4", "ok")),
+    ]
+
+
+async def test_an_error_after_a_fallback_logs_the_attempt_that_failed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    primary = FakeProvider(error=UpstreamUnavailable(), model="gpt-4o-mini")
+    secondary = FakeProvider(
+        name="anthropic", model="claude-haiku-4-5", error=InvalidModelOutput(reason="refusal")
+    )
+    router = FallbackProvider([primary, secondary], Cooldown())
+    with caplog.at_level(logging.INFO), pytest.raises(InvalidModelOutput):
+        await service(router).estimate(request())
+    assert logged(caplog)[-1] == (
+        "llm_call",
+        ("anthropic", "claude-haiku-4-5", 2, True, False, "v4", "invalid_model_output"),
+    )
+
+
+async def test_a_failing_fallback_after_a_cooldown_skip_reports_attempt_1(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    primary = FakeProvider(error=UpstreamUnavailable(), model="gpt-4o-mini")
+    secondary = FakeProvider(name="anthropic", model="claude-haiku-4-5")
+    estimator = service(FallbackProvider([primary, secondary], Cooldown(failures=1)))
+    await estimator.estimate(request())  # the primary fails once and cools down
+    secondary.error = UpstreamRateLimited()
+    caplog.clear()
+    with caplog.at_level(logging.INFO), pytest.raises(UpstreamRateLimited) as info:
+        await estimator.estimate(request())
+    assert len(primary.calls) == 1
+    assert info.value.attempt == Attempt("anthropic", "claude-haiku-4-5", 1, fallback=True)
+    assert logged(caplog) == [
+        (
+            "llm_call",
+            ("anthropic", "claude-haiku-4-5", 1, True, False, "v4", "upstream_rate_limited"),
+        ),
+    ]

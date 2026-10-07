@@ -216,7 +216,8 @@ async def main(
 
     if ledger:
         live_budget.ensure_budget(0.10, ledger=ledger)
-    resolved = settings or Settings()
+    # Primary only: a fallback would mix two models' answers into one score.
+    resolved = settings or Settings(llm_fallbacks="")
     provider = provider_factory(resolved)
     service = EstimationService(
         provider=provider,

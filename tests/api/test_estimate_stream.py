@@ -4,7 +4,9 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import StreamEvent, T, TextDelta
+from app.services.providers.fallback import Cooldown, FallbackProvider
 from tests.api.conftest import ClientFactory
 from tests.factories import TRANSCRIPT
 from tests.fakes import FakeProvider
@@ -76,3 +78,39 @@ def test_malformed_partials_never_break_the_stream(make_client: ClientFactory) -
         events = parse_sse(client.post(URL, json={"transcription": TRANSCRIPT}).text)
     names = [e for e, _ in events]
     assert names[-1] == "result" and names.count("result") == 1 and "error" not in names
+
+
+def test_primary_down_before_the_first_token_switches_to_the_fallback(
+    make_client: ClientFactory,
+) -> None:
+    primary = FakeProvider(error=UpstreamUnavailable(), model="gpt-4o-mini")
+    secondary = FakeProvider(name="anthropic", model="claude-haiku-4-5")
+    with make_client(provider=FallbackProvider([primary, secondary], Cooldown())) as client:
+        events = parse_sse(client.post(URL, json={"transcription": TRANSCRIPT}).text)
+    statuses = [data for name, data in events if name == "status"]
+    assert statuses[0] == {"phase": "calling_llm", "provider": "openai", "model": "gpt-4o-mini"}
+    assert statuses[1] == {
+        "phase": "fallback",
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+    }
+    name, result = events[-1]
+    assert name == "result" and (result["provider"], result["model"]) == (
+        "anthropic",
+        "claude-haiku-4-5",
+    )
+    assert (result["metrics"]["fallback_used"], result["metrics"]["attempts"]) == (True, 2)
+
+
+def test_primary_failing_after_tokens_is_an_error_never_a_mixed_answer(
+    make_client: ClientFactory,
+) -> None:
+    primary = FakeProvider(stream_error_after_chunks=1, stream_error=UpstreamUnavailable())
+    secondary = FakeProvider(name="anthropic")
+    with make_client(provider=FallbackProvider([primary, secondary], Cooldown())) as client:
+        events = parse_sse(client.post(URL, json={"transcription": TRANSCRIPT}).text)
+    names = [name for name, _ in events]
+    assert names[-1] == "error" and "result" not in names
+    assert events[-1][1]["code"] == "upstream_unavailable"
+    assert "fallback" not in [data["phase"] for name, data in events if name == "status"]
+    assert secondary.calls == []

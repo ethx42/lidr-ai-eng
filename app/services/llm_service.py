@@ -6,7 +6,7 @@ import time
 from collections.abc import AsyncGenerator
 from contextlib import aclosing
 
-from app.observability import log_llm_call
+from app.observability import log_llm_call, prompt_version_var
 from app.prompts.loader import PromptBundle, build_user_message
 from app.schemas.estimation import (
     CallMetrics,
@@ -15,7 +15,7 @@ from app.schemas.estimation import (
     EstimationBreakdown,
 )
 from app.schemas.stream import PartialEvent, StatusEvent
-from app.services.errors import InvalidModelOutput, LLMError
+from app.services.errors import Attempt, InvalidModelOutput, LLMError
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
 from app.services.pricing import cost_usd
@@ -47,6 +47,7 @@ class EstimationService:
         self.hourly_rate = hourly_rate
         # Provider-side prompt-cache routing key (OpenAI `prompt_cache_key`), not a response cache.
         self.prompt_cache_key = f"estimator-{prompt.version}"
+        self.primary_attempt = Attempt(provider.name, provider.model)
 
     def _log_call(
         self,
@@ -54,12 +55,19 @@ class EstimationService:
         latency_ms: int,
         error: LLMError | None = None,
         *,
+        attempt: Attempt | None = None,
         stream: bool = False,
         ttft_ms: int | None = None,
     ) -> None:
+        """`attempt` names the call that failed or was cancelled; a result names its own."""
+        attempt = (
+            Attempt(result.provider, result.model, result.attempts, result.fallback_used)
+            if result
+            else attempt or self.primary_attempt
+        )
         log_llm_call(
-            provider=result.provider if result else self.provider.name,
-            model=result.model if result else self.provider.model,
+            provider=attempt.provider,
+            model=attempt.model,
             prompt_version=self.prompt.version,
             usage=result.usage if result else None,
             latency_ms=latency_ms,
@@ -69,20 +77,22 @@ class EstimationService:
             stream=stream,
             ttft_ms=ttft_ms,
             cost_usd=cost_usd(result.model, result.usage) if result else None,
-            attempt=result.attempts if result else 1,
-            fallback=result.fallback_used if result else False,
+            attempt=attempt.number,
+            fallback=attempt.fallback,
         )
 
-    def _log_cancelled(self, latency_ms: int, ttft_ms: int | None) -> None:
+    def _log_cancelled(self, attempt: Attempt, latency_ms: int, ttft_ms: int | None) -> None:
         log_llm_call(
-            provider=self.provider.name,
-            model=self.provider.model,
+            provider=attempt.provider,
+            model=attempt.model,
             prompt_version=self.prompt.version,
             usage=None,
             latency_ms=latency_ms,
             outcome="cancelled",
             stream=True,
             ttft_ms=ttft_ms,
+            attempt=attempt.number,
+            fallback=attempt.fallback,
         )
 
     def _respond(
@@ -123,6 +133,7 @@ class EstimationService:
         )
 
     async def estimate(self, request: EstimateRequest) -> EstimateResponse:
+        prompt_version_var.set(self.prompt.version)
         start = time.perf_counter()
         try:
             result = await self.provider.generate(
@@ -132,15 +143,17 @@ class EstimationService:
                 cache_key=self.prompt_cache_key,
             )
         except LLMError as exc:
-            self._log_call(None, _ms_since(start), exc)
+            self._log_call(None, _ms_since(start), exc, attempt=exc.attempt)
             raise
         return self._respond(result, request)
 
     async def estimate_stream(self, request: EstimateRequest) -> AsyncGenerator[StreamItem]:
+        prompt_version_var.set(self.prompt.version)
         user = build_user_message(request.transcription, request.output_language)
         start = time.perf_counter()
         snapshotter = PartialSnapshotter()
         snapshot, ttft_ms, result = "", None, None
+        in_flight = self.primary_attempt
         yield StatusEvent(
             phase="calling_llm", provider=self.provider.name, model=self.provider.model
         )
@@ -161,6 +174,9 @@ class EstimationService:
                             if partial := snapshotter.feed(snapshot):
                                 yield partial
                         case ProviderSwitch():
+                            in_flight = Attempt(
+                                event.provider, event.model, event.attempt, fallback=True
+                            )
                             yield StatusEvent(
                                 phase="fallback", provider=event.provider, model=event.model
                             )
@@ -169,12 +185,14 @@ class EstimationService:
             if result is None:
                 raise InvalidModelOutput(reason="no_final_result")
         except LLMError as exc:
-            self._log_call(None, _ms_since(start), exc, stream=True, ttft_ms=ttft_ms)
+            self._log_call(
+                None, _ms_since(start), exc, attempt=in_flight, stream=True, ttft_ms=ttft_ms
+            )
             raise
         # Disconnect mid-await (CancelledError) or aclose() while parked at a yield (GeneratorExit).
         # Sync logging only: any await here would be cancelled again.
         except (asyncio.CancelledError, GeneratorExit):
-            self._log_cancelled(_ms_since(start), ttft_ms)
+            self._log_cancelled(in_flight, _ms_since(start), ttft_ms)
             raise
         # Built (and logged) before the trailing events: the upstream call is complete, so a client
         # leaving now must still leave exactly one llm_call record.

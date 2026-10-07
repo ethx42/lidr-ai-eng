@@ -190,6 +190,6 @@ async def context(service: ServiceDep, settings: SettingsDep) -> ContextResponse
             )
             for ref in REFERENCE_ESTIMATIONS
         ],
-        chain=[f"{settings.llm_provider}:{settings.llm_model}"],
+        chain=[f"{provider}:{model}" for provider, model in settings.chain],
         max_transcription_chars=settings.max_transcription_chars,
     )
