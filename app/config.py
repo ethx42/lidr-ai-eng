@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Self, TypeGuard, get_args
 from pydantic import BeforeValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-from app.attachments.extractor import AttachmentLimits
+from app.attachments.limits import AttachmentLimits
 
 Provider = Literal["openai", "anthropic", "replay"]
 # Every level the installed SDKs define; which ones a model accepts lives in its profile.
