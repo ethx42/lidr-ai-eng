@@ -146,6 +146,14 @@ test.describe("chat", () => {
     const markdown = await page.evaluate(() => navigator.clipboard.readText());
     expect(markdown.split("\n")[0]).toBe(`## Estimation: ${await projectName(page).textContent()}`);
     expect(markdown).toContain("| ID | Phase | Task |");
+    // Sonner's own CSS animates toasts for 400 ms in 13 px system-ui; they follow the motion and type tokens instead.
+    const toast = await page.locator("[data-sonner-toast]").filter({ hasText: "Estimate copied as markdown" }).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { durations: style.transitionDuration.split(",").map(parseFloat), fontSize: style.fontSize, fontFamily: style.fontFamily, body: getComputedStyle(document.body).fontFamily };
+    });
+    expect(Math.max(...toast.durations), "toast transition duration, in s").toBeLessThanOrEqual(0.15);
+    expect(toast.fontSize).toBe("14px");
+    expect(toast.fontFamily).toBe(toast.body);
     if (MEDIA) {
       await page.screencast.stop();
       saveGif(video);
