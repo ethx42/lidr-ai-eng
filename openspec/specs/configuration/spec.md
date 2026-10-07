@@ -14,6 +14,7 @@ The system SHALL also read these settings, with these defaults:
 - `REDIS_URL` (unset: no response cache) and `CACHE_TTL_SECONDS=86400`: see `response-cache`
 - `REPLAY_CASSETTE_DIR=tests/cassettes` and `REPLAY_DELAY_SCALE=1` (not negative): see the replay provider in `llm-providers`
 - `ALLOWED_HOSTS=localhost,127.0.0.1,ai-service,testserver`: comma-separated host names, without a port, that the API answers (see the host allowlist in `estimation-api`); an empty value keeps the default
+- `PROMPT_VERSION=v2`: the prompt version used when a request names none (see `Prompt version selection` in `estimation-api` and `Prompt versioning` in `prompt-context`)
 
 The provider chain SHALL be the primary (`LLM_PROVIDER` with `LLM_MODEL`, or model `replay` for the replay provider) followed by the `LLM_FALLBACKS` entries. Reasoning effort SHALL accept `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`, and startup SHALL fail with an error naming `LLM_REASONING_EFFORT` for any other value. Temperature and reasoning effort SHALL be applied only when the configured model supports them (see `llm-providers`). The model SHALL be selected by server configuration only, never by API callers.
 
@@ -33,6 +34,10 @@ The provider chain SHALL be the primary (`LLM_PROVIDER` with `LLM_MODEL`, or mod
 - **WHEN** `LLM_FALLBACKS` is set to an empty value
 - **THEN** the chain still ends with `anthropic:claude-haiku-4-5`
 
+#### Scenario: Default prompt version
+- **WHEN** `PROMPT_VERSION` is unset
+- **THEN** requests without a `prompt_version` parameter are rendered from `v2`
+
 #### Scenario: Extended effort level accepted
 - **WHEN** `LLM_REASONING_EFFORT=xhigh`
 - **THEN** the settings load with reasoning effort `xhigh`
@@ -42,7 +47,7 @@ The provider chain SHALL be the primary (`LLM_PROVIDER` with `LLM_MODEL`, or mod
 - **THEN** startup fails with an error naming `LLM_REASONING_EFFORT`
 
 ### Requirement: Fail-fast validation
-The system SHALL refuse to start when `LLM_PROVIDER` is not a supported value, when an `LLM_FALLBACKS` entry is not `provider:model` with a supported provider and a model, when a numeric setting is out of range, when `ALLOWED_HOSTS` lists no host name or an entry with a port, or when the API key of any provider in the chain (primary or fallback) is missing or blank, with an error message naming the missing or invalid variable. The `replay` provider SHALL need no key. For a missing fallback key, the error SHALL also say that `LLM_FALLBACKS=none` disables the fallback.
+The system SHALL refuse to start when `LLM_PROVIDER` is not a supported value, when an `LLM_FALLBACKS` entry is not `provider:model` with a supported provider and a model, when a numeric setting is out of range, when `ALLOWED_HOSTS` lists no host name or an entry with a port, when `PROMPT_VERSION` names no available prompt version, when any available prompt version fails to render with the default choices (`web_saas`, `medium`, `phases_table`), or when the API key of any provider in the chain (primary or fallback) is missing or blank, with an error message naming the missing or invalid variable. The `replay` provider SHALL need no key. For a missing fallback key, the error SHALL also say that `LLM_FALLBACKS=none` disables the fallback.
 
 #### Scenario: Missing key for selected provider
 - **WHEN** `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` is unset
@@ -59,6 +64,14 @@ The system SHALL refuse to start when `LLM_PROVIDER` is not a supported value, w
 #### Scenario: Allowed host with a port
 - **WHEN** `ALLOWED_HOSTS=localhost:8000`
 - **THEN** startup fails with an error naming `ALLOWED_HOSTS`
+
+#### Scenario: Unknown prompt version
+- **WHEN** `PROMPT_VERSION=v999`
+- **THEN** startup fails with an error naming `PROMPT_VERSION` and the available versions
+
+#### Scenario: Broken template
+- **WHEN** a prompt version's user template uses a variable the loader does not pass
+- **THEN** startup fails with an undefined-variable error, before any request is served
 
 #### Scenario: Replay needs no key
 - **WHEN** `LLM_PROVIDER=replay`, `LLM_FALLBACKS=none`, and no API key is set

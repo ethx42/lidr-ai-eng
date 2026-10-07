@@ -26,11 +26,16 @@ When `REDIS_URL` is set, the system SHALL store each successful estimate respons
 - **THEN** every lookup reports the cache status `bypass` and nothing is stored
 
 ### Requirement: Cache key
-The cache key SHALL be a SHA-256 over canonical JSON of: a cache schema version, the prompt version, a SHA-256 of the rendered system prompt and user message kept as separate values, the provider chain, the generation parameters (temperature, reasoning effort, maximum output tokens), the blended hourly rate and weekly capacity hours (both are computed into the stored totals), and the output schema name. A change to any of them SHALL produce a different key.
+The cache key SHALL be a SHA-256 over canonical JSON of: a cache schema version, bumped whenever what an entry stores changes (the response's shape or its rendered markdown), the prompt version, a SHA-256 of the rendered system prompt and user message kept as separate values, the provider chain, the generation parameters (temperature, reasoning effort, maximum output tokens), the blended hourly rate and weekly capacity hours (both are computed into the stored totals), and the output schema name. A change to any of them SHALL produce a different key. The request's project type, detail level, and output format reach the key through the rendered prompt, so every combination of them SHALL have its own key for each prompt version, and a response cached for one combination or version SHALL never be served for another.
 
 #### Scenario: Every input changes the key
 - **WHEN** any one of the prompt version, system prompt, user message, chain and parameters, or output schema name changes
 - **THEN** the cache key changes
+
+#### Scenario: Choices and prompt version change the key
+- **WHEN** two requests carry the same transcription and differ only in project type, detail level, output format, or prompt version
+- **THEN** their cache keys differ
+- **AND** for each prompt version, the 36 combinations of the three choices give 36 distinct keys
 
 #### Scenario: System prompt and user message kept apart
 - **WHEN** two requests split the same text differently between system prompt and user message

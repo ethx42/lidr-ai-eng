@@ -19,12 +19,22 @@ The BFF SHALL answer its proxied routes (`POST /api/estimate/stream` and `GET /a
 - **AND** the AI service is not called
 
 ### Requirement: BFF forwarding
-The BFF SHALL call the AI service at `AI_SERVICE_URL`, read on the server only, on fixed paths and methods: `POST /api/estimate/stream` calls `POST /api/v1/estimate/stream` and `GET /api/context` calls `GET /api/v1/context`, whatever the incoming URL and method, and SHALL NOT follow redirects. It SHALL forward only the request body (POST), the `Content-Type` and `Accept` headers, and an `X-Request-ID` (the client's when it is 1 to 128 characters of letters, digits, `.`, `_`, `:`, or `-`, a generated one otherwise); of the query string, only `refresh=true` SHALL reach the AI service. Responses from the AI service, errors included, SHALL pass through with their status and body under fresh headers; a stream SHALL be sent unbuffered (`Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`).
+The BFF SHALL call the AI service at `AI_SERVICE_URL`, read on the server only, on fixed paths and methods: `POST /api/estimate/stream` calls `POST /api/v1/estimate/stream` and `GET /api/context` calls `GET /api/v1/context`, whatever the incoming URL and method, and SHALL NOT follow redirects. It SHALL forward only the request body (POST), the `Content-Type` and `Accept` headers, and an `X-Request-ID` (the client's when it is 1 to 128 characters of letters, digits, `.`, `_`, `:`, or `-`, a generated one otherwise). It SHALL rebuild the upstream query string from allowlisted parameters only, re-encoding each value, and SHALL forward a parameter only when its value is one the AI service accepts, dropping it otherwise (defence in depth: the AI service validates them too). `POST /api/estimate/stream` SHALL forward `refresh` only when it is `true` and `prompt_version` only when it matches `^v[1-9]\d*$`; the request's project type, detail level, and output format travel in its JSON body and are not forwarded from its query. `GET /api/context` SHALL forward `project_type`, `detail_level`, and `output_format` only when each is one of its enum values (see `estimation-api`), and `prompt_version` under the same pattern. Nothing else of the query string SHALL reach the AI service. Responses from the AI service, errors included, SHALL pass through with their status and body under fresh headers; a stream SHALL be sent unbuffered (`Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`).
 
 #### Scenario: Only allowlisted query and headers forwarded
 - **WHEN** a client posts to `/api/estimate/stream?refresh=true&model=gpt-5` with `Cookie` and `Authorization` headers
 - **THEN** the AI service receives `POST /api/v1/estimate/stream?refresh=true`
 - **AND** the forwarded headers are only `Accept`, `Content-Type`, and `X-Request-ID`
+
+#### Scenario: Prompt version forwarded with the stream
+- **WHEN** a client posts to `/api/estimate/stream?refresh=true&prompt_version=v2&model=gpt-5`
+- **THEN** the AI service receives `POST /api/v1/estimate/stream?prompt_version=v2&refresh=true`
+- **AND** with `prompt_version` `../v1`, `v0`, or an empty value, only `refresh=true` is forwarded
+
+#### Scenario: Context choices forwarded only with valid values
+- **WHEN** a client calls `/api/context?project_type=mobile_app&detail_level=detailed&output_format=narrative&prompt_version=v2&refresh=true&foo=1`
+- **THEN** the AI service receives exactly `project_type=mobile_app`, `detail_level=detailed`, `output_format=narrative`, and `prompt_version=v2`
+- **AND** a call with `project_type=game`, `detail_level=Detailed`, or `prompt_version=V2` forwards none of those parameters
 
 ### Requirement: BFF errors
 The BFF's own errors SHALL use the AI service's error body, `{"error": {"code": <string>, "message": <string>}, "request_id": <string>}`, with the request id also in `X-Request-ID`:

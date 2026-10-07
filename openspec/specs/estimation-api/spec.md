@@ -1,24 +1,33 @@
 # estimation-api Specification
 
 ## Purpose
-Exposes the estimator over HTTP: clients submit a meeting transcription and receive an LLM-generated software estimation, either as one JSON response or as a stream of Server-Sent Events, together with the context the estimator uses, per-call metrics, health, and self-documenting API endpoints.
+Exposes the estimator over HTTP: clients submit a meeting transcription with a project type, detail level and output format, and receive an LLM-generated software estimation, either as one JSON response or as a stream of Server-Sent Events, together with the context the estimator uses, per-call metrics, health, and self-documenting API endpoints.
 
 ## Requirements
 
 ### Requirement: Estimate endpoint
-The system SHALL expose `POST /api/v1/estimate` accepting a JSON body with a required `transcription` string and an optional `output_language` string, and SHALL respond `200` with a JSON body containing:
-- `estimation`: the estimation rendered as markdown
+The system SHALL expose `POST /api/v1/estimate` accepting a JSON body with these fields, and SHALL respond `200` with a JSON body as listed below.
+
+Request body:
+- `transcription` (required): the meeting transcription
+- `project_type` (required): one of `mobile_app`, `web_saas`, `internal_tool`, `data_pipeline`
+- `detail_level` (required): one of `summary`, `medium`, `detailed`
+- `output_format` (required): one of `phases_table`, `line_items`, `narrative`
+- `output_language` (optional): the language of the narrative fields
+
+Response body:
+- `estimation`: the estimation rendered as markdown, in the layout `output_format` names (see `prompt-context`)
 - `breakdown`: the structured estimation (see `prompt-context`) enriched with computed totals
 - `model` and `provider`: the model identifier and provider that served the result, after any fallback (see `llm-providers`)
 - `grounding`: the grounding report (see `prompt-context`)
-- `prompt_version`: the version of the prompt used
+- `prompt_version`: the version of the prompt templates that rendered the prompt (see `Prompt version selection`)
 - `usage`: input, output, cached input, and cache write token counts reported by the provider
 - `metrics`: the call metrics (see `Call metrics`)
 
-The endpoint SHALL accept an optional boolean `refresh` query parameter; `refresh=true` regenerates the estimate instead of reading it from the response cache (see `response-cache`).
+The endpoint SHALL accept an optional boolean `refresh` query parameter; `refresh=true` regenerates the estimate instead of reading it from the response cache (see `response-cache`). It SHALL also accept the optional `prompt_version` query parameter (see `Prompt version selection`).
 
 #### Scenario: Successful estimation
-- **WHEN** a client posts `{"transcription": "<meeting text>"}` to `/api/v1/estimate`
+- **WHEN** a client posts `{"transcription": "<meeting text>", "project_type": "web_saas", "detail_level": "medium", "output_format": "phases_table"}` to `/api/v1/estimate`
 - **THEN** the response status is `200`
 - **AND** the body contains non-empty `estimation`, a `breakdown` with at least one task, and the `grounding`, `model`, `provider`, `prompt_version`, `usage`, and `metrics` fields
 - **AND** `usage` contains `input_tokens`, `output_tokens`, `cached_input_tokens`, and `cache_write_tokens`
@@ -27,12 +36,17 @@ The endpoint SHALL accept an optional boolean `refresh` query parameter; `refres
 - **WHEN** an estimation succeeds
 - **THEN** the body includes `estimation` (string), `model` (string), and `provider` (string) as named in the course brief, with `provider` equal to `"openai"`, `"anthropic"`, or `"replay"` (the offline provider)
 
-#### Scenario: Refresh documented
+#### Scenario: Query parameters documented
 - **WHEN** a client reads the API contract
-- **THEN** both estimate operations declare an optional boolean query parameter `refresh` that defaults to `false`
+- **THEN** both estimate operations declare an optional boolean query parameter `refresh` that defaults to `false` and an optional string query parameter `prompt_version`
+- **AND** the request schema lists `transcription`, `project_type`, `detail_level`, and `output_format` as required, with the enum values above
+
+#### Scenario: Output format picks the markdown layout
+- **WHEN** an estimation is requested with `output_format` `narrative`
+- **THEN** `estimation` describes the tasks as prose, one paragraph per delivery phase, with no task table
 
 ### Requirement: Request validation
-The system SHALL reject invalid estimate requests with `422` before calling any LLM provider, on both estimate endpoints; on the streaming endpoint the check SHALL complete before the stream starts, so the `422` is an ordinary JSON response. A request is invalid when `transcription` is missing, empty or whitespace-only, or longer than the configured maximum length, when unknown fields are present, or when the body is not sent with a JSON content type (`Content-Type: application/json`). The JSON content-type requirement SHALL be stated in the API documentation.
+The system SHALL reject invalid estimate requests with `422` before calling any LLM provider, on both estimate endpoints; on the streaming endpoint the check SHALL complete before the stream starts, so the `422` is an ordinary JSON response. A request is invalid when `transcription` is missing, empty or whitespace-only, or longer than the configured maximum length, when `project_type`, `detail_level`, or `output_format` is missing or not one of its values, when unknown fields are present, or when the body is not sent with a JSON content type (`Content-Type: application/json`). The JSON content-type requirement SHALL be stated in the API documentation.
 
 #### Scenario: Empty transcription
 - **WHEN** a client posts `{"transcription": "   "}`
@@ -43,9 +57,27 @@ The system SHALL reject invalid estimate requests with `422` before calling any 
 - **WHEN** a client posts a transcription longer than the configured maximum length
 - **THEN** the response status is `422`
 
+#### Scenario: Unknown enum value
+- **WHEN** a client posts a valid transcription with `output_format` `"table"`
+- **THEN** the response status is `422` with error code `invalid_request`
+- **AND** no LLM provider call is made
+
 #### Scenario: Missing JSON content type
 - **WHEN** a client posts a valid JSON body with `Content-Type: text/plain`
 - **THEN** the response status is `422` with error code `invalid_request`
+- **AND** no LLM provider call is made
+
+### Requirement: Prompt version selection
+Both estimate endpoints and the context endpoint SHALL accept an optional `prompt_version` query parameter naming one of the available prompt versions (see `prompt-context`); when it is omitted, the `PROMPT_VERSION` setting applies (see `configuration`). Any other value, including a path such as `../v1`, a different letter case such as `V1`, or an empty value, SHALL be rejected with `422` and error code `invalid_request`, with `error.details` locating `["query", "prompt_version"]`, before any template is looked up and before any LLM provider call. On the streaming endpoint the check SHALL complete before the stream starts. Every response, stream `result`, and call log record SHALL carry the version that rendered the prompt.
+
+#### Scenario: Version chosen per request
+- **WHEN** the service runs with `PROMPT_VERSION=v2` and a client posts a valid request to `/api/v1/estimate?prompt_version=v1`
+- **THEN** the prompt is rendered from the `v1` templates and the response's `prompt_version` is `v1`
+- **AND** a request without the parameter is rendered from `v2`
+
+#### Scenario: Unknown or path-like version rejected
+- **WHEN** a client posts a valid request to either estimate endpoint with `prompt_version` `v999`, `../v1`, `v1/../../x`, `V1`, or an empty value
+- **THEN** the response status is `422` with error code `invalid_request` and `error.details[0].loc` equal to `["query", "prompt_version"]`
 - **AND** no LLM provider call is made
 
 ### Requirement: Upstream failure mapping
@@ -122,7 +154,7 @@ The system SHALL answer any unexpected server error, raised before the response 
 - **AND** neither the response nor the log record contains the exception message
 
 ### Requirement: Streaming estimate endpoint
-The system SHALL expose `POST /api/v1/estimate/stream`, which accepts the same body and `refresh` parameter as `POST /api/v1/estimate` and responds `200` with `text/event-stream`. The stream SHALL carry these events, whose payload schemas SHALL be part of the API contract:
+The system SHALL expose `POST /api/v1/estimate/stream`, which accepts the same body and query parameters (`refresh`, `prompt_version`) as `POST /api/v1/estimate` and responds `200` with `text/event-stream`. The stream SHALL carry these events, whose payload schemas SHALL be part of the API contract:
 
 | Event | Data | Rules |
 |---|---|---|
@@ -191,11 +223,24 @@ A response served from the response cache SHALL report the metrics of the lookup
 - **THEN** `metrics.cost_usd` is null
 
 ### Requirement: Context endpoint
-The system SHALL expose `GET /api/v1/context` returning, without calling any LLM provider: `prompt_version`; `system_prompt`, the exact system prompt sent to the provider; `references`, each reference estimation in that prompt with its `size`, `meeting_summary`, and `estimation`; `chain`, the configured providers as `provider:model`, primary first; and `max_transcription_chars`, the configured maximum transcription length.
+The system SHALL expose `GET /api/v1/context` returning, without calling any LLM provider: `prompt_version`, the version it rendered; `available_versions`, every available prompt version in numeric order; `system_prompt`, the exact system prompt an estimate request with the same choices and version would send to the provider; `references`, each reference estimation in that prompt with its `size`, `meeting_summary`, and `estimation`; `chain`, the configured providers as `provider:model`, primary first; and `max_transcription_chars`, the configured maximum transcription length. Because the system prompt depends on the request's choices, the endpoint SHALL accept the optional query parameters `project_type`, `detail_level`, and `output_format` (defaults `web_saas`, `medium`, `phases_table`) and `prompt_version` (see `Prompt version selection`), and SHALL answer an unknown value of any of them with `422` and error code `invalid_request`, with `error.details` locating the parameter.
 
 #### Scenario: Prompt and references exposed
 - **WHEN** a client calls `GET /api/v1/context`
-- **THEN** the body contains the prompt version, a system prompt that includes the reference estimations, three references, and a non-empty chain
+- **THEN** the body contains the prompt version, the available versions, a system prompt that includes the reference estimations, three references, and a non-empty chain
+
+#### Scenario: Prompt rendered for the requested choices
+- **WHEN** a client calls `GET /api/v1/context?project_type=web_saas&detail_level=detailed&output_format=narrative`
+- **THEN** the system prompt contains the per-phase assumptions instruction and does not contain `phases_table`
+
+#### Scenario: Configured version by default
+- **WHEN** the service runs with `PROMPT_VERSION=v2` and a client calls `GET /api/v1/context` without `prompt_version`
+- **THEN** `prompt_version` is `v2` and `available_versions` is `["v1", "v2"]`
+- **AND** with `?prompt_version=v1` the system prompt is rendered from `v1` and `prompt_version` is `v1`
+
+#### Scenario: Unknown parameter value rejected
+- **WHEN** a client calls `GET /api/v1/context` with `output_format=table` or `prompt_version=../v1`
+- **THEN** the response status is `422` with error code `invalid_request`, locating that query parameter
 
 #### Scenario: Chain and limit reported
 - **WHEN** the service runs with a maximum transcription length of 10 and no fallback

@@ -139,7 +139,7 @@ Exactly one terminal event per stream. Keep-alive comments every 15 s. Headers d
 
 ### 4.5 Exact-match cache
 
-- Key: SHA-256 over canonical JSON of `{cache_schema: 1, prompt_version, prompt_sha256 (rendered system + user), chain: ["provider:model", …], params (temperature, effort, max output tokens, blended hourly rate, weekly capacity hours — both are baked into the cached totals), output schema name}`; stored as `estimate:{hex}`.
+- Key: SHA-256 over canonical JSON of `{cache_schema: 2, prompt_version, prompt_sha256 (rendered system + user), chain: ["provider:model", …], params (temperature, effort, max output tokens, blended hourly rate, weekly capacity hours — both are baked into the cached totals), output schema name}`; stored as `estimate:{hex}`. `cache_schema` is bumped whenever what an entry stores changes (session 4's markdown layouts took it from 1 to 2).
 - Value: the `EstimateResponse` JSON. On a hit, `metrics.cache_hit = true`, `cost_usd = 0`, `attempts = 0`.
 - TTL `CACHE_TTL_SECONDS` (86400). `REDIS_URL` unset → `NullCache`.
 - Any Redis error logs `cache_error` and is treated as a miss (get) or ignored (set). Only successful results are stored.
@@ -200,7 +200,7 @@ Brief deliverable branch name: `pre-session-04`. Learning objectives to defend: 
 - `app/prompts/loader.py` exposes `render_estimation_prompt(request, version="v1") -> tuple[str, str]` with `Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True, autoescape=False)`.
 - `app/prompts/estimation/v1/{system,user,examples}.j2`. `system.j2` includes `examples.j2`, which loops over the typed references from `app/context/examples.py` (single source of truth stays typed and tested).
 - **Block order for prompt caching:** static content first (role, rules, references), enum-dependent blocks (`output_format`, `detail_level`) last. A test asserts that two different enum combinations share the same long prefix.
-- `detail_level` and `output_format` change both the instructions (as the brief's tests require) and the markdown layout rendered in code (`phases_table` = phase rollup table, `line_items` = task table, `narrative` = prose per phase).
+- `detail_level` and `output_format` change the instructions (as the brief's tests require). `output_format` also picks the markdown layout rendered in code (`phases_table` = phase rollup table, `line_items` = task table, `narrative` = prose per phase); `detail_level` drives the instructions only (the brief asks for no per-detail layout).
 - Transcript delimiter neutralisation is kept (prompt-injection defence).
 - Endpoints accept `?prompt_version=v1|v2` (422 for unknown versions; omitted → `PROMPT_VERSION` setting); `prompt_rendered` log (§4.6).
 
