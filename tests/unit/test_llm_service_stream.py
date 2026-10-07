@@ -8,8 +8,7 @@ from app.schemas.stream import PartialEvent, StatusEvent
 from app.services.errors import UpstreamUnavailable
 from app.services.llm_service import EstimationService
 from app.services.providers.base import ProviderSwitch, StreamEvent, T
-from tests.conftest import make_service
-from tests.factories import request
+from tests.factories import make_service, request
 from tests.fakes import FakeProvider, SlowFakeProvider
 
 

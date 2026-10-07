@@ -1,15 +1,9 @@
 import pytest
 
-from app.prompts.loader import load_prompt
 from app.services.errors import UpstreamUnavailable
 from app.services.llm_service import EstimationService
+from tests.factories import make_service
 from tests.fakes import FakeProvider, SlowFakeProvider
-
-
-def make_service(provider: FakeProvider) -> EstimationService:
-    return EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
-    )
 
 
 @pytest.fixture

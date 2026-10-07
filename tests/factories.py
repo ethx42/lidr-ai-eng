@@ -1,6 +1,9 @@
 from typing import Any
 
+from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.services.llm_service import EstimationService
+from app.services.providers.base import LLMProvider
 
 TRANSCRIPT = (
     "Client: We need a booking app for our “yoga studio”.\n"
@@ -65,3 +68,9 @@ def breakdown(**overrides: Any) -> EstimationBreakdown:
 
 def request(**overrides: object) -> EstimateRequest:
     return EstimateRequest.model_validate({"transcription": TRANSCRIPT} | overrides)
+
+
+def make_service(provider: LLMProvider) -> EstimationService:
+    return EstimationService(
+        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+    )

@@ -25,6 +25,8 @@ from app.services.streaming import PartialSnapshotter
 
 logger = logging.getLogger(__name__)
 
+StreamItem = StatusEvent | PartialEvent | EstimateResponse
+
 
 def _ms_since(start: float) -> int:
     return round((time.perf_counter() - start) * 1000)
@@ -134,9 +136,7 @@ class EstimationService:
             raise
         return self._respond(result, request)
 
-    async def estimate_stream(
-        self, request: EstimateRequest
-    ) -> AsyncGenerator[StatusEvent | PartialEvent | EstimateResponse]:
+    async def estimate_stream(self, request: EstimateRequest) -> AsyncGenerator[StreamItem]:
         user = build_user_message(request.transcription, request.output_language)
         start = time.perf_counter()
         snapshotter = PartialSnapshotter()

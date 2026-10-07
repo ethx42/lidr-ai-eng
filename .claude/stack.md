@@ -1,6 +1,6 @@
 # Tech stack brief
 
-stack-fingerprint: f152647aca7d
+stack-fingerprint: e40780ccc2fa
 updated: 2026-10-07
 
 How the installed versions are meant to be used today. Read before writing code against them; update when you learn something new (`stack-grounding` skill). Installed versions win over memory and over docs for other versions.
@@ -214,7 +214,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
     - It is detected immediately. The generator gets **`CancelledError`** at its current `await` (not `GeneratorExit`), then `finally` runs.
     - Any further `await` in cleanup raises `CancelledError` again (anyio cancellation is level-triggered). Cleanup that must await (usage logging, Redis write) needs `with anyio.CancelScope(shield=True), anyio.move_on_after(1): ...`.
     - Always re-raise. An `async with client.*.stream(...)` inside the generator closes the upstream by itself.
-    - If cancellation lands while the generator is parked at `yield` (producer blocked on the full buffer), it is finalized later by the loop's async-generator hook *(from source, unverified)*.
+    - If cancellation lands while the generator is parked at `yield` (producer blocked on the full buffer), it is only finalized at garbage collection, outside the request context (verified 2026-10-07; fix in "SSE endpoint in practice" below).
   - **Errors after headers:**
     - Anything raised inside the generator, even `HTTPException` before the first `yield`, ends as **200 with an empty or truncated body**: `/early` returned `200 ''` (verified).
     - Uncaught exceptions surface as `ExceptionGroup`, which TestClient re-raises. Exception handlers don't apply.
@@ -465,6 +465,8 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 ### SSE endpoint in practice (2026-10-07, Task 5)
 - **Typing `aclosing`:** `contextlib.aclosing(x)` needs `x` typed with `aclose()`; mypy strict rejects an `AsyncIterator` (`type-var` error, verified mypy 2.3.1). Streams that callers close are typed `AsyncGenerator[T]` (one parameter is fine: typeshed defaults the send type), including the `LLMProvider.stream` protocol and every implementation (an `AsyncIterator`-annotated implementation no longer satisfies the protocol).
 - **Contract:** `responses={200: {"content": {"text/event-stream": {"schema": {"oneOf": [refs]}}}}}` is deep-merged with FastAPI's default `itemSchema` (generic `data/event/id/retry`), so both appear. openapi-typescript 7.13.0 turns `schema` into a union for the `text/event-stream` content (verified). A body read by a dependency (`Annotated[EstimateRequest, Depends(checked_request)]`) keeps the request body as a plain `$ref` (not embedded) because it is the only body param.
+- **Slow reader + disconnect (verified 2026-10-07, ASGI harness with a stalled `send`):** FastAPI's `_producer` iterates the endpoint generator with a plain `async for` and never closes it. When the client stops reading, the producer parks on `send_stream.send` (buffer 1) with the generator at a `yield`; the disconnect cancels that send, so an `aclosing` *inside* the endpoint never runs and the upstream stays open until `gc.collect()` (its log then has `request_id='-'`). Fix: create the generator in a request-scoped **yield dependency** whose teardown runs `with anyio.move_on_after(1, shield=True): await items.aclose()`. Yield dependencies default to `scope="request"` and are entered on `fastapi_inner_astack` during `solve_dependencies`, before the SSE producer CM is entered on the same stack, so LIFO teardown runs after the producer is cancelled, in the request task (contextvars intact). The same unwind makes FastAPI 0.141.1 end that request with `ExceptionGroup(BrokenResourceError)`: `sse_receive_stream.aclose` runs first and breaks `_keepalive_inserter`'s pending send. It is upstream noise (logged as an unhandled error, client already gone).
+- **anyio 4.15.1:** `move_on_after(delay, shield=False)` / `fail_after` take `shield=` directly (one shielded scope with its own deadline). `anyio` is a direct dependency now (`tests/test_structure.py`).
 - **Disconnect, verified live (uvicorn 0.53, replay provider):** `curl --max-time 1` mid-stream → the service logs `outcome=cancelled` at ~1005 ms. Build and log the final response *before* yielding trailing events (final flush, `validating`): a client that leaves there still leaves exactly one `llm_call` record.
 - **Testing:** `pytest-asyncio` 1.4.0 ships the `unused_tcp_port` fixture; `uvicorn.Server.started` is a plain flag (polling it trips ruff `ASYNC110`, so the line carries a justified `noqa`).
 

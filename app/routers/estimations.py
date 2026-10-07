@@ -1,9 +1,9 @@
 import logging
-from collections.abc import AsyncIterator
-from contextlib import aclosing
+from collections.abc import AsyncGenerator, AsyncIterator
 from functools import cache
 from typing import Annotated, Any
 
+import anyio
 from fastapi import APIRouter, Depends, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.sse import EventSourceResponse, ServerSentEvent
@@ -18,7 +18,7 @@ from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.errors import LLMError
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
-from app.services.llm_service import EstimationService
+from app.services.llm_service import EstimationService, StreamItem
 from app.services.pricing import cost_usd
 from app.services.rendering import render_markdown
 
@@ -58,6 +58,25 @@ def checked_request(body: EstimateRequest, settings: SettingsDep) -> EstimateReq
 
 
 CheckedRequest = Annotated[EstimateRequest, Depends(checked_request)]
+
+
+async def service_stream(
+    body: CheckedRequest, service: ServiceDep
+) -> AsyncIterator[AsyncGenerator[StreamItem]]:
+    """Owns the service stream's lifetime. FastAPI iterates the endpoint generator in a producer
+    task that it cancels but never closes: when a slow reader disconnects, that task is cancelled
+    on a full buffer while both generators sit at a `yield`. This request-scoped teardown runs
+    after that cancellation, in the request's context, so the upstream stream closes (and the
+    call is logged with its request id) now instead of at garbage collection."""
+    items = service.estimate_stream(body)
+    try:
+        yield items
+    finally:
+        with anyio.move_on_after(1, shield=True):  # bounded, and immune to the request's cancel
+            await items.aclose()
+
+
+ServiceStream = Annotated[AsyncGenerator[StreamItem], Depends(service_stream)]
 
 
 @cache
@@ -126,21 +145,17 @@ also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse
         422: error_response("Invalid request (empty, too long, or unknown fields)."),
     },
 )
-async def estimate_stream(
-    body: CheckedRequest, service: ServiceDep
-) -> AsyncIterator[ServerSentEvent]:
+async def estimate_stream(items: ServiceStream) -> AsyncIterator[ServerSentEvent]:
     # Errors after the first byte cannot change the 200 status: they become an `error` event.
     try:
-        # aclosing: closes the service (and the upstream stream) promptly on disconnect.
-        async with aclosing(service.estimate_stream(body)) as items:
-            async for item in items:
-                match item:
-                    case StatusEvent():
-                        yield ServerSentEvent(event="status", data=item)
-                    case PartialEvent():
-                        yield ServerSentEvent(event="partial", data=item, id=str(item.seq))
-                    case EstimateResponse():
-                        yield ServerSentEvent(event="result", data=item)
+        async for item in items:
+            match item:
+                case StatusEvent():
+                    yield ServerSentEvent(event="status", data=item)
+                case PartialEvent():
+                    yield ServerSentEvent(event="partial", data=item, id=str(item.seq))
+                case EstimateResponse():
+                    yield ServerSentEvent(event="result", data=item)
     except LLMError as exc:
         yield ServerSentEvent(
             event="error",

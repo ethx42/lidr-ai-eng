@@ -100,3 +100,25 @@ class SlowFakeProvider(FakeProvider):
         finally:
             self.closed_streams += 1
             self.stream_closed.set()
+
+
+class TickingFakeProvider(SlowFakeProvider):
+    """Streams a changed snapshot every `interval` seconds and never finishes: a long answer."""
+
+    def __init__(self, interval: float = 0.11) -> None:
+        super().__init__()
+        self.interval = interval
+
+    async def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncGenerator[StreamEvent[T]]:
+        self._record(system, user, schema, cache_key)
+        snapshot = self.first_delta
+        try:
+            while True:
+                yield TextDelta(text=snapshot[-1], snapshot=snapshot)
+                await asyncio.sleep(self.interval)
+                snapshot += "o"
+        finally:
+            self.closed_streams += 1
+            self.stream_closed.set()
