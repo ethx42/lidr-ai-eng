@@ -45,11 +45,16 @@ const describe = ({ body, promptVersion }: Run) =>
     .filter(Boolean)
     .join(", ");
 
-// The quotes to mark: every requirement's evidence while it streams, then only those the server grounded.
-const quotesOf = (shown: StreamState): EvidenceQuote[] => {
-  const data = shown.status === "done" ? shown.result.breakdown : shown.status === "idle" ? null : shown.partial;
-  const { ungrounded } = readGrounding(shown.status === "done" ? shown.result.grounding : undefined);
-  return (readEstimate(data).requirements ?? []).flatMap(({ id, evidence }) => (id && evidence && !ungrounded.has(id) ? [{ id, evidence }] : []));
+// The quotes to mark: each complete quote while the estimate streams, then only those the server grounded. Evidence is
+// a requirement's last field, so a snapshot can end inside the newest requirement's quote, and a cut-short quote marks
+// wherever its first letters appear; that requirement waits until a later field (assumptions) starts or the result arrives.
+export const quotesOf = (shown: StreamState): EvidenceQuote[] => {
+  if (shown.status === "idle") return [];
+  const done = shown.status === "done";
+  const { requirements = [], assumptions } = readEstimate(done ? shown.result.breakdown : shown.partial);
+  const { ungrounded } = readGrounding(done ? shown.result.grounding : undefined);
+  const complete = done || assumptions ? requirements : requirements.slice(0, -1);
+  return complete.flatMap(({ id, evidence }) => (id && evidence && !ungrounded.has(id) ? [{ id, evidence }] : []));
 };
 
 // How a run ended, for the announcement made while its estimate is out of sight.

@@ -3,9 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceContextProvider } from "@/components/service-context";
 import { fullResponse } from "@/lib/estimate/fixtures";
+import type { PartialBreakdown, StreamState } from "@/lib/estimate/types";
 import type { Sample } from "@/lib/samples";
 import { stubPointer } from "@/test/pointer";
-import { Workspace } from "./workspace";
+import { Workspace, quotesOf } from "./workspace";
 
 const SAMPLES: Sample[] = [
   { id: "clinic-portal", title: "Clinic portal", description: "Patient portal, medium scope", text: "Sofía: We have three physiotherapy clinics." },
@@ -160,8 +161,10 @@ describe("Workspace", () => {
   it("highlights each grounded quote in the transcript, and the one behind the hovered or focused requirement", async () => {
     const { user, input } = setup();
     await run(user, input);
-    streams[0].push(frame("partial", { seq: 1, breakdown: { requirements: [{ id: "R1", evidence: "patients log in, see their" }] } }));
+    // R1's quote is complete once R2 has started; R2's, cut short, would match R1's sentence ("patients log in")
+    streams[0].push(frame("partial", { seq: 1, breakdown: { requirements: [{ id: "R1", evidence: "patients log in, see their" }, { id: "R2", evidence: "patients" }] } }));
     await waitFor(() => expect(mark("R1")).toHaveTextContent("patients log in, see their")); // marks follow the stream
+    expect(transcriptPane().querySelector('mark[data-req~="R2"]')).toBeNull();
 
     await finish(0);
     expect(runStatus()).toBeEmptyDOMElement(); // the visible estimate announces itself; no second announcement
@@ -480,5 +483,37 @@ describe("Workspace", () => {
     expect(screen.queryByRole("tablist", { name: "Result" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBe(stop);
     expect(stop).toHaveFocus();
+  });
+});
+
+describe("quotesOf", () => {
+  const R1 = { id: "R1", statement: "Log in", evidence: "patients log in, see their upcoming appointments" };
+  const streaming = (partial: PartialBreakdown): StreamState => ({ status: "streaming", phase: "calling_llm", partial, startedAt: 0 });
+
+  // Evidence is a requirement's last field, so a snapshot can end inside the newest one's quote ("Pat" of "Patients…"),
+  // which would mark the first place those letters appear.
+  it("leaves out the newest requirement of a snapshot until a later field starts: its quote may be cut short", () => {
+    const cut = { requirements: [R1, { id: "R2", statement: "Book", evidence: "Pat" }] };
+    expect(quotesOf(streaming(cut))).toEqual([{ id: "R1", evidence: R1.evidence }]);
+    expect(quotesOf(streaming({ requirements: [{ id: "R1", evidence: "pat" }] }))).toEqual([]);
+
+    const closed = { requirements: [R1, { id: "R2", statement: "Book", evidence: "Patients should be able to book" }], assumptions: [] };
+    expect(quotesOf(streaming(closed))).toEqual([
+      { id: "R1", evidence: R1.evidence },
+      { id: "R2", evidence: "Patients should be able to book" },
+    ]);
+  });
+
+  it("keeps a stream that stopped or failed mid-quote from marking the cut-short quote", () => {
+    const requirements = [R1, { id: "R2", evidence: "Pat" }];
+    expect(quotesOf({ status: "cancelled", partial: { requirements } })).toEqual([{ id: "R1", evidence: R1.evidence }]);
+    expect(quotesOf({ status: "error", error: { code: "upstream_unavailable", message: "down", retryable: true }, partial: { requirements } })).toEqual([
+      { id: "R1", evidence: R1.evidence },
+    ]);
+  });
+
+  it("marks every quote the server grounded once the result arrives, and nothing before a run", () => {
+    expect(quotesOf({ status: "done", result: fullResponse }).map(({ id }) => id)).toEqual(["R1", "R2"]); // R3 is ungrounded
+    expect(quotesOf({ status: "idle" })).toEqual([]);
   });
 });
