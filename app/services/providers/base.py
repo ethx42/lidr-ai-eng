@@ -9,10 +9,12 @@ from app.schemas.estimation import Usage
 
 T = TypeVar("T", bound=BaseModel)
 
+ChatRole = Literal["user", "assistant"]
+
 
 @dataclass(frozen=True)
 class ChatMessage:
-    role: Literal["user", "assistant"]
+    role: ChatRole
     content: str
 
 

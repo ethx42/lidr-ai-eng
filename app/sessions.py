@@ -4,6 +4,12 @@ and an in-memory session store.
 Sessions live in process memory: they are lost on restart and not shared across workers (the
 container runs one worker). That is acceptable for this phase; the `SessionStore` protocol is the
 seam for a Redis or Postgres implementation.
+
+Concurrency assumes one event loop and async endpoints: the store is touched only from that loop,
+never from a thread, so it needs no lock of its own, and each session's `asyncio.Lock` serialises
+its turns. Known limitation (accepted): the cap may evict a session while a turn is in flight
+(that takes `max_sessions` creates during one turn); the client still gets its answer, and its
+next turn is a 404, from which the UI recovers by creating a new session.
 """
 
 import asyncio
@@ -12,16 +18,16 @@ import uuid
 from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, Protocol, TypeGuard
+from typing import Protocol, TypeGuard, get_args
 
 from pydantic import BaseModel
 
 from app.schemas.estimation import RESPONSE_CONFIG
-from app.services.providers.base import ChatMessage
+from app.services.providers.base import ChatMessage, ChatRole
 
 
-def is_chat_role(role: str) -> TypeGuard[Literal["user", "assistant"]]:
-    return role in ("user", "assistant")
+def is_chat_role(role: str) -> TypeGuard[ChatRole]:
+    return role in get_args(ChatRole)
 
 
 class ConversationHistory:
@@ -114,6 +120,14 @@ class InMemorySessionStore:
         max_sessions: int,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        settings = {
+            "max_turns": max_turns,
+            "max_history_chars": max_history_chars,
+            "ttl_seconds": ttl_seconds,
+            "max_sessions": max_sessions,
+        }
+        if bad := [name for name, value in settings.items() if value <= 0]:
+            raise ValueError(f"{', '.join(bad)} must be positive")
         self._max_turns = max_turns
         self._max_history_chars = max_history_chars
         self._ttl_seconds = ttl_seconds
