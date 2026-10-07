@@ -133,7 +133,7 @@ def test_breakdown_data_round_trips() -> None:
 
 
 # The LLM-facing contract: a refactor of validators must not change what providers receive.
-SCHEMA_SHA256 = "1e5dd56a894d1e91ade0e7882cdf5fb5720900414365bedf40ebcfaacabd94fc"
+SCHEMA_SHA256 = "e86b24471f015d1b7e429f3ec153bbf4889a19d2a439922644773e467e6a8365"
 
 
 def test_json_schema_unchanged() -> None:

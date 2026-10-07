@@ -206,6 +206,11 @@ export interface components {
              * @description Recommended team composition.
              */
             team: components["schemas"]["TeamMember"][];
+            /**
+             * Technologies
+             * @description Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.
+             */
+            technologies: string[];
             totals: components["schemas"]["Totals"];
         };
         /** ErrorEvent */
@@ -374,6 +379,11 @@ export interface components {
              * @description Recommended team composition.
              */
             team: components["schemas"]["TeamMember"][];
+            /**
+             * Technologies
+             * @description Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.
+             */
+            technologies: string[];
         };
         /** GroundingReport */
         GroundingReport: {
@@ -801,6 +811,9 @@ export interface operations {
                      *             "count": 1,
                      *             "role": "UX/UI designer (part-time)"
                      *           }
+                     *         ],
+                     *         "technologies": [
+                     *           "email"
                      *         ],
                      *         "totals": {
                      *           "duration_weeks_max": 1.5,

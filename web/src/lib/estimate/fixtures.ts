@@ -8,6 +8,7 @@ export const breakdown: Schemas["EstimationBreakdown"] = {
   project_name: "Physiotherapy patient portal",
   summary:
     "A responsive patient portal for three physiotherapy clinics. Patients log in, see and book appointments, download invoices and watch exercise videos. Data comes from the ClinicCloud practice management system.",
+  technologies: ["ClinicCloud"],
   requirements: [
     {
       id: "R1",

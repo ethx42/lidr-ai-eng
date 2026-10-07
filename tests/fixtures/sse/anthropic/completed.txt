@@ -1,5 +1,5 @@
 event: message_start
-data: {"type":"message_start","message":{"model":"claude-haiku-4-5-20251001","id":"msg_fixture","type":"message","role":"assistant","content":[],"container":null,"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":2112,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"},"diagnostics":null}}
+data: {"type":"message_start","message":{"model":"claude-haiku-4-5-20251001","id":"msg_fixture","type":"message","role":"assistant","content":[],"container":null,"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":2187,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"},"diagnostics":null}}
 
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
@@ -23,7 +23,10 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"summary\":\"Build"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" a web page that"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" a web"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" page that"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" allows guests to book"}}
@@ -32,64 +35,88 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" tables"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" at the restaurant."}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" at a restaurant."}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" The page will"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" include a booking"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" include date"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" form with date"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"/"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":", time, and"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"time selection and"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" party size selection"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" guest"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"."}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" count"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"requirements\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" with booking"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" confirmation."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"technologies\":[\""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"HTML\",\"CSS\",\""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"JavaScript\"]"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\"requirements\""}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":":[{\"id"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"R"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"R"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1\",\"statement"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"Guests must"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"statement"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" be"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"Create a page"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" able"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" where"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" to book"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" guests can book a"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" a"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" table at the restaurant"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" table by"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" selecting date"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"evidence"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"We"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" time, and number"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" of guests.\",\""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"evidence\":\"We"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" need a page"}}
@@ -104,97 +131,133 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" restaurant."}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"}"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"}],\"assumptions"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"],\"assumptions\":"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":[{\"id"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[],\"open_"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"A1\",\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"questions\":[\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"statement\":\"Booking"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"What is"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" data"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" the restaurant's se"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" will"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ating capacity and"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" be stored in a"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" table"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" simple backend"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" configuration"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" database"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"?\",\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" without"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"How"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" complex availability"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" logic"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":".\",\"impact"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"if"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_wrong"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"If"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" real"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"-time availability"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" management"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" is required, backend"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" complexity"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" and"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" timeline"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" increase"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" significantly"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":".\"}],\""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"open_questions\":"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[\"What is"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" the maximum"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" party"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" size and"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" how"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" far"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" in advance should guests"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" in advance can"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" be"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" guests"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" able"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" book?\"],\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" to book ("}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"tasks\":[{\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"days"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"id\":\"T1"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"/"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"weeks"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":")?\",\"Do"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" you"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" need integration"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" with an"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" existing reservation system or"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" payment"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" processing?\"]"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\"tasks\":["}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"id\":\"T"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1\",\"phase"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"phase"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"frontend"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"name\":\"Build"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"name"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"Build"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" booking form"}}
@@ -215,28 +278,25 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" interface for"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" guests"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" date"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" to select date,"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" time, and party"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" time, and guest"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" size."}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" count selection with"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" Essential"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" validation.\",\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" for the"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"basis"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" booking experience"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":".\",\"basis\":"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[\""}}
@@ -245,25 +305,31 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"R"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1\"],\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1\"]"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"optimistic_hours"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":8"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"optim"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\"likely_hours"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"istic"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":16"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":8,\"likely"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours\":12"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\"pessimistic"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours\":24"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours\":18"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"},"}}
@@ -275,79 +341,64 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"2\",\"phase\":\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"backend"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"backend\",\"name\":\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"name\":\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Create"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Implement booking logic and"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" booking submission"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" storage"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" endpoint\",\"rationale"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"rationale\":\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"API"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Backend"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" to"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" service"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" receive"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" to validate"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" availability"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" and"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" store"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" reserv"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" booking requests"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ations, and manage"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" in"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" table"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" the"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" assignments based"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" database.\",\"basis"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" on party"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":[\"R1"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" size and"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"],\"optimistic"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" time."}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours\":6"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"basis\":[\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\"likely_hours"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"R1\"],\""}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":10,\"pess"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"optimistic_hours"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"imistic_hours"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":12,\"likely"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours\":24"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":",\"pessimistic"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"_hours\":40"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":16"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"}"}}
@@ -383,52 +434,34 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"Unclear"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" restaurant operations"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" booking availability"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" ("}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" rules and table"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"table"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" sizes"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":", capacity"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":", booking"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" rules"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":")"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" may"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" require"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" r"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ework of"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" availability"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" management"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" logic"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"impact"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" could"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"medium"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" cause"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" r"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ework"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":".\",\"impact\":\""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"medium"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"mit"}}
@@ -440,13 +473,19 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ify table"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" configuration"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" capacity"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" and booking"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" policies"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" availability windows, and"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" o"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"verbooking policy"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" before"}}
@@ -458,10 +497,10 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" starts"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\"}],\"confidence"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":".\"}],\""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\":\"low"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"confidence\":\"low"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"\",\"confidence_rat"}}
@@ -479,43 +518,40 @@ event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" provided;"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" missing"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" unclear"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" information"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" on"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" about system"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" backend"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" complexity,"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" availability"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" management"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":", payment"}}
 
 event: content_block_delta
 data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" integration"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":", and confirmation"}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" payment"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":","}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" notifications"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":", and restaurant"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"-specific business"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" rules.\"}"}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" flow.\"}"}}
 
 event: content_block_stop
 data: {"type":"content_block_stop","index":0}
 
 event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null,"container":null},"usage":{"input_tokens":2112,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":388}}
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null,"container":null},"usage":{"input_tokens":2187,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":409}}
 
 event: message_stop
 data: {"type":"message_stop"}

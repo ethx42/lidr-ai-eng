@@ -22,7 +22,7 @@ from typing import Protocol, TypeGuard, get_args
 
 from pydantic import BaseModel
 
-from app.schemas.estimation import RESPONSE_CONFIG
+from app.schemas.estimation import RESPONSE_CONFIG, EstimationBreakdown
 from app.services.providers.base import ChatMessage, ChatRole
 
 
@@ -90,6 +90,37 @@ class ProjectMetadata(BaseModel):
 
     def is_empty(self) -> bool:
         return self == ProjectMetadata()
+
+
+MAX_TECHNOLOGIES = 30
+
+
+def merge_metadata(
+    current: ProjectMetadata, breakdown: EstimationBreakdown
+) -> tuple[ProjectMetadata, list[str]]:
+    """Fold one answer into the known facts, in code: a blank answer never erases a fact.
+
+    Latest non-blank name and summary win; the team size is the sum of the latest team; the
+    technologies are a case-insensitive union that keeps the first spelling, capped. Returns the
+    merged metadata and the names of the fields that changed.
+    """
+    spellings: dict[str, str] = {}
+    for name in (*current.mentioned_technologies, *(t.strip() for t in breakdown.technologies)):
+        if name:
+            spellings.setdefault(name.casefold(), name)
+    merged = ProjectMetadata(
+        project_name=breakdown.project_name.strip() or current.project_name,
+        assumed_team_size=sum(member.count for member in breakdown.team)
+        or current.assumed_team_size,
+        mentioned_technologies=list(spellings.values())[:MAX_TECHNOLOGIES],
+        agreed_scope=breakdown.summary.strip() or current.agreed_scope,
+    )
+    changed = [
+        field
+        for field in ProjectMetadata.model_fields
+        if getattr(merged, field) != getattr(current, field)
+    ]
+    return merged, changed
 
 
 @dataclass

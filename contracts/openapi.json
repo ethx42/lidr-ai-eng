@@ -214,6 +214,14 @@
             "title": "Team",
             "type": "array"
           },
+          "technologies": {
+            "description": "Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Technologies",
+            "type": "array"
+          },
           "totals": {
             "$ref": "#/components/schemas/Totals"
           }
@@ -221,6 +229,7 @@
         "required": [
           "project_name",
           "summary",
+          "technologies",
           "requirements",
           "assumptions",
           "open_questions",
@@ -517,11 +526,20 @@
             },
             "title": "Team",
             "type": "array"
+          },
+          "technologies": {
+            "description": "Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Technologies",
+            "type": "array"
           }
         },
         "required": [
           "project_name",
           "summary",
+          "technologies",
           "requirements",
           "assumptions",
           "open_questions",
@@ -1221,6 +1239,9 @@
                         "count": 1,
                         "role": "UX/UI designer (part-time)"
                       }
+                    ],
+                    "technologies": [
+                      "email"
                     ],
                     "totals": {
                       "duration_weeks_max": 1.5,

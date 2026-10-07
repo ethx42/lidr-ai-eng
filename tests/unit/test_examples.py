@@ -32,6 +32,12 @@ def test_reference_follows_prompt_rules(ref: ReferenceEstimation) -> None:
     assert ref.estimation.open_questions
 
 
+@pytest.mark.parametrize("ref", REFERENCE_ESTIMATIONS, ids=lambda r: r.size)
+def test_reference_technologies_are_named_as_written(ref: ReferenceEstimation) -> None:
+    assert ref.estimation.technologies
+    assert [t for t in ref.estimation.technologies if t not in ref.meeting_summary] == []
+
+
 def test_sizes_are_ordered() -> None:
     totals = {
         r.size: compute_totals(

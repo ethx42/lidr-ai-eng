@@ -17,3 +17,10 @@
 {"ts": "2026-10-07T16:33:51+00:00", "command": "record-cassettes", "cost_usd": 0.00144}
 {"ts": "2026-10-07T16:34:02+00:00", "command": "record-cassettes", "cost_usd": 0.001308}
 {"ts": "2026-10-07T16:34:13+00:00", "command": "record-cassettes", "cost_usd": 0.001107}
+{"ts": "2026-10-07T21:32:11+00:00", "command": "record-sse-fixture", "cost_usd": 0.000328}
+{"ts": "2026-10-07T21:32:32+00:00", "command": "record-sse-fixture", "cost_usd": 0.006187}
+{"ts": "2026-10-07T21:33:18+00:00", "command": "record-sse-fixture", "cost_usd": 0.004232}
+{"ts": "2026-10-07T21:33:43+00:00", "command": "record-cassettes", "cost_usd": 0.001875}
+{"ts": "2026-10-07T21:33:54+00:00", "command": "record-cassettes", "cost_usd": 0.001276}
+{"ts": "2026-10-07T21:34:03+00:00", "command": "record-cassettes", "cost_usd": 0.0012}
+{"ts": "2026-10-07T21:35:50+00:00", "command": "eval", "cost_usd": 0.006395}

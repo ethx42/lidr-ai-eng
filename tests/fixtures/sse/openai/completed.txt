@@ -1,8 +1,8 @@
 event: response.created
-data: {"type":"response.created","response":{"id":"resp_fixture","object":"response","created_at":1791354908,"status":"in_progress","access_programs":null,"background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":"You estimate software projects from meeting transcripts. Keep the answer minimal: one requirement, no assumptions, one open question, two tasks, one team member, one risk.","max_output_tokens":800,"max_tool_calls":null,"model":"gpt-4o-mini-2024-07-18","moderation":null,"output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":"record-sse-fixture","prompt_cache_retention":"in_memory","reasoning":{"context":null,"effort":null,"summary":null},"safety_identifier":null,"service_tier":"auto","store":false,"temperature":0.2,"text":{"format":{"type":"json_schema","description":null,"name":"EstimationBreakdown","schema":{"$defs":{"Assumption":{"properties":{"id":{"description":"Identifier A1, A2, ...","title":"Id","type":"string"},"statement":{"description":"Something not stated in the transcript that we assume.","title":"Statement","type":"string"},"impact_if_wrong":{"description":"How the estimate changes if the assumption fails.","title":"Impact If Wrong","type":"string"}},"required":["id","statement","impact_if_wrong"],"title":"Assumption","type":"object","additionalProperties":false},"Requirement":{"properties":{"id":{"description":"Identifier R1, R2, ... in order of appearance.","title":"Id","type":"string"},"statement":{"description":"What the client needs, in the output language.","title":"Statement","type":"string"},"evidence":{"description":"Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.","title":"Evidence","type":"string"}},"required":["id","statement","evidence"],"title":"Requirement","type":"object","additionalProperties":false},"Risk":{"properties":{"description":{"description":"What could go wrong.","title":"Description","type":"string"},"impact":{"description":"Impact on schedule or cost.","enum":["low","medium","high"],"title":"Impact","type":"string"},"mitigation":{"description":"How to reduce or handle the risk.","title":"Mitigation","type":"string"}},"required":["description","impact","mitigation"],"title":"Risk","type":"object","additionalProperties":false},"Task":{"properties":{"id":{"description":"Identifier T1, T2, ...","title":"Id","type":"string"},"phase":{"description":"Delivery phase this task belongs to.","enum":["discovery","ux_ui","backend","frontend","integrations","qa","devops","project_management"],"title":"Phase","type":"string"},"name":{"description":"Short task name.","title":"Name","type":"string"},"rationale":{"description":"Why this task is needed and what drives its size.","title":"Rationale","type":"string"},"basis":{"description":"Requirement and/or assumption identifiers (R*, A*) this task rests on.","items":{"type":"string"},"title":"Basis","type":"array"},"optimistic_hours":{"description":"Best-case effort in hours.","title":"Optimistic Hours","type":"number"},"likely_hours":{"description":"Most likely effort in hours.","title":"Likely Hours","type":"number"},"pessimistic_hours":{"description":"Worst-case effort in hours.","title":"Pessimistic Hours","type":"number"}},"required":["id","phase","name","rationale","basis","optimistic_hours","likely_hours","pessimistic_hours"],"title":"Task","type":"object","additionalProperties":false},"TeamMember":{"properties":{"role":{"description":"Role name, e.g. Backend developer.","title":"Role","type":"string"},"count":{"description":"Number of people in this role.","title":"Count","type":"integer"}},"required":["role","count"],"title":"TeamMember","type":"object","additionalProperties":false}},"properties":{"project_name":{"description":"Short project name.","title":"Project Name","type":"string"},"summary":{"description":"Two to four sentences describing the project scope.","title":"Summary","type":"string"},"requirements":{"description":"Requirements explicitly stated in the transcript, each with verbatim evidence.","items":{"$ref":"#/$defs/Requirement"},"title":"Requirements","type":"array"},"assumptions":{"description":"Gaps filled with explicit assumptions instead of invented scope.","items":{"$ref":"#/$defs/Assumption"},"title":"Assumptions","type":"array"},"open_questions":{"description":"Questions to ask the client before committing.","items":{"type":"string"},"title":"Open Questions","type":"array"},"tasks":{"description":"Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.","items":{"$ref":"#/$defs/Task"},"title":"Tasks","type":"array"},"team":{"description":"Recommended team composition.","items":{"$ref":"#/$defs/TeamMember"},"title":"Team","type":"array"},"risks":{"description":"Main delivery risks.","items":{"$ref":"#/$defs/Risk"},"title":"Risks","type":"array"},"confidence":{"description":"Confidence in this estimate; low for vague input.","enum":["low","medium","high"],"title":"Confidence","type":"string"},"confidence_rationale":{"description":"Why this confidence level.","title":"Confidence Rationale","type":"string"}},"required":["project_name","summary","requirements","assumptions","open_questions","tasks","team","risks","confidence","confidence_rationale"],"title":"EstimationBreakdown","type":"object","additionalProperties":false},"strict":true},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":0}
+data: {"type":"response.created","response":{"id":"resp_fixture","object":"response","created_at":1791408727,"status":"in_progress","access_programs":null,"background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":"You estimate software projects from meeting transcripts. Keep the answer minimal: one requirement, no assumptions, one open question, two tasks, one team member, one risk.","max_output_tokens":800,"max_tool_calls":null,"model":"gpt-4o-mini-2024-07-18","moderation":null,"output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":"record-sse-fixture","prompt_cache_retention":"in_memory","reasoning":{"context":null,"effort":null,"summary":null},"safety_identifier":null,"service_tier":"auto","store":false,"temperature":0.2,"text":{"format":{"type":"json_schema","description":null,"name":"EstimationBreakdown","schema":{"$defs":{"Assumption":{"properties":{"id":{"description":"Identifier A1, A2, ...","title":"Id","type":"string"},"statement":{"description":"Something not stated in the transcript that we assume.","title":"Statement","type":"string"},"impact_if_wrong":{"description":"How the estimate changes if the assumption fails.","title":"Impact If Wrong","type":"string"}},"required":["id","statement","impact_if_wrong"],"title":"Assumption","type":"object","additionalProperties":false},"Requirement":{"properties":{"id":{"description":"Identifier R1, R2, ... in order of appearance.","title":"Id","type":"string"},"statement":{"description":"What the client needs, in the output language.","title":"Statement","type":"string"},"evidence":{"description":"Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.","title":"Evidence","type":"string"}},"required":["id","statement","evidence"],"title":"Requirement","type":"object","additionalProperties":false},"Risk":{"properties":{"description":{"description":"What could go wrong.","title":"Description","type":"string"},"impact":{"description":"Impact on schedule or cost.","enum":["low","medium","high"],"title":"Impact","type":"string"},"mitigation":{"description":"How to reduce or handle the risk.","title":"Mitigation","type":"string"}},"required":["description","impact","mitigation"],"title":"Risk","type":"object","additionalProperties":false},"Task":{"properties":{"id":{"description":"Identifier T1, T2, ...","title":"Id","type":"string"},"phase":{"description":"Delivery phase this task belongs to.","enum":["discovery","ux_ui","backend","frontend","integrations","qa","devops","project_management"],"title":"Phase","type":"string"},"name":{"description":"Short task name.","title":"Name","type":"string"},"rationale":{"description":"Why this task is needed and what drives its size.","title":"Rationale","type":"string"},"basis":{"description":"Requirement and/or assumption identifiers (R*, A*) this task rests on.","items":{"type":"string"},"title":"Basis","type":"array"},"optimistic_hours":{"description":"Best-case effort in hours.","title":"Optimistic Hours","type":"number"},"likely_hours":{"description":"Most likely effort in hours.","title":"Likely Hours","type":"number"},"pessimistic_hours":{"description":"Worst-case effort in hours.","title":"Pessimistic Hours","type":"number"}},"required":["id","phase","name","rationale","basis","optimistic_hours","likely_hours","pessimistic_hours"],"title":"Task","type":"object","additionalProperties":false},"TeamMember":{"properties":{"role":{"description":"Role name, e.g. Backend developer.","title":"Role","type":"string"},"count":{"description":"Number of people in this role.","title":"Count","type":"integer"}},"required":["role","count"],"title":"TeamMember","type":"object","additionalProperties":false}},"properties":{"project_name":{"description":"Short project name.","title":"Project Name","type":"string"},"summary":{"description":"Two to four sentences describing the project scope.","title":"Summary","type":"string"},"technologies":{"description":"Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.","items":{"type":"string"},"title":"Technologies","type":"array"},"requirements":{"description":"Requirements explicitly stated in the transcript, each with verbatim evidence.","items":{"$ref":"#/$defs/Requirement"},"title":"Requirements","type":"array"},"assumptions":{"description":"Gaps filled with explicit assumptions instead of invented scope.","items":{"$ref":"#/$defs/Assumption"},"title":"Assumptions","type":"array"},"open_questions":{"description":"Questions to ask the client before committing.","items":{"type":"string"},"title":"Open Questions","type":"array"},"tasks":{"description":"Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.","items":{"$ref":"#/$defs/Task"},"title":"Tasks","type":"array"},"team":{"description":"Recommended team composition.","items":{"$ref":"#/$defs/TeamMember"},"title":"Team","type":"array"},"risks":{"description":"Main delivery risks.","items":{"$ref":"#/$defs/Risk"},"title":"Risks","type":"array"},"confidence":{"description":"Confidence in this estimate; low for vague input.","enum":["low","medium","high"],"title":"Confidence","type":"string"},"confidence_rationale":{"description":"Why this confidence level.","title":"Confidence Rationale","type":"string"}},"required":["project_name","summary","technologies","requirements","assumptions","open_questions","tasks","team","risks","confidence","confidence_rationale"],"title":"EstimationBreakdown","type":"object","additionalProperties":false},"strict":true},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":0}
 
 event: response.in_progress
-data: {"type":"response.in_progress","response":{"id":"resp_fixture","object":"response","created_at":1791354908,"status":"in_progress","access_programs":null,"background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":"You estimate software projects from meeting transcripts. Keep the answer minimal: one requirement, no assumptions, one open question, two tasks, one team member, one risk.","max_output_tokens":800,"max_tool_calls":null,"model":"gpt-4o-mini-2024-07-18","moderation":null,"output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":"record-sse-fixture","prompt_cache_retention":"in_memory","reasoning":{"context":null,"effort":null,"summary":null},"safety_identifier":null,"service_tier":"auto","store":false,"temperature":0.2,"text":{"format":{"type":"json_schema","description":null,"name":"EstimationBreakdown","schema":{"$defs":{"Assumption":{"properties":{"id":{"description":"Identifier A1, A2, ...","title":"Id","type":"string"},"statement":{"description":"Something not stated in the transcript that we assume.","title":"Statement","type":"string"},"impact_if_wrong":{"description":"How the estimate changes if the assumption fails.","title":"Impact If Wrong","type":"string"}},"required":["id","statement","impact_if_wrong"],"title":"Assumption","type":"object","additionalProperties":false},"Requirement":{"properties":{"id":{"description":"Identifier R1, R2, ... in order of appearance.","title":"Id","type":"string"},"statement":{"description":"What the client needs, in the output language.","title":"Statement","type":"string"},"evidence":{"description":"Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.","title":"Evidence","type":"string"}},"required":["id","statement","evidence"],"title":"Requirement","type":"object","additionalProperties":false},"Risk":{"properties":{"description":{"description":"What could go wrong.","title":"Description","type":"string"},"impact":{"description":"Impact on schedule or cost.","enum":["low","medium","high"],"title":"Impact","type":"string"},"mitigation":{"description":"How to reduce or handle the risk.","title":"Mitigation","type":"string"}},"required":["description","impact","mitigation"],"title":"Risk","type":"object","additionalProperties":false},"Task":{"properties":{"id":{"description":"Identifier T1, T2, ...","title":"Id","type":"string"},"phase":{"description":"Delivery phase this task belongs to.","enum":["discovery","ux_ui","backend","frontend","integrations","qa","devops","project_management"],"title":"Phase","type":"string"},"name":{"description":"Short task name.","title":"Name","type":"string"},"rationale":{"description":"Why this task is needed and what drives its size.","title":"Rationale","type":"string"},"basis":{"description":"Requirement and/or assumption identifiers (R*, A*) this task rests on.","items":{"type":"string"},"title":"Basis","type":"array"},"optimistic_hours":{"description":"Best-case effort in hours.","title":"Optimistic Hours","type":"number"},"likely_hours":{"description":"Most likely effort in hours.","title":"Likely Hours","type":"number"},"pessimistic_hours":{"description":"Worst-case effort in hours.","title":"Pessimistic Hours","type":"number"}},"required":["id","phase","name","rationale","basis","optimistic_hours","likely_hours","pessimistic_hours"],"title":"Task","type":"object","additionalProperties":false},"TeamMember":{"properties":{"role":{"description":"Role name, e.g. Backend developer.","title":"Role","type":"string"},"count":{"description":"Number of people in this role.","title":"Count","type":"integer"}},"required":["role","count"],"title":"TeamMember","type":"object","additionalProperties":false}},"properties":{"project_name":{"description":"Short project name.","title":"Project Name","type":"string"},"summary":{"description":"Two to four sentences describing the project scope.","title":"Summary","type":"string"},"requirements":{"description":"Requirements explicitly stated in the transcript, each with verbatim evidence.","items":{"$ref":"#/$defs/Requirement"},"title":"Requirements","type":"array"},"assumptions":{"description":"Gaps filled with explicit assumptions instead of invented scope.","items":{"$ref":"#/$defs/Assumption"},"title":"Assumptions","type":"array"},"open_questions":{"description":"Questions to ask the client before committing.","items":{"type":"string"},"title":"Open Questions","type":"array"},"tasks":{"description":"Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.","items":{"$ref":"#/$defs/Task"},"title":"Tasks","type":"array"},"team":{"description":"Recommended team composition.","items":{"$ref":"#/$defs/TeamMember"},"title":"Team","type":"array"},"risks":{"description":"Main delivery risks.","items":{"$ref":"#/$defs/Risk"},"title":"Risks","type":"array"},"confidence":{"description":"Confidence in this estimate; low for vague input.","enum":["low","medium","high"],"title":"Confidence","type":"string"},"confidence_rationale":{"description":"Why this confidence level.","title":"Confidence Rationale","type":"string"}},"required":["project_name","summary","requirements","assumptions","open_questions","tasks","team","risks","confidence","confidence_rationale"],"title":"EstimationBreakdown","type":"object","additionalProperties":false},"strict":true},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":1}
+data: {"type":"response.in_progress","response":{"id":"resp_fixture","object":"response","created_at":1791408727,"status":"in_progress","access_programs":null,"background":false,"completed_at":null,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":"You estimate software projects from meeting transcripts. Keep the answer minimal: one requirement, no assumptions, one open question, two tasks, one team member, one risk.","max_output_tokens":800,"max_tool_calls":null,"model":"gpt-4o-mini-2024-07-18","moderation":null,"output":[],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":"record-sse-fixture","prompt_cache_retention":"in_memory","reasoning":{"context":null,"effort":null,"summary":null},"safety_identifier":null,"service_tier":"auto","store":false,"temperature":0.2,"text":{"format":{"type":"json_schema","description":null,"name":"EstimationBreakdown","schema":{"$defs":{"Assumption":{"properties":{"id":{"description":"Identifier A1, A2, ...","title":"Id","type":"string"},"statement":{"description":"Something not stated in the transcript that we assume.","title":"Statement","type":"string"},"impact_if_wrong":{"description":"How the estimate changes if the assumption fails.","title":"Impact If Wrong","type":"string"}},"required":["id","statement","impact_if_wrong"],"title":"Assumption","type":"object","additionalProperties":false},"Requirement":{"properties":{"id":{"description":"Identifier R1, R2, ... in order of appearance.","title":"Id","type":"string"},"statement":{"description":"What the client needs, in the output language.","title":"Statement","type":"string"},"evidence":{"description":"Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.","title":"Evidence","type":"string"}},"required":["id","statement","evidence"],"title":"Requirement","type":"object","additionalProperties":false},"Risk":{"properties":{"description":{"description":"What could go wrong.","title":"Description","type":"string"},"impact":{"description":"Impact on schedule or cost.","enum":["low","medium","high"],"title":"Impact","type":"string"},"mitigation":{"description":"How to reduce or handle the risk.","title":"Mitigation","type":"string"}},"required":["description","impact","mitigation"],"title":"Risk","type":"object","additionalProperties":false},"Task":{"properties":{"id":{"description":"Identifier T1, T2, ...","title":"Id","type":"string"},"phase":{"description":"Delivery phase this task belongs to.","enum":["discovery","ux_ui","backend","frontend","integrations","qa","devops","project_management"],"title":"Phase","type":"string"},"name":{"description":"Short task name.","title":"Name","type":"string"},"rationale":{"description":"Why this task is needed and what drives its size.","title":"Rationale","type":"string"},"basis":{"description":"Requirement and/or assumption identifiers (R*, A*) this task rests on.","items":{"type":"string"},"title":"Basis","type":"array"},"optimistic_hours":{"description":"Best-case effort in hours.","title":"Optimistic Hours","type":"number"},"likely_hours":{"description":"Most likely effort in hours.","title":"Likely Hours","type":"number"},"pessimistic_hours":{"description":"Worst-case effort in hours.","title":"Pessimistic Hours","type":"number"}},"required":["id","phase","name","rationale","basis","optimistic_hours","likely_hours","pessimistic_hours"],"title":"Task","type":"object","additionalProperties":false},"TeamMember":{"properties":{"role":{"description":"Role name, e.g. Backend developer.","title":"Role","type":"string"},"count":{"description":"Number of people in this role.","title":"Count","type":"integer"}},"required":["role","count"],"title":"TeamMember","type":"object","additionalProperties":false}},"properties":{"project_name":{"description":"Short project name.","title":"Project Name","type":"string"},"summary":{"description":"Two to four sentences describing the project scope.","title":"Summary","type":"string"},"technologies":{"description":"Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.","items":{"type":"string"},"title":"Technologies","type":"array"},"requirements":{"description":"Requirements explicitly stated in the transcript, each with verbatim evidence.","items":{"$ref":"#/$defs/Requirement"},"title":"Requirements","type":"array"},"assumptions":{"description":"Gaps filled with explicit assumptions instead of invented scope.","items":{"$ref":"#/$defs/Assumption"},"title":"Assumptions","type":"array"},"open_questions":{"description":"Questions to ask the client before committing.","items":{"type":"string"},"title":"Open Questions","type":"array"},"tasks":{"description":"Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.","items":{"$ref":"#/$defs/Task"},"title":"Tasks","type":"array"},"team":{"description":"Recommended team composition.","items":{"$ref":"#/$defs/TeamMember"},"title":"Team","type":"array"},"risks":{"description":"Main delivery risks.","items":{"$ref":"#/$defs/Risk"},"title":"Risks","type":"array"},"confidence":{"description":"Confidence in this estimate; low for vague input.","enum":["low","medium","high"],"title":"Confidence","type":"string"},"confidence_rationale":{"description":"Why this confidence level.","title":"Confidence Rationale","type":"string"}},"required":["project_name","summary","technologies","requirements","assumptions","open_questions","tasks","team","risks","confidence","confidence_rationale"],"title":"EstimationBreakdown","type":"object","additionalProperties":false},"strict":true},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":1}
 
 event: response.output_item.added
 data: {"type":"response.output_item.added","item":{"id":"msg_fixture","type":"message","status":"in_progress","content":[],"role":"assistant"},"output_index":0,"sequence_number":2}
@@ -80,307 +80,307 @@ event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":" restaurant","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":26}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":27}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":27}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" The","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":28}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" ensuring","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":28}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":29}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":29}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" should","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":30}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" user","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":30}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" be","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":31}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"-friendly","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":31}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" user","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":32}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" interface","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":32}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"-friendly","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":33}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" and","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":33}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" and","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":34}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" seamless","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":34}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" integrate","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":35}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":35}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" with","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":36}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" process","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":36}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":37}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":37}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" restaurant","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":38}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"techn","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":38}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"'s","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":39}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ologies","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":39}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" existing","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":40}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[]","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":40}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" system","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":41}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":41}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":42}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"requirements","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":42}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"requirements","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":43}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":43}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":44}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":44}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":45}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"id","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":45}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"id","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":46}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":46}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":47}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"R","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":47}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"R","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":48}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":48}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":49}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":49}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":50}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"statement","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":50}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"statement","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":51}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":51}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":52}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"A","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":52}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"A","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":53}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":53}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":54}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" where","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":54}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" where","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":55}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" guests","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":55}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" guests","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":56}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" can","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":56}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" can","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":57}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" book","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":57}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" book","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":58}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":58}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":59}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":59}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":60}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" at","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":60}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" at","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":61}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":61}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":62}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" restaurant","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":62}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" restaurant","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":63}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":63}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":64}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"e","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":64}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"e","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":65}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"vidence","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":65}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"vidence","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":66}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":66}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":67}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"We","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":67}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"We","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":68}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" need","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":68}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" need","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":69}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":69}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":70}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":70}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":71}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" where","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":71}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" where","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":72}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" guests","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":72}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" guests","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":73}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" book","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":73}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" book","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":74}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":74}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":75}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":75}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":76}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" at","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":76}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" at","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":77}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" our","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":77}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" our","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":78}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" restaurant","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":78}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" restaurant","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":79}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":79}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":80}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":80}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":81}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":81}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":82}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ass","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":82}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ass","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":83}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"um","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":83}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"um","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":84}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ptions","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":84}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ptions","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":85}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[]","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":85}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[]","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":86}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":86}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":87}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"open","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":87}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"open","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":88}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_questions","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":88}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_questions","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":89}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":89}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":90}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"What","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":90}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"What","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":91}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" specific","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":91}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" specific","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":92}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" features","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":92}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" features","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":93}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" do","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":93}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" do","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":94}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" you","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":94}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" you","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":95}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" want","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":95}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" want","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":96}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" on","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":96}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" on","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":97}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":97}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":98}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":98}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":99}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":99}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":100}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" (","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":100}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" (","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":101}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"e","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":101}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"e","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":102}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".g","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":102}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".g","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":103}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".,","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":103}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".,","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":104}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" date","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":104}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" date","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":105}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" selection","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":105}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" selection","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":106}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":106}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":107}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" time","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":107}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" time","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":108}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" slots","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":108}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" slots","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":109}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":109}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":110}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" number","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":110}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" number","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":111}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" of","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":111}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" of","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":112}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" guests","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":112}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" guests","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":113}
+data: {"type":"response.output_text.delta","content_index":0,"delta":")?","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":113}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":")?","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":114}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\"],","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":114}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\"],","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":115}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":115}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":116}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"tasks","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":116}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"tasks","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":117}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":117}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":118}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":118}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":119}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"id","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":119}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"id","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":120}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":120}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":121}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"T","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":121}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"T","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":122}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":122}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":123}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":123}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":124}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"phase","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":124}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"phase","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":125}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":125}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":126}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ux","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":126}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"frontend","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":127}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_ui","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":127}
 
 event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":128}
@@ -395,244 +395,244 @@ event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":"Design","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":131}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" Booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":132}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":132}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" Page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":133}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" page","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":133}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":134}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" layout","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":134}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"r","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":135}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":135}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ationale","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":136}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"r","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":136}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":137}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ationale","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":137}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"To","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":138}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":138}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" create","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":139}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"To","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":139}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":140}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" create","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":140}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" user","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":141}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" an","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":141}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"-friendly","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":142}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" intuitive","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":142}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" interface","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":143}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" user","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":143}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" for","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":144}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" interface","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":144}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":145}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" for","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":145}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" bookings","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":146}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":146}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":147}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":147}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"basis","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":148}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" process","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":148}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":149}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":149}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"R","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":150}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"basis","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":150}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":151}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":151}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\"],","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":152}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"R","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":152}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":153}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":153}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"optim","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":154}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\"],","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":154}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":155}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":155}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":156}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"optim","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":156}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":157}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":157}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"4","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":158}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":158}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":159}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":159}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"likely","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":160}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"4","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":160}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":161}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":161}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":162}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"likely","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":162}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"6","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":163}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":163}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":164}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":164}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"p","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":165}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"6","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":165}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ess","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":166}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":166}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"im","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":167}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"p","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":167}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":168}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ess","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":168}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":169}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"im","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":169}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":170}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":170}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"8","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":171}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":171}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"},{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":172}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":172}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"id","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":173}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"8","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":173}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":174}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"},{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":174}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"T","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":175}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"id","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":175}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"2","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":176}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":176}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":177}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"T","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":177}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"phase","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":178}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"2","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":178}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":179}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":179}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"backend","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":180}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"phase","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":180}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":181}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":181}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"name","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":182}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"backend","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":182}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":183}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":183}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"Implement","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":184}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"name","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":184}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" Booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":185}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":185}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" Logic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":186}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"Implement","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":186}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":187}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":187}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"r","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":188}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" functionality","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":188}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ationale","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":189}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":189}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":190}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"r","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":190}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"To","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":191}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ationale","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":191}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" handle","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":192}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":192}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":193}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"To","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":193}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" availability","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":194}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" handle","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":194}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" and","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":195}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" table","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":195}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":196}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" reservations","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":196}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" confirmations","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":197}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" and","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":197}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":198}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" manage","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":198}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"basis","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":199}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" bookings","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":199}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":200}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" in","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":200}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"R","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":201}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":201}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":202}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" database","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":202}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\"],","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":203}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":203}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":204}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"basis","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":204}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"optim","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":205}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":205}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":206}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"R","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":206}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":207}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":207}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":208}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\"],","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":208}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"5","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":209}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":209}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":210}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"optim","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":210}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"likely","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":211}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":211}
 
 event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":212}
@@ -641,254 +641,275 @@ event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":213}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"7","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":214}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"8","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":214}
 
 event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":215}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"p","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":216}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"likely","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":216}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ess","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":217}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":217}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"im","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":218}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":218}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":219}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"12","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":219}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":220}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":220}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":221}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"p","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":221}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"10","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":222}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ess","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":222}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":223}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"im","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":223}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":224}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"istic","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":224}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"team","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":225}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_hours","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":225}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":226}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":226}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":227}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"16","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":227}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"role","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":228}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":228}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":229}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":229}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"Frontend","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":230}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"team","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":230}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" Developer","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":231}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":231}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":232}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":232}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"count","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":233}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"role","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":233}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":234}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":234}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":235}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"Frontend","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":235}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":236}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" Developer","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":236}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":237}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":237}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ris","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":238}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"count","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":238}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ks","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":239}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":239}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":240}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"1","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":240}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":241}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":241}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"description","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":242}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":242}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":243}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ris","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":243}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"Potential","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":244}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ks","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":244}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" integration","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":245}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":[","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":245}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" issues","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":246}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"{\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":246}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" with","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":247}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"description","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":247}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":248}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":248}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" existing","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":249}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"Potential","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":249}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":250}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" delays","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":250}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" system","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":251}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" in","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":251}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":252}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" gathering","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":252}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"impact","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":253}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" requirements","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":253}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":254}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" for","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":254}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"high","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":255}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" the","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":255}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":256}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" booking","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":256}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"mit","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":257}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" features","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":257}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"igation","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":258}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":258}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":259}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"impact","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":259}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"Conduct","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":260}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":260}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" thorough","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":261}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"medium","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":261}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" testing","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":262}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":262}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" and","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":263}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"mit","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":263}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" have","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":264}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"igation","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":264}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":265}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":265}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" rollback","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":266}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"Schedule","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":266}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" plan","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":267}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" a","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":267}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":268}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" follow","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":268}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":269}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"-up","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":269}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":270}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" meeting","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":270}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"confidence","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":271}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" to","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":271}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":272}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" clarify","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":272}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"medium","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":273}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" requirements","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":273}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":274}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" promptly","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":274}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"confidence","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":275}
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":275}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"_r","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":276}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":276}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"ationale","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":277}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"],\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":277}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":278}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"confidence","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":278}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"The","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":279}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":279}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" requirement","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":280}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"medium","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":280}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" is","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":281}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\",\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":281}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" clear","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":282}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"confidence","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":282}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":283}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"_r","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":283}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" but","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":284}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"ationale","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":284}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" additional","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":285}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"\":\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":285}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" details","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":286}
+data: {"type":"response.output_text.delta","content_index":0,"delta":"The","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":286}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" are","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":287}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" requirement","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":287}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" needed","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":288}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" is","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":288}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" for","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":289}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" clear","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":289}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" full","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":290}
+data: {"type":"response.output_text.delta","content_index":0,"delta":",","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":290}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":" scope","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":291}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" but","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":291}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":".\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":292}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" additional","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":292}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":293}
+data: {"type":"response.output_text.delta","content_index":0,"delta":" details","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":293}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":" are","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":294}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":" needed","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":295}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":" for","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":296}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":" full","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":297}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":" scope","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":298}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":".\"","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":299}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","content_index":0,"delta":"}","item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":300}
 
 event: response.output_text.done
-data: {"type":"response.output_text.done","content_index":0,"item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":294,"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant. The page should be user-friendly and integrate with the restaurant's existing system.\",\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"frontend\",\"name\":\"Design Booking Page\",\"rationale\":\"To create a user-friendly interface for table bookings.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement Booking Logic\",\"rationale\":\"To handle table availability and booking confirmations.\",\"basis\":[\"R1\"],\"optimistic_hours\":5,\"likely_hours\":7,\"pessimistic_hours\":10}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential integration issues with the existing booking system.\",\"impact\":\"high\",\"mitigation\":\"Conduct thorough testing and have a rollback plan.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"}
+data: {"type":"response.output_text.done","content_index":0,"item_id":"msg_fixture","logprobs":[],"output_index":0,"sequence_number":301,"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant, ensuring a user-friendly interface and seamless booking process.\",\"technologies\":[],\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"ux_ui\",\"name\":\"Design booking page layout\",\"rationale\":\"To create an intuitive user interface for the booking process.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement booking functionality\",\"rationale\":\"To handle table reservations and manage bookings in the database.\",\"basis\":[\"R1\"],\"optimistic_hours\":8,\"likely_hours\":12,\"pessimistic_hours\":16}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential delays in gathering requirements for the booking features.\",\"impact\":\"medium\",\"mitigation\":\"Schedule a follow-up meeting to clarify requirements promptly.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"}
 
 event: response.content_part.done
-data: {"type":"response.content_part.done","content_index":0,"item_id":"msg_fixture","output_index":0,"part":{"type":"output_text","annotations":[],"logprobs":[],"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant. The page should be user-friendly and integrate with the restaurant's existing system.\",\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"frontend\",\"name\":\"Design Booking Page\",\"rationale\":\"To create a user-friendly interface for table bookings.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement Booking Logic\",\"rationale\":\"To handle table availability and booking confirmations.\",\"basis\":[\"R1\"],\"optimistic_hours\":5,\"likely_hours\":7,\"pessimistic_hours\":10}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential integration issues with the existing booking system.\",\"impact\":\"high\",\"mitigation\":\"Conduct thorough testing and have a rollback plan.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"},"sequence_number":295}
+data: {"type":"response.content_part.done","content_index":0,"item_id":"msg_fixture","output_index":0,"part":{"type":"output_text","annotations":[],"logprobs":[],"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant, ensuring a user-friendly interface and seamless booking process.\",\"technologies\":[],\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"ux_ui\",\"name\":\"Design booking page layout\",\"rationale\":\"To create an intuitive user interface for the booking process.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement booking functionality\",\"rationale\":\"To handle table reservations and manage bookings in the database.\",\"basis\":[\"R1\"],\"optimistic_hours\":8,\"likely_hours\":12,\"pessimistic_hours\":16}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential delays in gathering requirements for the booking features.\",\"impact\":\"medium\",\"mitigation\":\"Schedule a follow-up meeting to clarify requirements promptly.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"},"sequence_number":302}
 
 event: response.output_item.done
-data: {"type":"response.output_item.done","item":{"id":"msg_fixture","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant. The page should be user-friendly and integrate with the restaurant's existing system.\",\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"frontend\",\"name\":\"Design Booking Page\",\"rationale\":\"To create a user-friendly interface for table bookings.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement Booking Logic\",\"rationale\":\"To handle table availability and booking confirmations.\",\"basis\":[\"R1\"],\"optimistic_hours\":5,\"likely_hours\":7,\"pessimistic_hours\":10}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential integration issues with the existing booking system.\",\"impact\":\"high\",\"mitigation\":\"Conduct thorough testing and have a rollback plan.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"}],"role":"assistant"},"output_index":0,"sequence_number":296}
+data: {"type":"response.output_item.done","item":{"id":"msg_fixture","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant, ensuring a user-friendly interface and seamless booking process.\",\"technologies\":[],\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"ux_ui\",\"name\":\"Design booking page layout\",\"rationale\":\"To create an intuitive user interface for the booking process.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement booking functionality\",\"rationale\":\"To handle table reservations and manage bookings in the database.\",\"basis\":[\"R1\"],\"optimistic_hours\":8,\"likely_hours\":12,\"pessimistic_hours\":16}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential delays in gathering requirements for the booking features.\",\"impact\":\"medium\",\"mitigation\":\"Schedule a follow-up meeting to clarify requirements promptly.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"}],"role":"assistant"},"output_index":0,"sequence_number":303}
 
 event: response.completed
-data: {"type":"response.completed","response":{"id":"resp_fixture","object":"response","created_at":1791354908,"status":"completed","access_programs":null,"background":false,"completed_at":1791354915,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":"You estimate software projects from meeting transcripts. Keep the answer minimal: one requirement, no assumptions, one open question, two tasks, one team member, one risk.","max_output_tokens":800,"max_tool_calls":null,"model":"gpt-4o-mini-2024-07-18","moderation":null,"output":[{"id":"msg_fixture","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant. The page should be user-friendly and integrate with the restaurant's existing system.\",\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"frontend\",\"name\":\"Design Booking Page\",\"rationale\":\"To create a user-friendly interface for table bookings.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement Booking Logic\",\"rationale\":\"To handle table availability and booking confirmations.\",\"basis\":[\"R1\"],\"optimistic_hours\":5,\"likely_hours\":7,\"pessimistic_hours\":10}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential integration issues with the existing booking system.\",\"impact\":\"high\",\"mitigation\":\"Conduct thorough testing and have a rollback plan.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"}],"role":"assistant"}],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":"record-sse-fixture","prompt_cache_retention":"in_memory","reasoning":{"context":null,"effort":null,"summary":null},"safety_identifier":null,"service_tier":"default","store":false,"temperature":0.2,"text":{"format":{"type":"json_schema","description":null,"name":"EstimationBreakdown","schema":{"$defs":{"Assumption":{"properties":{"id":{"description":"Identifier A1, A2, ...","title":"Id","type":"string"},"statement":{"description":"Something not stated in the transcript that we assume.","title":"Statement","type":"string"},"impact_if_wrong":{"description":"How the estimate changes if the assumption fails.","title":"Impact If Wrong","type":"string"}},"required":["id","statement","impact_if_wrong"],"title":"Assumption","type":"object","additionalProperties":false},"Requirement":{"properties":{"id":{"description":"Identifier R1, R2, ... in order of appearance.","title":"Id","type":"string"},"statement":{"description":"What the client needs, in the output language.","title":"Statement","type":"string"},"evidence":{"description":"Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.","title":"Evidence","type":"string"}},"required":["id","statement","evidence"],"title":"Requirement","type":"object","additionalProperties":false},"Risk":{"properties":{"description":{"description":"What could go wrong.","title":"Description","type":"string"},"impact":{"description":"Impact on schedule or cost.","enum":["low","medium","high"],"title":"Impact","type":"string"},"mitigation":{"description":"How to reduce or handle the risk.","title":"Mitigation","type":"string"}},"required":["description","impact","mitigation"],"title":"Risk","type":"object","additionalProperties":false},"Task":{"properties":{"id":{"description":"Identifier T1, T2, ...","title":"Id","type":"string"},"phase":{"description":"Delivery phase this task belongs to.","enum":["discovery","ux_ui","backend","frontend","integrations","qa","devops","project_management"],"title":"Phase","type":"string"},"name":{"description":"Short task name.","title":"Name","type":"string"},"rationale":{"description":"Why this task is needed and what drives its size.","title":"Rationale","type":"string"},"basis":{"description":"Requirement and/or assumption identifiers (R*, A*) this task rests on.","items":{"type":"string"},"title":"Basis","type":"array"},"optimistic_hours":{"description":"Best-case effort in hours.","title":"Optimistic Hours","type":"number"},"likely_hours":{"description":"Most likely effort in hours.","title":"Likely Hours","type":"number"},"pessimistic_hours":{"description":"Worst-case effort in hours.","title":"Pessimistic Hours","type":"number"}},"required":["id","phase","name","rationale","basis","optimistic_hours","likely_hours","pessimistic_hours"],"title":"Task","type":"object","additionalProperties":false},"TeamMember":{"properties":{"role":{"description":"Role name, e.g. Backend developer.","title":"Role","type":"string"},"count":{"description":"Number of people in this role.","title":"Count","type":"integer"}},"required":["role","count"],"title":"TeamMember","type":"object","additionalProperties":false}},"properties":{"project_name":{"description":"Short project name.","title":"Project Name","type":"string"},"summary":{"description":"Two to four sentences describing the project scope.","title":"Summary","type":"string"},"requirements":{"description":"Requirements explicitly stated in the transcript, each with verbatim evidence.","items":{"$ref":"#/$defs/Requirement"},"title":"Requirements","type":"array"},"assumptions":{"description":"Gaps filled with explicit assumptions instead of invented scope.","items":{"$ref":"#/$defs/Assumption"},"title":"Assumptions","type":"array"},"open_questions":{"description":"Questions to ask the client before committing.","items":{"type":"string"},"title":"Open Questions","type":"array"},"tasks":{"description":"Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.","items":{"$ref":"#/$defs/Task"},"title":"Tasks","type":"array"},"team":{"description":"Recommended team composition.","items":{"$ref":"#/$defs/TeamMember"},"title":"Team","type":"array"},"risks":{"description":"Main delivery risks.","items":{"$ref":"#/$defs/Risk"},"title":"Risks","type":"array"},"confidence":{"description":"Confidence in this estimate; low for vague input.","enum":["low","medium","high"],"title":"Confidence","type":"string"},"confidence_rationale":{"description":"Why this confidence level.","title":"Confidence Rationale","type":"string"}},"required":["project_name","summary","requirements","assumptions","open_questions","tasks","team","risks","confidence","confidence_rationale"],"title":"EstimationBreakdown","type":"object","additionalProperties":false},"strict":true},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":{"input_tokens":952,"input_tokens_details":{"cache_write_tokens":0,"cached_tokens":0},"output_tokens":291,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":1243},"user":null,"metadata":{}},"sequence_number":297}
+data: {"type":"response.completed","response":{"id":"resp_fixture","object":"response","created_at":1791408727,"status":"completed","access_programs":null,"background":false,"completed_at":1791408731,"error":null,"frequency_penalty":0.0,"incomplete_details":null,"instructions":"You estimate software projects from meeting transcripts. Keep the answer minimal: one requirement, no assumptions, one open question, two tasks, one team member, one risk.","max_output_tokens":800,"max_tool_calls":null,"model":"gpt-4o-mini-2024-07-18","moderation":null,"output":[{"id":"msg_fixture","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"logprobs":[],"text":"{\"project_name\":\"Restaurant Booking Page\",\"summary\":\"Develop a web page that allows guests to book tables at the restaurant, ensuring a user-friendly interface and seamless booking process.\",\"technologies\":[],\"requirements\":[{\"id\":\"R1\",\"statement\":\"A page where guests can book a table at the restaurant.\",\"evidence\":\"We need a page where guests book a table at our restaurant.\"}],\"assumptions\":[],\"open_questions\":[\"What specific features do you want on the booking page (e.g., date selection, time slots, number of guests)?\"],\"tasks\":[{\"id\":\"T1\",\"phase\":\"ux_ui\",\"name\":\"Design booking page layout\",\"rationale\":\"To create an intuitive user interface for the booking process.\",\"basis\":[\"R1\"],\"optimistic_hours\":4,\"likely_hours\":6,\"pessimistic_hours\":8},{\"id\":\"T2\",\"phase\":\"backend\",\"name\":\"Implement booking functionality\",\"rationale\":\"To handle table reservations and manage bookings in the database.\",\"basis\":[\"R1\"],\"optimistic_hours\":8,\"likely_hours\":12,\"pessimistic_hours\":16}],\"team\":[{\"role\":\"Frontend Developer\",\"count\":1}],\"risks\":[{\"description\":\"Potential delays in gathering requirements for the booking features.\",\"impact\":\"medium\",\"mitigation\":\"Schedule a follow-up meeting to clarify requirements promptly.\"}],\"confidence\":\"medium\",\"confidence_rationale\":\"The requirement is clear, but additional details are needed for full scope.\"}"}],"role":"assistant"}],"parallel_tool_calls":true,"presence_penalty":0.0,"previous_response_id":null,"prompt_cache_key":"record-sse-fixture","prompt_cache_retention":"in_memory","reasoning":{"context":null,"effort":null,"summary":null},"safety_identifier":null,"service_tier":"default","store":false,"temperature":0.2,"text":{"format":{"type":"json_schema","description":null,"name":"EstimationBreakdown","schema":{"$defs":{"Assumption":{"properties":{"id":{"description":"Identifier A1, A2, ...","title":"Id","type":"string"},"statement":{"description":"Something not stated in the transcript that we assume.","title":"Statement","type":"string"},"impact_if_wrong":{"description":"How the estimate changes if the assumption fails.","title":"Impact If Wrong","type":"string"}},"required":["id","statement","impact_if_wrong"],"title":"Assumption","type":"object","additionalProperties":false},"Requirement":{"properties":{"id":{"description":"Identifier R1, R2, ... in order of appearance.","title":"Id","type":"string"},"statement":{"description":"What the client needs, in the output language.","title":"Statement","type":"string"},"evidence":{"description":"Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.","title":"Evidence","type":"string"}},"required":["id","statement","evidence"],"title":"Requirement","type":"object","additionalProperties":false},"Risk":{"properties":{"description":{"description":"What could go wrong.","title":"Description","type":"string"},"impact":{"description":"Impact on schedule or cost.","enum":["low","medium","high"],"title":"Impact","type":"string"},"mitigation":{"description":"How to reduce or handle the risk.","title":"Mitigation","type":"string"}},"required":["description","impact","mitigation"],"title":"Risk","type":"object","additionalProperties":false},"Task":{"properties":{"id":{"description":"Identifier T1, T2, ...","title":"Id","type":"string"},"phase":{"description":"Delivery phase this task belongs to.","enum":["discovery","ux_ui","backend","frontend","integrations","qa","devops","project_management"],"title":"Phase","type":"string"},"name":{"description":"Short task name.","title":"Name","type":"string"},"rationale":{"description":"Why this task is needed and what drives its size.","title":"Rationale","type":"string"},"basis":{"description":"Requirement and/or assumption identifiers (R*, A*) this task rests on.","items":{"type":"string"},"title":"Basis","type":"array"},"optimistic_hours":{"description":"Best-case effort in hours.","title":"Optimistic Hours","type":"number"},"likely_hours":{"description":"Most likely effort in hours.","title":"Likely Hours","type":"number"},"pessimistic_hours":{"description":"Worst-case effort in hours.","title":"Pessimistic Hours","type":"number"}},"required":["id","phase","name","rationale","basis","optimistic_hours","likely_hours","pessimistic_hours"],"title":"Task","type":"object","additionalProperties":false},"TeamMember":{"properties":{"role":{"description":"Role name, e.g. Backend developer.","title":"Role","type":"string"},"count":{"description":"Number of people in this role.","title":"Count","type":"integer"}},"required":["role","count"],"title":"TeamMember","type":"object","additionalProperties":false}},"properties":{"project_name":{"description":"Short project name.","title":"Project Name","type":"string"},"summary":{"description":"Two to four sentences describing the project scope.","title":"Summary","type":"string"},"technologies":{"description":"Technologies, platforms and third-party services mentioned in the transcript or attachments, using the names as written.","items":{"type":"string"},"title":"Technologies","type":"array"},"requirements":{"description":"Requirements explicitly stated in the transcript, each with verbatim evidence.","items":{"$ref":"#/$defs/Requirement"},"title":"Requirements","type":"array"},"assumptions":{"description":"Gaps filled with explicit assumptions instead of invented scope.","items":{"$ref":"#/$defs/Assumption"},"title":"Assumptions","type":"array"},"open_questions":{"description":"Questions to ask the client before committing.","items":{"type":"string"},"title":"Open Questions","type":"array"},"tasks":{"description":"Work breakdown across phases, including QA, deployment (devops) and project management. Do not compute totals.","items":{"$ref":"#/$defs/Task"},"title":"Tasks","type":"array"},"team":{"description":"Recommended team composition.","items":{"$ref":"#/$defs/TeamMember"},"title":"Team","type":"array"},"risks":{"description":"Main delivery risks.","items":{"$ref":"#/$defs/Risk"},"title":"Risks","type":"array"},"confidence":{"description":"Confidence in this estimate; low for vague input.","enum":["low","medium","high"],"title":"Confidence","type":"string"},"confidence_rationale":{"description":"Why this confidence level.","title":"Confidence Rationale","type":"string"}},"required":["project_name","summary","technologies","requirements","assumptions","open_questions","tasks","team","risks","confidence","confidence_rationale"],"title":"EstimationBreakdown","type":"object","additionalProperties":false},"strict":true},"verbosity":"medium"},"tool_choice":"auto","tool_usage":{"image_gen":{"input_tokens":0,"input_tokens_details":{"image_tokens":0,"text_tokens":0},"output_tokens":0,"output_tokens_details":{"image_tokens":0,"text_tokens":0},"total_tokens":0},"web_search":{"num_requests":0}},"tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled","usage":{"input_tokens":995,"input_tokens_details":{"cache_write_tokens":0,"cached_tokens":0},"output_tokens":298,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":1293},"user":null,"metadata":{}},"sequence_number":304}
 

@@ -23,10 +23,12 @@ from tests.factories import typed_request
 # Each published version's system prompt for every project type, detail level and output format,
 # plus its user message for every project type with and without an explicit language. Published
 # versions never change: a changed template needs a new version directory
-# (app/prompts/estimation/vN/) and a new pin.
+# (app/prompts/estimation/vN/) and a new pin. An output-schema change is the exception: every
+# version embeds the reference estimations' JSON, so it re-pins every version (and is measured
+# with an eval).
 PINNED_SHA256 = {
-    "v1": "32ab95b8fc9ff0782dece7d8059da6bcd105fc82d5eab809e303ac1518e8a1ce",
-    "v2": "72addb482b48102a492ccbecc042c285b0f2f072d49fa398f58cefb1c17060f2",
+    "v1": "72fe57bfc9b18459fe354b3acc9a077c3736d6d946faedf23a3a9ed22c855c9a",
+    "v2": "0c84aa152004f4f1a0c93233a689975623d43a8d4703cb840602f3053010b107",
 }
 
 

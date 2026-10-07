@@ -17,7 +17,7 @@ from app.schemas.estimation import EstimateResponse
 
 logger = logging.getLogger(__name__)
 
-CACHE_SCHEMA = 2  # bump when what a key stores changes: the response shape or its markdown
+CACHE_SCHEMA = 3  # bump when what a key stores changes: the response shape or its markdown
 # Wall-clock bound on each whole get/set, connection handshake included (a new redis-py
 # connection makes three round trips before the command: HELLO, CLIENT MAINT_NOTIFICATIONS, then
 # two pipelined CLIENT SETINFO), so Redis adds at most ~0.4 s a request.

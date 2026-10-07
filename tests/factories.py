@@ -42,10 +42,18 @@ def task(
     }
 
 
+def team_member(member: tuple[str, int] | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(member, tuple):
+        role, count = member
+        return {"role": role, "count": count}
+    return member
+
+
 def breakdown_data(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "project_name": "Yoga booking",
         "summary": "Booking app with online payments.",
+        "technologies": ["Stripe"],
         "requirements": [
             {"id": "R1", "statement": "Online booking", "evidence": "a booking app"},
             {"id": "R2", "statement": "Stripe payments", "evidence": "pay online with Stripe"},
@@ -69,6 +77,8 @@ def breakdown_data(**overrides: Any) -> dict[str, Any]:
         "confidence": "medium",
         "confidence_rationale": "Scope is clear but integrations are unknown.",
     }
+    if "team" in overrides:
+        overrides = overrides | {"team": [team_member(m) for m in overrides["team"]]}
     return data | overrides
 
 

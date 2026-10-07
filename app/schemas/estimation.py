@@ -128,6 +128,12 @@ class Risk(BaseModel):
 class EstimationBreakdown(BaseModel):
     project_name: str = Field(description="Short project name.")
     summary: str = Field(description="Two to four sentences describing the project scope.")
+    technologies: list[str] = Field(
+        description=(
+            "Technologies, platforms and third-party services mentioned in the transcript or "
+            "attachments, using the names as written."
+        )
+    )
     requirements: Annotated[list[Requirement], AfterValidator(_ids("R"))] = Field(
         description="Requirements explicitly stated in the transcript, each with verbatim evidence."
     )

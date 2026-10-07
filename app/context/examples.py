@@ -1,7 +1,8 @@
 """Reference estimations injected into the system prompt (the CAG context).
 
 Typed so every few-shot example matches the output contract exactly. Requirement evidence
-quotes each meeting summary verbatim; `tests/unit/test_examples.py` enforces it.
+quotes each meeting summary verbatim, and every technology is named as written there;
+`tests/unit/test_examples.py` enforces both.
 """
 
 from typing import Literal
@@ -33,6 +34,7 @@ Owner: It has to look good on phones. We already have the domain and a logo.
                 "presenting services, team, and opening hours, plus an appointment request "
                 "form delivered to the clinic's inbox."
             ),
+            "technologies": ["email"],
             "requirements": [
                 {
                     "id": "R1",
@@ -188,6 +190,7 @@ Gerente: Los encargados usan tablets en la tienda.
                 "cálculo, descuenta stock automáticamente con las ventas de Square, alerta de "
                 "mínimos, genera pedidos a proveedores e informa de mermas semanales."
             ),
+            "technologies": ["hojas de cálculo", "Square", "tablets"],
             "requirements": [
                 {
                     "id": "R1",
@@ -425,6 +428,7 @@ CEO: Launch in Spain and Portugal, so Spanish and Portuguese from day one.
                 "SAP load import for key shippers, and an admin backoffice. Launch in Spain and "
                 "Portugal."
             ),
+            "technologies": ["iOS", "Android", "GPS", "SAP"],
             "requirements": [
                 {
                     "id": "R1",
