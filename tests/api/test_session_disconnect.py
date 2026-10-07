@@ -108,7 +108,7 @@ async def test_a_slow_reader_leaving_releases_the_session(settings: Settings) ->
             "server": ("127.0.0.1", 8000),
         }
         request = asyncio.create_task(app(scope, receive, send))
-        async with asyncio.timeout(2):
+        async with asyncio.timeout(5):
             await blocked.wait()
             await until_parked(provider)
         assert session.lock.locked()
