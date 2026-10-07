@@ -3,14 +3,17 @@
 import hashlib
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from app.attachments.extractor import ExtractedAttachment
 from app.context.examples import REFERENCE_ESTIMATIONS
 from app.schemas.estimation import DetailLevel, EstimateRequest, OutputFormat, ProjectType
+from app.sessions import ProjectMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,9 @@ DEFAULT_LANGUAGE = (
     "The language the transcript is written in, not languages or places mentioned in it"
 )
 # Our delimiter tags, in any case or spacing, so request data cannot close or open them.
-DELIMITER_TAG = re.compile(r"<\s*(/?)\s*(transcript|output_language)\b[^>]*>", re.IGNORECASE)
+DELIMITER_TAG = re.compile(
+    r"<\s*(/?)\s*(transcript|output_language|project_metadata)\b[^>]*>", re.IGNORECASE
+)
 
 _env = Environment(
     loader=FileSystemLoader(PROMPTS_DIR),
@@ -74,6 +79,17 @@ def neutralize(text: str) -> str:
     return DELIMITER_TAG.sub(r"[\1\2]", text)
 
 
+def _neutral_metadata(metadata: ProjectMetadata) -> ProjectMetadata:
+    # Model output, re-rendered into every later system prompt.
+    return metadata.model_copy(
+        update={
+            "project_name": metadata.project_name and neutralize(metadata.project_name),
+            "mentioned_technologies": [neutralize(t) for t in metadata.mentioned_technologies],
+            "agreed_scope": metadata.agreed_scope and neutralize(metadata.agreed_scope),
+        }
+    )
+
+
 @cache
 def _references() -> list[dict[str, str]]:
     return [
@@ -86,32 +102,55 @@ def _references() -> list[dict[str, str]]:
     ]
 
 
-def render_system(params: PromptParams, version: str = DEFAULT_VERSION) -> str:
+# The templates always get `metadata` (system) and `attachments` (user): StrictUndefined raises
+# on a missing one. v1 and v2 ignore them.
+def render_system(
+    params: PromptParams,
+    version: str = DEFAULT_VERSION,
+    *,
+    metadata: ProjectMetadata | None = None,
+) -> str:
     template = _env.get_template(f"{USE_CASE}/{_check(version)}/system.j2")
     return template.render(
         references=_references(),
         project_type=params.project_type.value,
         detail_level=params.detail_level.value,
         output_format=params.output_format.value,
+        metadata=None if metadata is None else _neutral_metadata(metadata),
     )
 
 
 def render_estimation_prompt(
-    request: EstimateRequest, version: str = DEFAULT_VERSION
+    request: EstimateRequest,
+    version: str = DEFAULT_VERSION,
+    *,
+    metadata: ProjectMetadata | None = None,
+    attachments: Sequence[ExtractedAttachment] = (),
 ) -> tuple[str, str]:
     params = PromptParams(request.project_type, request.detail_level, request.output_format)
     language = re.sub(r"[<>]", "", request.output_language or "") or DEFAULT_LANGUAGE
     user = _env.get_template(f"{USE_CASE}/{_check(version)}/user.j2").render(
         transcript=neutralize(request.transcription),
+        attachments=[
+            {"filename": neutralize(a.filename), "text": neutralize(a.text)} for a in attachments
+        ],
         project_type=request.project_type.value,
         output_language=language,
         evidence_reminder=EVIDENCE_REMINDER if request.output_language else "",
     )
-    return render_system(params, version), user
+    return render_system(params, version, metadata=metadata), user
 
 
-def render(request: EstimateRequest, version: str = DEFAULT_VERSION) -> RenderedPrompt:
-    system, user = render_estimation_prompt(request, version)
+def render(
+    request: EstimateRequest,
+    version: str = DEFAULT_VERSION,
+    *,
+    metadata: ProjectMetadata | None = None,
+    attachments: Sequence[ExtractedAttachment] = (),
+) -> RenderedPrompt:
+    system, user = render_estimation_prompt(
+        request, version, metadata=metadata, attachments=attachments
+    )
     digest = hashlib.sha256(f"{system}\x00{user}".encode()).hexdigest()
     logger.info(
         "prompt_rendered",

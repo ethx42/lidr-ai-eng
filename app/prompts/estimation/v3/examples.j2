@@ -1,0 +1,10 @@
+{% for ref in references %}
+<reference index="{{ loop.index }}" size="{{ ref.size }}">
+<meeting_summary>
+{{ ref.meeting_summary }}
+</meeting_summary>
+<estimation>
+{{ ref.estimation_json }}
+</estimation>
+</reference>
+{% endfor %}

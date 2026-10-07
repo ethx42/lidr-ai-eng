@@ -4,6 +4,7 @@ from itertools import product
 
 import pytest
 
+from app.attachments.extractor import ExtractedAttachment
 from app.context.examples import REFERENCE_ESTIMATIONS
 from app.prompts import loader
 from app.prompts.loader import (
@@ -18,6 +19,7 @@ from app.prompts.loader import (
     render_system,
 )
 from app.schemas.estimation import DetailLevel, OutputFormat, ProjectType
+from app.sessions import ProjectMetadata
 from tests.factories import typed_request
 
 # Each published version's system prompt for every project type, detail level and output format,
@@ -29,6 +31,7 @@ from tests.factories import typed_request
 PINNED_SHA256 = {
     "v1": "72fe57bfc9b18459fe354b3acc9a077c3736d6d946faedf23a3a9ed22c855c9a",
     "v2": "0c84aa152004f4f1a0c93233a689975623d43a8d4703cb840602f3053010b107",
+    "v3": "8be43ba255d79aca6a95746d3427bead45f4f397ce0f8d2861ec1b34348fd7bd",
 }
 
 
@@ -122,6 +125,18 @@ def test_every_version_has_a_pin() -> None:
         "PINNED_SHA256 with any digest, and test_published_versions_never_change prints "
         "the real one"
     )
+
+
+METADATA = ProjectMetadata(project_name="Yoga Booking", mentioned_technologies=["Stripe"])
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_earlier_versions_ignore_session_inputs(version: str) -> None:
+    att = ExtractedAttachment(filename="spec.pdf", kind="pdf", text="ATTACHMENT", pages=1)
+    request = typed_request()
+    assert render_estimation_prompt(
+        request, version, metadata=METADATA, attachments=[att]
+    ) == render_estimation_prompt(request, version)
 
 
 def test_user_message_delimits_transcript() -> None:

@@ -1,0 +1,14 @@
+Estimate the project discussed in this meeting transcript.
+Project type: {{ project_type }}.
+<transcript>
+{{ transcript }}
+{% for a in attachments %}
+
+--- attachment: {{ a.filename }} ---
+{{ a.text }}
+{% endfor %}
+</transcript>
+<output_language>{{ output_language }}</output_language>
+{% if evidence_reminder %}
+{{ evidence_reminder }}
+{% endif %}
