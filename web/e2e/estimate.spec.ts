@@ -260,10 +260,20 @@ test.describe("estimate", () => {
     await sendSample(page);
     await expectResult(page);
     await showDocument(page);
-    const table = estimatePane(page).getByRole("region", { name: "Table" });
+    const table = estimatePane(page).getByRole("region", { name: "Task breakdown" });
     await expect(table).toHaveCount(1);
     await expect(table.getByRole("columnheader")).toHaveText(["Phase", "Tasks", "Expected h", "Range h"]);
     await expect(table.getByRole("row")).not.toHaveCount(1);
+    // A tab stop only while it scrolls sideways: the table fits the pane at 1280 px, not a 320 px window.
+    const scrolls = (region: Element) => region.scrollWidth > region.clientWidth;
+    expect(await table.evaluate(scrolls)).toBe(false);
+    await expect(table).not.toHaveAttribute("tabindex");
+    await page.setViewportSize({ width: 320, height: 800 });
+    const narrow = page.getByRole("region", { name: "Task breakdown" });
+    await expect(narrow).toHaveAttribute("tabindex", "0");
+    expect(await narrow.evaluate(scrolls)).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(table).not.toHaveAttribute("tabindex");
 
     await choose(page, "Output format", "Narrative");
     await estimateButton(page).click();
@@ -275,7 +285,7 @@ test.describe("estimate", () => {
     const paragraphs = estimatePane(page).locator("p").filter({ hasText: /— \d+ tasks?, [\d.,]+ h expected \(/ });
     await expect(paragraphs.first()).toBeVisible();
     for (const phase of await paragraphs.locator("strong").allTextContents()) expect(PHASES).toContain(phase);
-    await expect(estimatePane(page).getByRole("region", { name: "Table" })).toHaveCount(0);
+    await expect(estimatePane(page).getByRole("region", { name: "Task breakdown" })).toHaveCount(0);
     await expect(estimatePane(page).getByRole("table")).toHaveCount(0);
   });
 

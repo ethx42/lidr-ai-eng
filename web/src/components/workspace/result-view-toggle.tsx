@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import { type ComponentProps, useCallback, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Segmented } from "@/components/form/segmented";
@@ -15,12 +15,30 @@ export const ResultViewToggle = ({ value, onChange }: { value: ResultView; onCha
   <Segmented label="Result view" hideLabel options={VIEWS} labels={LABELS} value={value} onChange={onChange} />
 );
 
-// Wide tables (the task breakdown has eight columns) scroll on their own; keyboard users can scroll them too.
-const ScrollTable = ({ children }: ComponentProps<"table">) => (
-  <div role="region" aria-label="Table" tabIndex={0} className="overflow-x-auto rounded-md border focus-visible:-outline-offset-2!">
-    <table className="w-full min-w-max border-collapse text-sm">{children}</table>
-  </div>
-);
+// The server's documents hold one table, the task breakdown (app/services/rendering.py), and its region is named so. A
+// table wider than the pane (line items have eight columns) scrolls on its own, and only then is the region a tab stop,
+// so keyboard users can scroll it; one that fits adds no stop. Watches the region and the table, whose width follows
+// its text.
+const ScrollTable = ({ children }: ComponentProps<"table">) => {
+  const [scrolls, setScrolls] = useState(false);
+  const observe = useCallback((region: HTMLDivElement) => {
+    const observer = new ResizeObserver(() => setScrolls(region.scrollWidth > region.clientWidth));
+    observer.observe(region);
+    if (region.firstElementChild) observer.observe(region.firstElementChild);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div
+      ref={observe}
+      role="region"
+      aria-label="Task breakdown"
+      tabIndex={scrolls ? 0 : undefined}
+      className="overflow-x-auto rounded-md border focus-visible:-outline-offset-2!"
+    >
+      <table className="w-full min-w-max border-collapse text-sm">{children}</table>
+    </div>
+  );
+};
 
 // Markdown elements are styled from here, so no per-element component has to pass react-markdown's `node` along.
 const DOCUMENT = [
