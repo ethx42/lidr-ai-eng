@@ -1,0 +1,27 @@
+# Build context of the web image (web/Dockerfile); compose watch applies the same rules.
+# Never exclude *.md: src/content/samples/*.md are read by the page.
+
+# Secrets never enter the context (root and nested)
+**/.env*
+*.pem
+
+# Installed and built inside the image (a macOS node_modules must never reach Linux)
+node_modules
+.next
+out
+build
+
+# Test output, generated and local files
+coverage
+test-results
+playwright-report
+blob-report
+.playwright-mcp
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+npm-debug.log*
+.pnpm-debug.log*
+.DS_Store
+Dockerfile
+.dockerignore

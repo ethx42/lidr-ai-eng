@@ -76,3 +76,18 @@ record-cassettes:
 .PHONY: smoke-live
 smoke-live:
 	uv run python -m scripts.smoke_live
+
+# Docker Compose: the production-like stack (web on http://localhost:3000 only; waits for every
+# healthcheck), the dev stack with reload and watch (AI service also on :8000), teardown and logs
+.PHONY: up dev down logs
+up:
+	docker compose up --build --wait
+
+dev:
+	docker compose -f compose.yaml -f compose.dev.yaml up --build --watch
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f

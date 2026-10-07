@@ -1,0 +1,20 @@
+# Local development (make dev): docker compose -f compose.yaml -f compose.dev.yaml up --build --watch
+# Dev images with reload; watch syncs source edits into the containers and rebuilds on dependency
+# changes. Synced paths are never bind-mounted.
+services:
+  ai-service:
+    build: { target: dev }
+    ports: ["8000:8000"]
+    develop:
+      watch:
+        - { action: sync, path: ./app, target: /app/app }
+        - { action: rebuild, path: ./uv.lock }
+        - { action: rebuild, path: ./pyproject.toml }
+
+  web:
+    build: { target: dev }
+    develop:
+      watch:
+        - { action: sync, path: ./web, target: /app, ignore: [node_modules/, .next/] }
+        - { action: rebuild, path: ./web/package.json }
+        - { action: rebuild, path: ./web/pnpm-lock.yaml }

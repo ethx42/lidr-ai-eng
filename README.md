@@ -85,6 +85,21 @@ curl -s http://127.0.0.1:8000/api/v1/estimate \
 
 Requests must be sent with `Content-Type: application/json`; other content types get `422 invalid_request`. Response fields: `estimation` (markdown), `breakdown` (structured, with computed `totals`), `grounding`, `model`, `provider`, `prompt_version`, `usage` (`input_tokens`, `output_tokens`, `cached_input_tokens`, `cache_write_tokens`). Optional request field: `output_language` (defaults to the transcription's language). Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. Every response carries `X-Request-ID`.
 
+### Docker Compose (web, AI service, Redis)
+
+Requires Docker Engine 25+ with Compose 2.24+ (verified on Engine 29.4.3, Compose v5.1.3).
+
+```bash
+make up                 # build and start; returns once every healthcheck passes
+make logs               # follow the logs
+make down               # stop and remove the containers
+make dev                # dev images: reload, compose watch syncs ./app and ./web, rebuilds on lockfile changes
+```
+
+- Only `web` publishes a port: http://localhost:3000. The AI service and Redis are reachable only on the Compose network; the browser calls the Next.js BFF, which calls `http://ai-service:8000`. `make dev` also publishes the AI service on http://localhost:8000.
+- The AI service reads `.env` through `env_file` (optional), so a key exported in the host shell never reaches a container. Compose points `REDIS_URL` at its own Redis.
+- `compose.e2e.yaml` runs the stack offline for end-to-end tests (`docker compose -f compose.yaml -f compose.e2e.yaml up --build --wait`): `LLM_PROVIDER=replay`, `LLM_FALLBACKS=none`, no cache, `tests/cassettes` mounted read-only.
+
 ## Quality gates
 
 ```bash

@@ -1,0 +1,36 @@
+# Build context of the AI service image (Dockerfile); compose watch applies the same rules.
+# The image needs only pyproject.toml, uv.lock and app/. Never exclude *.md: app/prompts/**/system.md
+# is read at runtime.
+
+# Secrets never enter the context (root and nested)
+**/.env*
+
+# VCS, local environments, caches, editor and agent state
+.git
+.github
+.venv
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+.DS_Store
+.idea
+.vscode
+.claude
+.superpowers
+.openspec
+.playwright-mcp
+
+# Not part of this image: the web app builds from ./web; data, docs and reports stay out, and the
+# cassettes under tests/ are mounted by compose.e2e.yaml, never baked in
+web
+data
+docs
+evals/reports
+tests
+Dockerfile
+.dockerignore
+compose*.yaml
