@@ -13,6 +13,7 @@ The system SHALL also read these settings, with these defaults:
 - `LLM_COOLDOWN_FAILURES=3` (at least 1) and `LLM_COOLDOWN_SECONDS=30` (not negative): see `llm-providers`
 - `REDIS_URL` (unset: no response cache) and `CACHE_TTL_SECONDS=86400`: see `response-cache`
 - `REPLAY_CASSETTE_DIR=tests/cassettes` and `REPLAY_DELAY_SCALE=1` (not negative): see the replay provider in `llm-providers`
+- `ALLOWED_HOSTS=localhost,127.0.0.1,ai-service,testserver`: comma-separated host names, without a port, that the API answers (see the host allowlist in `estimation-api`); an empty value keeps the default
 
 The provider chain SHALL be the primary (`LLM_PROVIDER` with `LLM_MODEL`, or model `replay` for the replay provider) followed by the `LLM_FALLBACKS` entries. Reasoning effort SHALL accept `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`, and startup SHALL fail with an error naming `LLM_REASONING_EFFORT` for any other value. Temperature and reasoning effort SHALL be applied only when the configured model supports them (see `llm-providers`). The model SHALL be selected by server configuration only, never by API callers.
 
@@ -41,7 +42,7 @@ The provider chain SHALL be the primary (`LLM_PROVIDER` with `LLM_MODEL`, or mod
 - **THEN** startup fails with an error naming `LLM_REASONING_EFFORT`
 
 ### Requirement: Fail-fast validation
-The system SHALL refuse to start when `LLM_PROVIDER` is not a supported value, when an `LLM_FALLBACKS` entry is not `provider:model` with a supported provider and a model, when a numeric setting is out of range, or when the API key of any provider in the chain (primary or fallback) is missing or blank, with an error message naming the missing or invalid variable. The `replay` provider SHALL need no key. For a missing fallback key, the error SHALL also say that `LLM_FALLBACKS=none` disables the fallback.
+The system SHALL refuse to start when `LLM_PROVIDER` is not a supported value, when an `LLM_FALLBACKS` entry is not `provider:model` with a supported provider and a model, when a numeric setting is out of range, when `ALLOWED_HOSTS` lists no host name or an entry with a port, or when the API key of any provider in the chain (primary or fallback) is missing or blank, with an error message naming the missing or invalid variable. The `replay` provider SHALL need no key. For a missing fallback key, the error SHALL also say that `LLM_FALLBACKS=none` disables the fallback.
 
 #### Scenario: Missing key for selected provider
 - **WHEN** `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` is unset
@@ -54,6 +55,10 @@ The system SHALL refuse to start when `LLM_PROVIDER` is not a supported value, w
 #### Scenario: Malformed fallback entry
 - **WHEN** `LLM_FALLBACKS` is `acme:model-1`, `anthropic`, `anthropic:`, `:gpt-4o-mini`, or `,`
 - **THEN** startup fails with an error naming `LLM_FALLBACKS`
+
+#### Scenario: Allowed host with a port
+- **WHEN** `ALLOWED_HOSTS=localhost:8000`
+- **THEN** startup fails with an error naming `ALLOWED_HOSTS`
 
 #### Scenario: Replay needs no key
 - **WHEN** `LLM_PROVIDER=replay`, `LLM_FALLBACKS=none`, and no API key is set

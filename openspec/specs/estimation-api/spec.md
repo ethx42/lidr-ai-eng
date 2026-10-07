@@ -81,6 +81,18 @@ The system SHALL attach a request identifier to every response in the `X-Request
 - **WHEN** a request carries an `X-Request-ID` of 500 characters
 - **THEN** the response carries a generated request id instead
 
+### Requirement: Host allowlist
+The system SHALL answer only requests whose `Host` header names one of the configured allowed hosts (`ALLOWED_HOSTS`, see `configuration`), comparing the name without its port and ignoring case, so that a web page which rebinds its own name to the loopback address (DNS rebinding) cannot call the loopback-published API from a browser. Any other request, including one without a `Host` header, SHALL be answered `400` with error code `invalid_host` and the request id, before any handler runs and without calling any LLM provider. The default allowed hosts SHALL cover the loopback names `localhost` and `127.0.0.1` (the Compose healthcheck, `make run` and `make dev`), the Compose service name `ai-service` (the BFF's upstream), and the test client's `testserver`.
+
+#### Scenario: Rebound host rejected
+- **WHEN** a client posts a valid transcription to `/api/v1/estimate/stream?refresh=true` with `Host: rebind.attacker.example:8000`
+- **THEN** the response status is `400` with error code `invalid_host` and the request id
+- **AND** no LLM provider call is made
+
+#### Scenario: Loopback and Compose callers answered
+- **WHEN** a client calls `GET /health` with `Host: 127.0.0.1:8000`, `localhost:8000`, or `ai-service:8000`
+- **THEN** the response status is `200`
+
 ### Requirement: Health endpoint
 The system SHALL expose `GET /health` returning `200` with `status`, application `version`, `environment`, the primary `provider` and `model`, and the configured provider `chain` (`provider:model` entries, primary first), without calling any LLM provider.
 

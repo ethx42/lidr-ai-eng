@@ -10,6 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic.json_schema import models_json_schema
+from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
@@ -89,6 +90,29 @@ class RequestIdMiddleware:
             request_id_var.reset(token)
 
 
+class AllowedHostMiddleware:
+    """Answers only a Host whose name is in ALLOWED_HOSTS, so a page that rebinds its own name to
+    127.0.0.1 (DNS rebinding) cannot call the loopback-published API. Matches like Starlette's
+    TrustedHostMiddleware (port ignored), but reads the settings the lifespan resolved and answers
+    with the API's error body."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        settings: Settings = scope["app"].state.settings
+        host = Headers(scope=scope).get("host", "").split(":")[0].lower()
+        if host in settings.allowed_hosts:
+            await self.app(scope, receive, send)
+            return
+        logger.warning("host_rejected", extra={"fields": {"host": host}})
+        response = JSONResponse(error_body("invalid_host", "Invalid host header."), 400)
+        await response(scope, receive, send)
+
+
 def create_app(
     settings: Settings | None = None,
     provider_factory: Callable[[Settings], LLMProvider] = build_provider,
@@ -121,7 +145,8 @@ def create_app(
         version=__version__,
         lifespan=lifespan,
     )
-    app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(AllowedHostMiddleware)
+    app.add_middleware(RequestIdMiddleware)  # outermost: rejections carry the request id too
     app.include_router(estimations.router)
     default_openapi = app.openapi
 

@@ -111,8 +111,9 @@ The AI service reads environment variables and `.env` (pydantic-settings; enviro
 | `MAX_TRANSCRIPTION_CHARS` | `50000` | longer requests get `422`; the web composer reads this limit from `/api/v1/context` |
 | `BLENDED_HOURLY_RATE`, `WEEKLY_CAPACITY_HOURS` | unset, `30` | cost and duration estimates (part of the cache key, since they are baked into cached totals) |
 | `APP_ENV`, `LOG_LEVEL` | `development`, `DEBUG` | JSON logs on stderr; see Logging |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1,ai-service,testserver` | comma-separated host names, without a port (unlike the BFF's variable of the same name), whose `Host` the API answers; anything else gets `400 invalid_host`. Add the name you call the API by if it is not one of these; an entry with a port fails startup |
 
-`.env.example` does not list `REPLAY_CASSETTE_DIR` and `REPLAY_DELAY_SCALE` yet; their defaults apply unless you set them.
+`.env.example` does not list `REPLAY_CASSETTE_DIR`, `REPLAY_DELAY_SCALE` and `ALLOWED_HOSTS` yet; their defaults apply unless you set them.
 
 Web (`web/`):
 
@@ -147,7 +148,7 @@ make down               # stop and remove the containers
 make dev                # dev images: reload, compose watch syncs ./app and ./web, rebuilds on lockfile changes
 ```
 
-- Open http://localhost:3000. Only `web` publishes a port, and only on loopback: there is no auth and the BFF spends the AI service's keys, so nothing is reachable from the LAN. The BFF also answers only requests whose `Host` is in `ALLOWED_HOSTS` and refuses cross-site POSTs (`Sec-Fetch-Site`, `Origin`), so a web page that rebinds its own name to 127.0.0.1 (DNS rebinding) cannot spend the keys either. `make dev` also publishes the AI service on http://localhost:8000, again loopback only. `tests/test_compose.py` enforces both rules.
+- Open http://localhost:3000. Only `web` publishes a port, and only on loopback: there is no auth and the BFF spends the AI service's keys, so nothing is reachable from the LAN. `make dev` also publishes the AI service on http://localhost:8000, again loopback only. `tests/test_compose.py` enforces both rules. Loopback alone does not stop a web page that rebinds its own name to 127.0.0.1 (DNS rebinding), so both services also check `Host`: the BFF answers only the `host:port` values in its `ALLOWED_HOSTS` and refuses cross-site POSTs (`Sec-Fetch-Site`, `Origin`) with `403`, and the AI service answers only the host names in its own `ALLOWED_HOSTS` (`400 invalid_host` otherwise), so such a page cannot spend the keys through either port.
 - `make up` uses your `.env`, so it makes live calls with your keys. For a zero-spend demo, run the offline stack the e2e tests use: `docker compose -f compose.yaml -f compose.e2e.yaml up --build --wait`. It sets `LLM_PROVIDER=replay` and `LLM_FALLBACKS=none`, disables the cache, mounts `tests/cassettes` read-only and drops `env_file` entirely (`!reset`), so the stack never holds a key. The three sample transcripts in the UI replay real recorded streams; anything else gets a synthesised stream.
 - The AI service runs one uvicorn worker (cooldown state is per process) with a 30 s graceful shutdown, so open streams can drain on `make down`.
 
@@ -213,7 +214,7 @@ Stream events, in order:
 
 Exactly one terminal event per stream; keep-alive comments every 15 s. A cache hit streams `status{cache_hit}` then `result`. A client disconnect closes the upstream provider stream, logs `outcome=cancelled` and caches nothing.
 
-Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `403 forbidden` (a `Host` outside `ALLOWED_HOSTS`, or a cross-site POST), `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
+Errors use `{"error": {"code", "message"}, "request_id"}`: `400 invalid_host` (a `Host` outside `ALLOWED_HOSTS`), `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `403 forbidden` (a `Host` outside `ALLOWED_HOSTS`, or a cross-site POST), `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
 
 ## Quality gates
 

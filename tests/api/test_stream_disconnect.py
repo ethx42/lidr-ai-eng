@@ -96,7 +96,11 @@ async def test_slow_client_disconnect_closes_upstream_in_the_request_context(
         "raw_path": b"/api/v1/estimate/stream",
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"content-type", b"application/json"), (b"x-request-id", b"slow-reader")],
+        "headers": [
+            (b"host", b"127.0.0.1:8000"),  # HTTP/1.1 requires it; the API checks it
+            (b"content-type", b"application/json"),
+            (b"x-request-id", b"slow-reader"),
+        ],
         "client": ("127.0.0.1", 50000),
         "server": ("127.0.0.1", 8000),
     }

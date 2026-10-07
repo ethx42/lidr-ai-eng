@@ -20,6 +20,7 @@ ENV_VARS = [
     "LLM_FALLBACKS",
     "LLM_COOLDOWN_FAILURES",
     "LLM_COOLDOWN_SECONDS",
+    "ALLOWED_HOSTS",
 ]
 
 
@@ -213,4 +214,32 @@ def test_invalid_cooldown_rejected(monkeypatch: pytest.MonkeyPatch, var: str, va
     both_keys(monkeypatch)
     monkeypatch.setenv(var, value)
     with pytest.raises(ValidationError, match=var.lower()):
+        load()
+
+
+def test_allowed_hosts_default_covers_loopback_compose_and_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
+    assert load().allowed_hosts == ["localhost", "127.0.0.1", "ai-service", "testserver"]
+    monkeypatch.setenv("ALLOWED_HOSTS", "")  # an empty value keeps the default
+    assert load().allowed_hosts == ["localhost", "127.0.0.1", "ai-service", "testserver"]
+
+
+def test_allowed_hosts_parses_comma_separated_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
+    monkeypatch.setenv("ALLOWED_HOSTS", " Estimator.internal ,127.0.0.1,")
+    assert load().allowed_hosts == ["estimator.internal", "127.0.0.1"]
+
+
+@pytest.mark.parametrize("value", ["localhost:8000", ",", "localhost, ai-service:8000"])
+def test_allowed_hosts_with_a_port_or_no_name_fails_at_startup(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
+    monkeypatch.setenv("ALLOWED_HOSTS", value)
+    with pytest.raises(ValidationError, match="ALLOWED_HOSTS"):
         load()

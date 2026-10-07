@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Self, TypeGuard, get_args
+from typing import Annotated, Literal, Self, TypeGuard, get_args
 
-from pydantic import Field, SecretStr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BeforeValidator, Field, SecretStr, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Provider = Literal["openai", "anthropic", "replay"]
 # Every level the installed SDKs define; which ones a model accepts lives in its profile.
@@ -25,6 +25,20 @@ def parse_link(entry: str) -> tuple[Provider, str]:
     return name, model
 
 
+def parse_hosts(value: str | list[str]) -> list[str]:
+    """`ALLOWED_HOSTS`: comma-separated host names. The port is never part of the match."""
+    entries = value.split(",") if isinstance(value, str) else value
+    hosts = [host.strip().lower() for host in entries if host.strip()]
+    if not hosts or any(":" in host for host in hosts):
+        raise ValueError(
+            "ALLOWED_HOSTS must list host names without a port, e.g. localhost,ai-service"
+        )
+    return hosts
+
+
+HostList = Annotated[list[str], NoDecode, BeforeValidator(parse_hosts)]
+
+
 class Settings(BaseSettings):
     # Errors must not echo the raw input: it holds the API keys as plain strings.
     model_config = SettingsConfigDict(
@@ -37,6 +51,9 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     app_env: str = "development"
     log_level: str = "DEBUG"
+    # Host header names the API answers (DNS rebinding guard): loopback for make run and make dev,
+    # the Compose service name the BFF calls, and TestClient's default.
+    allowed_hosts: HostList = ["localhost", "127.0.0.1", "ai-service", "testserver"]
 
     llm_timeout_seconds: float = Field(default=60, gt=0)
     llm_max_retries: int = Field(default=2, ge=0)

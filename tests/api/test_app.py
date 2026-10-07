@@ -146,3 +146,52 @@ def test_startup_fails_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
             pass
     finally:
         get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://testserver/health",  # TestClient's default
+        "http://localhost:8000/health",  # make run, make dev
+        "http://127.0.0.1:8000/health",  # the Compose healthcheck
+        "http://ai-service:8000/health",  # the BFF inside Compose
+        "http://LOCALHOST:8000/health",
+    ],
+)
+def test_allowed_hosts_are_answered(make_client: ClientFactory, url: str) -> None:
+    with make_client() as client:
+        assert client.get(url).status_code == 200
+
+
+def test_foreign_host_is_rejected_before_any_handler(
+    make_client: ClientFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A page at rebind.attacker.example:8000 whose name now resolves to 127.0.0.1
+    with make_client() as client, caplog.at_level(logging.WARNING, logger="app.main"):
+        response = client.post(
+            "http://rebind.attacker.example:8000/api/v1/estimate/stream?refresh=true",
+            json={"transcription": "Client: one"},
+            headers={"X-Request-ID": "r-host"},
+        )
+        assert response.status_code == 400
+        assert response.headers["X-Request-ID"] == "r-host"
+        assert response.json() == {
+            "error": {"code": "invalid_host", "message": "Invalid host header."},
+            "request_id": "r-host",
+        }
+        assert client.fake.calls == []
+        for host in ("rebind.attacker.example", "localhost.attacker.example", ""):
+            assert client.get("/health", headers={"host": host}).status_code == 400
+    rejected = [r.fields["host"] for r in caplog.records if r.getMessage() == "host_rejected"]
+    assert rejected == [
+        "rebind.attacker.example",
+        "rebind.attacker.example",
+        "localhost.attacker.example",
+        "",
+    ]
+
+
+def test_allowed_hosts_come_from_settings(make_client: ClientFactory) -> None:
+    with make_client(allowed_hosts=["estimator.internal"]) as client:
+        assert client.get("http://estimator.internal:8000/health").status_code == 200
+        assert client.get("http://localhost:8000/health").status_code == 400
