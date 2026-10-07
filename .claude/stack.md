@@ -1,6 +1,6 @@
 # Tech stack brief
 
-stack-fingerprint: eeb6e31c4f82
+stack-fingerprint: 5f8d5d408db4
 updated: 2026-10-07
 
 How the installed versions are meant to be used today. Read before writing code against them; update when you learn something new (`stack-grounding` skill). Installed versions win over memory and over docs for other versions.
@@ -50,6 +50,7 @@ How the installed versions are meant to be used today. Read before writing code 
 - **pytest 9:** native `[tool.pytest]` table with `strict = true` (strict config/markers/xfail/ids); built-in `subtests`, `RaisesGroup`. Deprecated: generator `argvalues`, `--pastebin`.
 - **pytest-asyncio 1.x:** reads the native `[tool.pytest]` table (verified 1.4.0). Starlette 1.6.0's `TestClient` emits an `anyio.abc.BlockingPortal` DeprecationWarning (upstream). `asyncio_mode = "auto"`; set `asyncio_default_fixture_loop_scope` explicitly; `event_loop` fixture is gone; use `loop_scope=`.
 - **ruff 0.16:** default set is now 413 rules — use `extend-select` (plain `select` replaces the defaults); `# ruff: ignore[CODE]`; `--output-format github` in CI; formatter also formats Python blocks in Markdown (exclude doc trees if unwanted).
+  - The defaults include `BLE001` (blind `except Exception`; a handler that re-raises with `raise X from exc` passes, `from None` does not) and `PLC0414` (`import X as X`). For an explicit re-export that also satisfies mypy's `no_implicit_reexport`, list the name in `__all__` (session 5 Task 4).
 - **mypy 2.x:** strict + `pydantic.mypy`; `--local-partial-types`/`--strict-bytes` now default; extras worth enabling: `warn_unreachable`, `ignore-without-code`, `redundant-expr`, `truthy-bool`, `possibly-undefined`, `[tool.pydantic-mypy]` flags; `-n N` parallel (experimental).
 - **Sources:** Context7 `/websites/astral_sh_uv`, `/pytest-dev/pytest`, `/pytest-dev/pytest-asyncio`, `/websites/astral_sh_ruff`, `/python/mypy` (2026-09-23); `--help` output, release notes, scratch-config runs.
 
@@ -235,7 +236,8 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 
 ### FastAPI 0.141.1 multipart + python-multipart 0.0.32
 - **Use:**
-  - Add `python-multipart>=0.0.32` as a direct dependency. It is the latest (2026-06-04, Apache-2.0) and is **not installed** today. Without it, FastAPI raises `RuntimeError` at route registration for any `Form`/`File` param. Don't use `fastapi[standard]` just for this.
+  - `python-multipart>=0.0.32` is a direct dependency (installed 0.0.32, session 5 Task 4; Apache-2.0). Without it, FastAPI raises `RuntimeError` at route registration for any `Form`/`File` param. Don't use `fastapi[standard]` just for this.
+  - The import name is `python_multipart` (FastAPI checks `from python_multipart import __version__`); the old `multipart` package dir is only a compatibility shim.
   - Verified shape: a single form model that also holds the files.
   ```python
   class EstimateForm(BaseModel):
@@ -348,6 +350,19 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 - **New and useful:** resource limits via `pypdf.Configuration` (6.18), applied with `with pypdf.apply_configuration(zlib_maximum_output_length=..., page_tree_maximum_entries=...)` (ContextVar-based; it propagates into `asyncio.to_thread`, verified). The defaults are a 75 MB decompressed stream and 100k page-tree entries. Exceeding a limit raises `LimitReachedError`. 6.14–6.19 are mostly security fixes, so keep the floor current.
 - **Avoid:** mutating `pypdf.filters.ZLIB_MAX_OUTPUT_LENGTH` and similar constants (deprecated, removed in 7.0); `strict=True` for uploads; `extraction_mode="layout"` (experimental); relying on the text order.
 - **Sources:** Context7 `/websites/pypdf_readthedocs_io_en_stable` (extract_text, encryption, errors) and `/py-pdf/pypdf` (Configuration, changelog), 2026-10-06. PyPI JSON, `inspect.signature` and the `pypdf.errors` MRO on 6.19.0, and reportlab-generated plain and encrypted PDFs.
+- **Installed and used (2026-10-07, session 5 Task 4, `app/attachments/extractor.py`):** pypdf 6.19.0 with `cryptography` 50.0.2 (`pypdf[crypto]`).
+  - **Order matters:** on a user-password PDF, `len(reader.pages)` itself raises `FileNotDecryptedError`. Check `is_encrypted` + `decrypt("") == PasswordType.NOT_DECRYPTED` first, then the page count. `PasswordType` is exported from `pypdf`.
+  - **`apply_configuration(**dict)` fails mypy:** the first positional parameter is `configuration: Configuration | None`, so a `**dict[str, int]` is matched against it. Pass the keywords inline: `apply_configuration(zlib_maximum_output_length=20_000_000, page_tree_maximum_entries=10_000)`.
+  - **Bomb check (verified):** a 25 KB PDF whose page content stream inflates to 25 MB raises `LimitReachedError` under a 20 MB `zlib_maximum_output_length` (10 ms). `extract_text()` only decodes the content stream of a page that has `/Resources /Font`; a page without fonts returns `""` without decoding.
+  - **Malformed input raises more than `PyPdfError`/`DependencyError` (fuzzed: 3,000 random byte mutations of a plain and an AES-256 PDF):** bare `KeyError` (`'/CF'`, `'/DescendantFonts'`, …), `AttributeError`, `TypeError`, `ValueError` and `NotImplementedError` ("only Standard PDF encryption handler is available", "Encryption V=0 NOT supported"). Wrap the whole read in `except Exception` (re-raise your own errors and `MemoryError` first) when a failure must become a 4xx, and log only `type(exc).__name__`, because the messages can quote the document.
+  - Font-encoding problems are logged at ERROR on `pypdf._cmap` ("Advanced encoding … not implemented yet"); capping the `pypdf` logger at ERROR keeps those and drops the per-object repair warnings.
+  - `PdfWriter(clone_from=PdfReader(...))` + `writer.encrypt(user_password=..., owner_password=..., algorithm="AES-256")` builds an encrypted fixture (`tests/fixtures/attachments/make_fixtures.py`; the plain PDF comes from fpdf2 2.8.9 run ad hoc with `uv run --with fpdf2`, not a dependency, with `set_creation_date` pinned so `spec.pdf` is byte-stable across reruns; `encrypted.pdf` (random IV) and `spec.docx` (zip timestamps) are not).
+  - Import cost: about 73 ms (python-docx about 50 ms). `AttachmentLimits` lives in the stdlib-only `app/attachments/limits.py`, so `app.config` loads neither (subprocess test).
+  - **CPU cost (measured, fix round 1):** page content parses at about 0.75–1 s per MB decoded, and pages that share one content stream re-parse it each. Every font *name* in a page's `/Resources /Font` is built (ToUnicode CMap parsed, about 0.17 s per MB) before the first operator, even when the names point at the same font object: 100 names sharing one 256 KB CMap took 4.3 s for a 3.7 KB upload, linear in the count. Neither a check between pages nor `visitor_operand_before` can stop that.
+  - Form XObjects: a form without `/Resources` is skipped unparsed. Each `Do` re-parses the form's content (`xform_maximum_invocations_per_extraction`, default 5,000 per page), and `_extract_text__xform` swallows any `Exception` from a form with a WARNING, so an abort raised inside a form must be a `BaseException`.
+  - **Bounding time:** only a separate process that can be killed gives a hard bound (fix round 2: `app/attachments/isolation.py`; see "multiprocessing + resource" below). `extractor.py` keeps a check between pages against `AttachmentLimits.timeout_seconds` and lowers the `zlib`/`array_based_stream`/`lzw`/`run_length` output caps to 4 MB, as defence in depth. A 4 MB decoded stream is about 4 s of parsing.
+  - **Superseded (fix round 1):** a `sys.settrace` deadline hook worked: a `BaseException` raised from `call` events, about 2.4 times slower. It was fragile, though. The first Python call after the deadline can be a garbage-collector weakref callback or a generator `close()`. An exception raised there is only printed, and CPython then switches the tracer off for good. It was replaced by process isolation.
+  - The per-filter caps are `Configuration` fields used in `filters.py` (`zlib_maximum_output_length`, `lzw_maximum_output_length`, `run_length_maximum_output_length`) and `generic/_data_structures.py` (`array_based_stream_maximum_output_length` for `/Contents` arrays, `maximum_declared_stream_length` for raw `/Length`).
 
 ### python-docx 1.2.0 + licenses
 - **Use:**
@@ -366,7 +381,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
     - A zip without `[Content_Types].xml` raises `KeyError`.
     - Another OOXML type (xlsx) raises `ValueError("... is not a Word file ...")`.
     - `PackageNotFoundError` is raised only for path strings.
-  - XXE is off (`resolve_entities=False`), but there is **no zip-bomb guard**. Check `sum(i.file_size for i in zipfile.ZipFile(buf).infolist()) <= cap`, then `buf.seek(0)`.
+  - XXE is off (`resolve_entities=False`), but there is **no zip-bomb guard**. Check `sum(i.file_size for i in zipfile.ZipFile(buf).infolist()) <= cap`, then repack in bounded reads (the sum alone is not enough; see "Installed and used" below).
   - It is sync, so run it in a thread.
 - **Licenses (PyPI metadata, 2026-10-06):**
   - pypdf: BSD-3-Clause.
@@ -378,6 +393,55 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   - jiter: MIT.
   - **PyMuPDF 1.28.2: "GNU AFFERO GPL 3.0 or Artifex Commercial License". AGPL is confirmed, so do not add it.**
 - **Sources:** Context7 `/python-openxml/python-docx` (`blkcntnr.iter_inner_content`, `table._Row.cells`, tables docs), 2026-10-06. PyPI JSON, a scratch docx with merges, a nested table, header and footer, and the garbage/empty/zip/xlsx inputs.
+- **Installed and used (2026-10-07, session 5 Task 4):** python-docx 1.2.0 with lxml 6.1.3. `Document(docx: str | IO[bytes] | None)`; `Document.iter_inner_content() -> Iterator[Paragraph | Table]` (import `Table` from `docx.table`, `Paragraph` from `docx.text.paragraph`).
+  - **More exceptions on malformed packages (verified by rewriting one member of a real .docx, then fuzzed with 1,500 byte mutations):** a broken `word/document.xml` or `_rels/.rels` raises lxml's `XMLSyntaxError`, which is a builtin `SyntaxError` subclass (catch `SyntaxError`; importing `lxml` in `app/` would make it a direct dependency under `tests/test_structure.py`); a document part whose root is another element raises `AttributeError`; a corrupt deflate member raises `zlib.error`. Wrap the parse the same way: re-raise your own errors and `MemoryError`, and log only the type name.
+  - **The declared-size sum alone is not a zip-bomb guard (verified, CPython 3.12 `zipfile`):** `ZipExtFile` cuts each member at the central directory's `file_size`, but only *after* inflating. `read()` (what python-docx's `ZipFile.read(name)` calls) asks the decompressor for up to `MAX_N` (`1 << 31 - 1`, i.e. 1 GiB) at once. A 1.4 MB .docx whose `word/document.xml` declares 1 KB but inflates to 600 MB took peak RSS from 47 MB to 651 MB before failing. `read(n)` is bounded (`decompress(data, max(n, 4096))`). So: check `sum(info.file_size ...)` for the clear "too large" error, then copy every member with `shutil.copyfileobj(source.open(info), copy.open(info.filename, "w"))` into a new uncompressed `ZipFile(BytesIO(), "w")` and hand that to `Document` (`repacked` in `app/attachments/extractor.py`; regression test with `tracemalloc`). A lying member then stops at its declared size and usually fails its CRC (`BadZipFile`).
+  - Internal DTD entities are not expanded (`resolve_entities=False`): `&b;` comes out as an empty run, so "billion laughs" yields nothing.
+  - **Element count, not bytes, drives memory and CPU:** `Document()` on 1M empty `<w:p/>` (6 MB XML) took +134 MB and 0.07 s; on 5M (a 78 KB upload) +477 MB, and iterating them took 34 s and +771 MB. `extractor.py` counts `<` bytes in the `.xml`/`.rels` members while repacking (cap 1M; Word writes about 25 per paragraph) and the parse runs in the killable child process (`extract_all_isolated`).
+  - **More `zipfile` traps (CPython 3.12):**
+    - The bzip2 and LZMA readers call `decompress(data)` with no output limit, so even `read(64 KiB)` can inflate without bound. Reject any member whose `compress_type` is not `ZIP_STORED` or `ZIP_DEFLATED` (all Word writes) before reading.
+    - Besides `BadZipFile`, the `ZipFile()` constructor raises `UnicodeDecodeError` (a name flagged UTF-8 that is not) and `NotImplementedError` ("zip file version 9.5"). Found by fuzzing 40,000 central directories.
+    - Writing a duplicate name emits a `UserWarning` that quotes the name; check the names for duplicates first.
+
+### multiprocessing + resource (CPython 3.12.11): killable extraction child (2026-10-07, session 5 Task 4 fix round 2)
+- **Sources:** Context7 `/websites/python_3_12_library` (multiprocessing contexts and start methods, `set_forkserver_preload`, `Pipe`, `connection.wait`, `Process.join`/`exitcode`; `resource.setrlimit`/`getrlimit`). Also the installed stdlib source (`multiprocessing/forkserver.py`, `process.py`, `context.py`) and probes on macOS 15 (arm64) and in the `python:3.12-slim-trixie` image (Linux aarch64, Docker 29.4).
+- **Start method: `forkserver`, via `multiprocessing.get_context("forkserver")`.** A library should not call `set_start_method`.
+  - The server is launched with `spawnv_passfds`, meaning fork+exec, so starting it from a threaded server is safe. It is single-threaded, and every child forks from it.
+  - `set_forkserver_preload([...])` is process-wide and only takes effect before the server starts. `ImportError` is ignored.
+  - **Correction (fix round 4):** an explicit list without `"__main__"` does not stop main from being re-imported. It moves the work into every child: `spawn.prepare()` re-runs the parent's main *script* (`init_main_from_path`) in each child, unless the child inherited a `__main__` whose `__file__` matches. A `-m` main (`init_main_from_name` ending in `.__main__`) is never re-run.
+  - **`["__main__", ...]` is a no-op on CPython 3.12.11:** `forkserver.ensure_running` keeps only `{'main_path', 'sys_path'}` from `spawn.get_preparation_data()`, which emits `init_main_from_path`, so `main_path` is always `None` in the server. Verified in source and by measurement.
+  - **Measured cost, accepted (fix round 5 ruling):**
+    - With uvicorn's console script as `__main__`, each child re-runs it, which mostly means importing `uvicorn.main`.
+    - The median `extract_all_isolated` call on the three fixtures takes about 37 ms on Linux (Docker `python:3.12-slim-trixie`, aarch64) and about 36 ms on macOS (arm64), against 13 and 12 ms once the server has loaded the script. Measured with `uvicorn --app-dir <probe> probe_app:app`, 20 calls.
+    - A workaround did remove the cost: the parent exported its script path and the forkserver preload called `spawn.import_main_path`. It was dropped, because it depended on CPython internals (the forkserver's `-c` command, the preparation-data keys) and added an environment variable, all to save about 25 ms per upload. That is small next to the LLM call that follows.
+    - Running the service as `python -m uvicorn` would avoid the re-run without any code; the Docker CMD uses the console script.
+  - The server gets the parent's `sys.path` from the spawn preparation data. That is how test-module targets unpickle in the child.
+- **Measured overhead** (a small probe script as `__main__`; with uvicorn's console script, add about 25 ms per child, as above):
+  - forkserver: about 11 ms per child on Linux (7 ms on macOS) after a one-off 91–114 ms start.
+  - spawn: 108–160 ms per child on Linux (435 ms cold) and 115–210 ms on macOS.
+  - `extract_all_isolated` on the three fixtures: median 15.8 ms against 6.2 ms in-process on Linux (14.6 against 4.4 ms on macOS). The first call takes 119–137 ms.
+  - A child stuck on a 1,000-font page is killed at 2.00 s with a 2 s timeout and at 10.01 s with a 10 s timeout.
+- **Pipe pattern:** `receive, send = ctx.Pipe(duplex=False)`. Start the process, then `send.close()` in the parent.
+  - The child's death then shows up as `receive.poll(t)` returning True and `recv()` raising `EOFError`.
+  - `poll(timeout)` with the remaining time gives the hard timeout. Then `kill()` (SIGKILL) if `is_alive()`, `join()` and `close()`.
+  - `exitcode` is negative for a signal.
+  - Use `daemon=True` so children die with the parent.
+- **Pickling across the boundary:** an exception pickles as `(cls, args)`. Its traceback, `__cause__` and `__context__` do not cross, so a parser message chained inside never leaves the child. Frozen dataclasses round-trip.
+- **`resource.setrlimit(RLIMIT_AS, (soft, hard))`:**
+  - It raises `ValueError` when soft is greater than hard, or when raising the hard limit.
+  - On macOS, any 512 MB cap fails with `ValueError: current limit exceeds maximum limit`, because the address space already reserved is far larger. Suppress the error there.
+  - On Linux it is enforced: `bytearray(1 GiB)` under a 512 MB cap raises `MemoryError` in the child. An idle child with pypdf, python-docx and lxml imported maps about 62 MB (`VmSize`), so 128 MiB is a sane floor.
+  - Lower only the soft limit and keep the current hard one.
+- **Bounding concurrency (fix round 3):**
+  - A module-level `threading.BoundedSemaphore` caps the children at `AttachmentLimits.max_concurrent` (default 2). It is created on first use under a `threading.Lock`.
+  - The caller holds a slot for the child's whole lifetime. `acquire(timeout=...)` returns `False` on expiry, which becomes a "busy" `AttachmentError`.
+  - A thread semaphore is right because callers wait in `asyncio.to_thread` worker threads.
+- **Exception attributes across the pipe:** `BaseException.__reduce__` returns `(cls, args, __dict__)`. An attribute set in `__init__` (`AttachmentError.reason`) therefore survives pickling, as long as the extra `__init__` parameter has a default, since unpickling calls `cls(*args)` and then restores `__dict__`. Verified by a round-trip test.
+- **`RLIMIT_CPU` as a backstop:** the child sets a soft `RLIMIT_CPU` of `ceil(timeout) + 1` CPU seconds. Since CPU time is at most wall time for this single-threaded work, the parent's wall-clock kill always comes first. The limit only stops a child that outlived its parent: the forkserver exits with the parent, but its children do not. macOS and Linux both accept it (verified by reading it back in the child).
+- **Pipe edge cases:**
+  - A child killed in the middle of `send` leaves a partial message. `recv()` then raises `OSError("got end of file during message")`, not `EOFError`, so catch both.
+  - Open the pipe with `with receive, send:` so both ends close even when `Process.start()` raises. `Connection.close()` is idempotent.
+- **Logging in the child:** a forked child has no handlers, so `logging.lastResort` would print WARNING and above to stderr, unformatted (pypdf's included). Add a `NullHandler` to the root logger in the child and forward only the extractor's type-name records through the pipe.
 
 ### httpx2 2.13.0: async integration tests
 - **Use:** `httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://test")`. The signature is `ASGITransport(app, raise_app_exceptions=True, root_path="", client=("127.0.0.1", 123))`. It does **not** run the lifespan (verified: no startup and no `app.state`). The httpx2 docs call lifespan out of scope.
@@ -441,7 +505,9 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
     - Read and extract the uploads before the stream starts.
 11. **Parsers are sync and CPU-bound:** call pypdf and python-docx via `run_in_threadpool`/`anyio.to_thread`.
     - Use `pypdf[crypto]`, and catch `PyPdfError` *and* `DependencyError`.
-    - Zip-size-guard `.docx` uploads before opening them.
+    - Zip-size-guard `.docx` uploads before opening them, then repack them in bounded reads (a lying header otherwise inflates up to 1 GiB per member).
+    - Both parsers raise bare builtin exceptions on malformed files (see the pypdf and python-docx "Installed and used" notes); `app/attachments/extractor.py` maps any parser failure to `AttachmentError`.
+    - Bound wall-clock time and memory by extracting in a killable child process (`extract_all_isolated`, called through `asyncio.to_thread`); checks between pages cannot stop one expensive page. Bound DOCX memory by element count, not just bytes.
     - An all-empty `extract_text()` is an unsupported (scanned) PDF.
 12. **Redis fail-open:**
     - Use `from_url` (no retries) with timeouts of about 0.25–0.5 s, not the 5 s defaults.
