@@ -14,7 +14,7 @@ from starlette.types import Message
 from app.config import Settings
 from app.main import create_app
 from app.services.cache import RedisCache
-from tests.factories import TRANSCRIPT
+from tests.factories import request_body
 from tests.fakes import SlowFakeProvider, TickingFakeProvider
 
 
@@ -45,7 +45,7 @@ async def test_client_disconnect_closes_upstream(
                 http.stream(
                     "POST",
                     f"http://127.0.0.1:{unused_tcp_port}/api/v1/estimate/stream",
-                    json={"transcription": TRANSCRIPT},
+                    json=request_body(),
                 ) as r,
             ):
                 async for line in r.aiter_lines():
@@ -67,7 +67,7 @@ async def test_slow_client_disconnect_closes_upstream_in_the_request_context(
     # endpoint generator paused at a `yield`, which no cancellation reaches.
     provider = TickingFakeProvider()
     app = create_app(settings=settings, provider_factory=lambda _: provider)
-    body = json.dumps({"transcription": TRANSCRIPT}).encode()
+    body = json.dumps(request_body()).encode()
     disconnected = asyncio.Event()
     received = sent_chunks = 0
 

@@ -8,6 +8,7 @@ from app.main import create_app
 from app.observability import JsonFormatter
 from app.services.cache import NullCache
 from tests.api.conftest import ClientFactory
+from tests.factories import request_body
 from tests.fakes import FakeProvider
 
 
@@ -84,7 +85,10 @@ def test_provider_created_once_and_closed_on_shutdown(make_client: ClientFactory
     )
     with TestClient(app) as client:
         for text in ("Client: one", "Client: two"):
-            assert client.post("/api/v1/estimate", json={"transcription": text}).status_code == 200
+            assert (
+                client.post("/api/v1/estimate", json=request_body(transcription=text)).status_code
+                == 200
+            )
         assert not provider.closed
     assert len(created) == 1
     assert len(provider.calls) == 2
@@ -100,7 +104,9 @@ def test_cache_closed_on_shutdown(make_client: ClientFactory) -> None:
 
     cache = ClosingCache()
     with make_client(cache=cache) as client:
-        assert client.post("/api/v1/estimate", json={"transcription": "Client: one"}).is_success
+        assert client.post(
+            "/api/v1/estimate", json=request_body(transcription="Client: one")
+        ).is_success
         assert not cache.closed
     assert cache.closed
 
@@ -170,7 +176,7 @@ def test_foreign_host_is_rejected_before_any_handler(
     with make_client() as client, caplog.at_level(logging.WARNING, logger="app.main"):
         response = client.post(
             "http://rebind.attacker.example:8000/api/v1/estimate/stream?refresh=true",
-            json={"transcription": "Client: one"},
+            json=request_body(transcription="Client: one"),
             headers={"X-Request-ID": "r-host"},
         )
         assert response.status_code == 400

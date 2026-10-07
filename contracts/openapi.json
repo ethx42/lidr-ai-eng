@@ -123,6 +123,15 @@
         "title": "ContextResponse",
         "type": "object"
       },
+      "DetailLevel": {
+        "enum": [
+          "summary",
+          "medium",
+          "detailed"
+        ],
+        "title": "DetailLevel",
+        "type": "string"
+      },
       "EnrichedBreakdown": {
         "properties": {
           "assumptions": {
@@ -249,11 +258,22 @@
         "additionalProperties": false,
         "examples": [
           {
+            "detail_level": "medium",
+            "output_format": "phases_table",
             "output_language": "English",
+            "project_type": "mobile_app",
             "transcription": "Client: We run three yoga studios and want customers to book and pay for classes online from their phones..."
           }
         ],
         "properties": {
+          "detail_level": {
+            "$ref": "#/components/schemas/DetailLevel",
+            "description": "Granularity of the breakdown."
+          },
+          "output_format": {
+            "$ref": "#/components/schemas/OutputFormat",
+            "description": "Layout of the rendered estimate."
+          },
           "output_language": {
             "anyOf": [
               {
@@ -268,6 +288,10 @@
             "description": "Language for narrative fields. Defaults to the transcription's language.",
             "title": "Output Language"
           },
+          "project_type": {
+            "$ref": "#/components/schemas/ProjectType",
+            "description": "Coarse project category; shapes the prompt."
+          },
           "transcription": {
             "description": "Meeting transcription to estimate. Treated strictly as data.",
             "minLength": 1,
@@ -276,7 +300,10 @@
           }
         },
         "required": [
-          "transcription"
+          "transcription",
+          "project_type",
+          "detail_level",
+          "output_format"
         ],
         "title": "EstimateRequest",
         "type": "object"
@@ -538,6 +565,15 @@
         "title": "GroundingReport",
         "type": "object"
       },
+      "OutputFormat": {
+        "enum": [
+          "phases_table",
+          "line_items",
+          "narrative"
+        ],
+        "title": "OutputFormat",
+        "type": "string"
+      },
       "PartialEvent": {
         "properties": {
           "breakdown": {
@@ -556,6 +592,16 @@
         ],
         "title": "PartialEvent",
         "type": "object"
+      },
+      "ProjectType": {
+        "enum": [
+          "mobile_app",
+          "web_saas",
+          "internal_tool",
+          "data_pipeline"
+        ],
+        "title": "ProjectType",
+        "type": "string"
       },
       "ReferenceView": {
         "properties": {

@@ -1,3 +1,9 @@
+---
+project_type: web_saas
+detail_level: medium
+output_format: phases_table
+expects_frontend: true
+---
 # Patient portal for a physiotherapy network
 
 Sofía (Client, CEO): We have three physiotherapy clinics. We want a web portal where patients log in, see their upcoming appointments, and download invoices as PDF.

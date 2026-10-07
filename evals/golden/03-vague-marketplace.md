@@ -1,3 +1,9 @@
+---
+project_type: web_saas
+detail_level: medium
+output_format: phases_table
+expects_frontend: true
+---
 # Early idea call
 
 Pablo (Founder): So the idea is kind of like an Airbnb, but for things. People have stuff they don't use and others could rent it.

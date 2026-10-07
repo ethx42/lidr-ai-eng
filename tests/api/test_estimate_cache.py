@@ -7,12 +7,12 @@ import pytest
 from app.services.cache import RedisCache
 from tests.api.conftest import ClientFactory
 from tests.api.test_estimate_stream import parse_sse
-from tests.factories import TRANSCRIPT, breakdown
+from tests.factories import breakdown, request_body
 from tests.fakes import FakeProvider
 
 ESTIMATE = "/api/v1/estimate"
 STREAM = "/api/v1/estimate/stream"
-BODY = {"transcription": TRANSCRIPT}
+BODY = request_body()
 
 
 def result_of(response: httpx2.Response) -> dict[str, Any]:

@@ -14,7 +14,13 @@ from pathlib import Path
 from app.config import Settings
 from app.observability import configure_logging
 from app.prompts.loader import PromptBundle, build_user_message, load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.schemas.estimation import (
+    DetailLevel,
+    EstimateRequest,
+    EstimationBreakdown,
+    OutputFormat,
+    ProjectType,
+)
 from app.services.pricing import cost_usd
 from app.services.providers.base import LLMProvider, LLMResult, TextDelta
 from app.services.providers.factory import build_one
@@ -47,9 +53,19 @@ def sample_text(sample: Path) -> str:
     return FRONT_MATTER.sub("", sample.read_text(encoding="utf-8"))
 
 
+def sample_request(sample: Path) -> EstimateRequest:
+    """The sample with the default choices; the request model strips whitespace like the API."""
+    return EstimateRequest(
+        transcription=sample_text(sample),
+        project_type=ProjectType.WEB_SAAS,
+        detail_level=DetailLevel.MEDIUM,
+        output_format=OutputFormat.PHASES_TABLE,
+    )
+
+
 def prompt_pair(sample: Path, prompt: PromptBundle) -> tuple[str, str]:
-    """The service's system and user strings; the request model strips whitespace like the API."""
-    request = EstimateRequest(transcription=sample_text(sample))
+    """The service's system and user strings for the sample's request."""
+    request = sample_request(sample)
     return prompt.system_text, build_user_message(request.transcription, request.output_language)
 
 

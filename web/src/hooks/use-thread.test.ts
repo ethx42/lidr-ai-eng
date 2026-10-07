@@ -48,7 +48,7 @@ describe("useThread", () => {
 
     act(() => result.current.send("We need a booking portal."));
     expect(result.current.turns).toEqual([{ id: expect.any(String), transcription: "We need a booking portal.", state: expect.objectContaining({ status: "streaming" }) }]);
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ transcription: "We need a booking portal." });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ transcription: "We need a booking portal.", project_type: "web_saas", detail_level: "medium", output_format: "phases_table" });
 
     streams[0].push(frame("partial", { seq: 1, breakdown: { project_name: "Booking" } }));
     await waitFor(() => expect(result.current.turns[0].state).toMatchObject({ status: "streaming", partial: { project_name: "Booking" } }));
@@ -102,7 +102,7 @@ describe("useThread", () => {
     const first = result.current.turns[0].id;
     act(() => result.current.regenerate(first));
     expect(fetchMock.mock.calls[2][0]).toBe("/api/estimate/stream?refresh=true");
-    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ transcription: "First" });
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ transcription: "First", project_type: "web_saas", detail_level: "medium", output_format: "phases_table" });
     expect(result.current.turns.map((turn) => [turn.id === first, turn.state.status])).toEqual([
       [true, "streaming"],
       [false, "done"],

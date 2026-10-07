@@ -5,8 +5,14 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown
-from tests.factories import breakdown, breakdown_data, task
+from app.schemas.estimation import (
+    DetailLevel,
+    EstimateRequest,
+    EstimationBreakdown,
+    OutputFormat,
+    ProjectType,
+)
+from tests.factories import REQUEST_DEFAULTS, breakdown, breakdown_data, request, task
 
 UNSUPPORTED_KEYWORDS = {
     "minimum",
@@ -109,14 +115,16 @@ def test_understanding_fields_precede_tasks() -> None:
 
 
 def test_request_strips_and_rejects_blank() -> None:
-    assert EstimateRequest(transcription="  hi  ").transcription == "hi"
+    assert request(transcription="  hi  ").transcription == "hi"
     with pytest.raises(ValidationError):
-        EstimateRequest(transcription="   ")
+        request(transcription="   ")
 
 
 def test_request_forbids_extra_fields() -> None:
     with pytest.raises(ValidationError):
-        EstimateRequest.model_validate({"transcription": "hi", "model": "gpt-5"})
+        EstimateRequest.model_validate(
+            {"transcription": "hi", **REQUEST_DEFAULTS, "model": "gpt-5"}
+        )
 
 
 def test_breakdown_data_round_trips() -> None:
@@ -157,3 +165,42 @@ def test_single_field_rules_report_the_field(
     overrides: dict[str, Any], loc: tuple[int | str, ...]
 ) -> None:
     assert error_locs(overrides) == [loc]
+
+
+def typed(**overrides: object) -> dict[str, object]:
+    return {
+        "transcription": "Client: we need a booking app for three studios.",
+        "project_type": "mobile_app",
+        "detail_level": "medium",
+        "output_format": "phases_table",
+        **overrides,
+    }
+
+
+def test_enums_use_brief_values() -> None:
+    assert [e.value for e in ProjectType] == [
+        "mobile_app",
+        "web_saas",
+        "internal_tool",
+        "data_pipeline",
+    ]
+    assert [e.value for e in DetailLevel] == ["summary", "medium", "detailed"]
+    assert [e.value for e in OutputFormat] == ["phases_table", "line_items", "narrative"]
+
+
+@pytest.mark.parametrize("field", ["project_type", "detail_level", "output_format"])
+def test_typed_fields_are_required(field: str) -> None:
+    body = typed()
+    del body[field]
+    with pytest.raises(ValidationError):
+        EstimateRequest.model_validate(body)
+
+
+def test_unknown_enum_value_rejected() -> None:
+    with pytest.raises(ValidationError):
+        EstimateRequest.model_validate(typed(project_type="MOBILE_APP"))
+
+
+def test_enums_serialize_to_their_values() -> None:
+    dumped = EstimateRequest.model_validate(typed()).model_dump(mode="json")
+    assert dumped["project_type"] == "mobile_app"

@@ -1,3 +1,9 @@
+---
+project_type: mobile_app
+detail_level: medium
+output_format: phases_table
+expects_frontend: true
+---
 # Reunión: app de pedidos para una cafetería
 
 Carmen (Cliente): Tenemos una cafetería con mucho movimiento por la mañana. Queremos que los clientes puedan pedir y pagar desde el móvil antes de llegar, para recogerlo en barra.

@@ -76,8 +76,23 @@ def breakdown(**overrides: Any) -> EstimationBreakdown:
     return EstimationBreakdown.model_validate(breakdown_data(**overrides))
 
 
+REQUEST_DEFAULTS = {
+    "project_type": "web_saas",
+    "detail_level": "medium",
+    "output_format": "phases_table",
+}
+
+
+def request_body(**overrides: object) -> dict[str, object]:
+    return {"transcription": TRANSCRIPT, **REQUEST_DEFAULTS, **overrides}
+
+
 def request(**overrides: object) -> EstimateRequest:
-    return EstimateRequest.model_validate({"transcription": TRANSCRIPT} | overrides)
+    return EstimateRequest.model_validate(request_body(**overrides))
+
+
+def typed_request(transcription: str = TRANSCRIPT, **overrides: object) -> EstimateRequest:
+    return request(transcription=transcription, **overrides)
 
 
 def response_fixture() -> EstimateResponse:

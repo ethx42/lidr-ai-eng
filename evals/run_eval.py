@@ -7,14 +7,21 @@ import re
 import sys
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import KW_ONLY, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from app.config import Settings
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EnrichedBreakdown, EstimateRequest, EstimateResponse
+from app.schemas.estimation import (
+    DetailLevel,
+    EnrichedBreakdown,
+    EstimateRequest,
+    EstimateResponse,
+    OutputFormat,
+    ProjectType,
+)
 from app.services.cache import NullCache, cache_scope
 from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
@@ -45,6 +52,8 @@ LANGUAGE_NAMES = {
     "español": "spanish",
 }
 FRONT_MATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+REQUIRED_KEYS = ("project_type", "detail_level", "output_format", "expects_frontend")
+BOOLEANS = {"true": True, "false": False}
 
 
 @dataclass(frozen=True)
@@ -52,6 +61,11 @@ class GoldenCase:
     name: str
     transcript: str
     output_language: str | None = None
+    _: KW_ONLY
+    project_type: ProjectType = ProjectType.WEB_SAAS
+    detail_level: DetailLevel = DetailLevel.MEDIUM
+    output_format: OutputFormat = OutputFormat.PHASES_TABLE
+    expects_frontend: bool = False
 
     @property
     def vague(self) -> bool:
@@ -62,11 +76,25 @@ def parse_case(path: Path) -> GoldenCase:
     text = path.read_text(encoding="utf-8")
     match = FRONT_MATTER.match(text)
     if not match:
-        return GoldenCase(path.stem, text)
-    meta = dict(line.split(":", 1) for line in match.group(1).splitlines() if ":" in line)
-    return GoldenCase(
-        path.stem, text[match.end() :], meta.get("output_language", "").strip() or None
-    )
+        raise ValueError(f"{path.name}: no front matter (needs {', '.join(REQUIRED_KEYS)})")
+    pairs = (line.split(":", 1) for line in match.group(1).splitlines() if ":" in line)
+    meta = {key.strip(): value.strip() for key, value in pairs}
+    if missing := [key for key in REQUIRED_KEYS if key not in meta]:
+        raise ValueError(f"{path.name}: front matter is missing {', '.join(missing)}")
+    if meta["expects_frontend"] not in BOOLEANS:
+        raise ValueError(f"{path.name}: expects_frontend must be true or false")
+    try:
+        return GoldenCase(
+            path.stem,
+            text[match.end() :],
+            meta.get("output_language") or None,
+            project_type=ProjectType(meta["project_type"]),
+            detail_level=DetailLevel(meta["detail_level"]),
+            output_format=OutputFormat(meta["output_format"]),
+            expects_frontend=BOOLEANS[meta["expects_frontend"]],
+        )
+    except ValueError as exc:
+        raise ValueError(f"{path.name}: {exc}") from exc
 
 
 def load_golden_cases(directory: Path = GOLDEN_DIR) -> list[GoldenCase]:
@@ -130,7 +158,13 @@ async def evaluate_case(service: EstimationService, case: GoldenCase) -> dict[st
     error: str | None = None
     try:
         response = await service.estimate(
-            EstimateRequest(transcription=case.transcript, output_language=case.output_language)
+            EstimateRequest(
+                transcription=case.transcript,
+                output_language=case.output_language,
+                project_type=case.project_type,
+                detail_level=case.detail_level,
+                output_format=case.output_format,
+            )
         )
     except LLMError as exc:
         error = exc.code

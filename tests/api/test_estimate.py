@@ -11,7 +11,7 @@ from app.services.errors import (
     UpstreamUnavailable,
 )
 from tests.api.conftest import ClientFactory
-from tests.factories import TRANSCRIPT
+from tests.factories import REQUEST_DEFAULTS, request_body
 from tests.fakes import FakeProvider
 
 URL = "/api/v1/estimate"
@@ -19,7 +19,7 @@ URL = "/api/v1/estimate"
 
 def test_success(make_client: ClientFactory) -> None:
     with make_client() as client:
-        response = client.post(URL, json={"transcription": TRANSCRIPT})
+        response = client.post(URL, json=request_body())
         assert response.status_code == 200
         body = response.json()
         assert body["estimation"].startswith("## Estimation:")
@@ -42,7 +42,7 @@ def test_llm_call_log_excludes_transcript(
     make_client: ClientFactory, caplog: pytest.LogCaptureFixture
 ) -> None:
     with make_client() as client, caplog.at_level(logging.DEBUG):
-        client.post(URL, json={"transcription": TRANSCRIPT}, headers={"X-Request-ID": "log-1"})
+        client.post(URL, json=request_body(), headers={"X-Request-ID": "log-1"})
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.request_id == "log-1"  # type: ignore[attr-defined]
     assert all("yoga studio" not in str(r.__dict__) for r in caplog.records)
@@ -51,13 +51,14 @@ def test_llm_call_log_excludes_transcript(
 @pytest.mark.parametrize(
     "payload,settings",
     [
-        ({"transcription": "   "}, {}),
-        ({"transcription": ""}, {}),
-        ({}, {}),
-        ({"transcription": "x" * 11}, {"max_transcription_chars": 10}),
-        ({"transcription": "hello", "model": "gpt-5"}, {}),
+        (request_body(transcription="   "), {}),
+        (request_body(transcription=""), {}),
+        (REQUEST_DEFAULTS, {}),
+        (request_body(transcription="x" * 11), {"max_transcription_chars": 10}),
+        (request_body(transcription="hello", model="gpt-5"), {}),
+        (request_body(project_type="MOBILE_APP"), {}),
     ],
-    ids=["whitespace", "empty", "missing", "too-long", "extra-field"],
+    ids=["whitespace", "empty", "missing", "too-long", "extra-field", "unknown-enum"],
 )
 def test_validation_422_without_provider_call(
     make_client: ClientFactory, payload: dict[str, object], settings: dict[str, object]
@@ -75,7 +76,7 @@ def test_json_content_type_required(make_client: ClientFactory) -> None:
     with make_client() as client:
         response = client.post(
             URL,
-            content=json.dumps({"transcription": TRANSCRIPT}),
+            content=json.dumps(request_body()),
             headers={"Content-Type": "text/plain"},
         )
         assert response.status_code == 422
@@ -85,7 +86,7 @@ def test_json_content_type_required(make_client: ClientFactory) -> None:
 
 def test_422_does_not_echo_transcription(make_client: ClientFactory) -> None:
     with make_client(max_transcription_chars=10) as client:
-        response = client.post(URL, json={"transcription": "SECRET-MEETING-CONTENT"})
+        response = client.post(URL, json=request_body(transcription="SECRET-MEETING-CONTENT"))
         assert response.status_code == 422
         assert "SECRET-MEETING-CONTENT" not in response.text
 
@@ -104,9 +105,7 @@ def test_upstream_error_mapping(
     make_client: ClientFactory, error: LLMError, status: int, code: str
 ) -> None:
     with make_client(provider=FakeProvider(error=error)) as client:
-        response = client.post(
-            URL, json={"transcription": TRANSCRIPT}, headers={"X-Request-ID": "e-1"}
-        )
+        response = client.post(URL, json=request_body(), headers={"X-Request-ID": "e-1"})
         assert response.status_code == status
         assert response.json() == {
             "error": {"code": code, "message": error.message},

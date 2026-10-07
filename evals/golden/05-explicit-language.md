@@ -1,5 +1,9 @@
 ---
 output_language: Spanish
+project_type: web_saas
+detail_level: medium
+output_format: phases_table
+expects_frontend: true
 ---
 # Kickoff call: volunteer scheduling tool
 

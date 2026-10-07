@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown, Usage
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import LLMResult, TextDelta
 from app.services.providers.fallback import FallbackProvider
@@ -20,7 +20,7 @@ from scripts.record_cassettes import (
     save,
 )
 from scripts.smoke_live import Row, failed_row, format_table, row_for
-from tests.factories import breakdown, make_service, response_fixture
+from tests.factories import breakdown, make_service, response_fixture, typed_request
 from tests.fakes import FakeProvider
 
 HEADER = "| check | provider served | fallback | ttft ms | latency ms | cost usd | result |"
@@ -31,7 +31,7 @@ async def test_recorder_sends_the_prompt_pair_the_service_sends(sample: Path) ->
     fake = FakeProvider()
     service = make_service(fake)
     # The UI posts the sample file's text as is; the API strips it.
-    request = EstimateRequest.model_validate({"transcription": sample_text(sample)})
+    request = typed_request(sample_text(sample))
     [_ async for _ in service.estimate_stream(request)]
     [call] = fake.calls
     assert prompt_pair(sample, load_prompt()) == (call["system"], call["user"])

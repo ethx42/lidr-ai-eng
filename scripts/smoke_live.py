@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 from app.config import Provider, Settings
 from app.observability import configure_logging
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest, EstimateResponse
+from app.schemas.estimation import EstimateResponse
 from app.services.cache import NullCache, cache_scope
 from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
@@ -23,7 +23,7 @@ from app.services.providers.fallback import Cooldown, FallbackProvider
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.profiles import get_profile
 from scripts.live_budget import call_bound_usd, ensure_budget, record_spend
-from scripts.record_cassettes import SAMPLES, sample_text
+from scripts.record_cassettes import SAMPLES, sample_request
 
 OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
@@ -136,7 +136,7 @@ async def run(check: Check) -> Row:
         cache=NullCache(),  # every check must reach a provider
         cache_scope=cache_scope(settings),
     )
-    request = EstimateRequest(transcription=sample_text(SAMPLES[0]))
+    request = sample_request(SAMPLES[0])
     try:
         async with aclosing(service.estimate_stream(request)) as items:
             [response] = [item async for item in items if isinstance(item, EstimateResponse)]

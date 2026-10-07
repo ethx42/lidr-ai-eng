@@ -1,3 +1,9 @@
+---
+project_type: mobile_app
+detail_level: medium
+output_format: phases_table
+expects_frontend: true
+---
 # Discovery meeting — FitTrack Studios
 
 Fictional transcription authored for this repository as the exercise input (see design.md, Open Questions).

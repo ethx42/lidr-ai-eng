@@ -7,6 +7,7 @@ outputs support. Field order matters: understanding fields precede numbers.
 
 import re
 from collections.abc import Callable, Sequence
+from enum import StrEnum
 from typing import Annotated, Literal, Protocol, Self
 
 from pydantic import (
@@ -189,6 +190,25 @@ class Usage(BaseModel):
     cache_write_tokens: int = 0
 
 
+class ProjectType(StrEnum):
+    MOBILE_APP = "mobile_app"
+    WEB_SAAS = "web_saas"
+    INTERNAL_TOOL = "internal_tool"
+    DATA_PIPELINE = "data_pipeline"
+
+
+class DetailLevel(StrEnum):
+    SUMMARY = "summary"
+    MEDIUM = "medium"
+    DETAILED = "detailed"
+
+
+class OutputFormat(StrEnum):
+    PHASES_TABLE = "phases_table"
+    LINE_ITEMS = "line_items"
+    NARRATIVE = "narrative"
+
+
 class EstimateRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -199,6 +219,9 @@ class EstimateRequest(BaseModel):
                         "Client: We run three yoga studios and want customers to book and pay "
                         "for classes online from their phones..."
                     ),
+                    "project_type": "mobile_app",
+                    "detail_level": "medium",
+                    "output_format": "phases_table",
                     "output_language": "English",
                 }
             ]
@@ -208,6 +231,9 @@ class EstimateRequest(BaseModel):
     transcription: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
         description="Meeting transcription to estimate. Treated strictly as data."
     )
+    project_type: ProjectType = Field(description="Coarse project category; shapes the prompt.")
+    detail_level: DetailLevel = Field(description="Granularity of the breakdown.")
+    output_format: OutputFormat = Field(description="Layout of the rendered estimate.")
     output_language: (
         Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)] | None
     ) = Field(

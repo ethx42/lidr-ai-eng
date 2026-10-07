@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 
 from app.observability import CLIENT_LOGGERS, configure_logging
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown, Usage
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, UpstreamRateLimited
 from app.services.llm_service import EstimationService
@@ -21,7 +21,7 @@ from app.services.pricing import cost_usd
 from app.services.providers.anthropic_provider import AnthropicProvider, anthropic_http_client
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
-from tests.factories import breakdown, make_service, request
+from tests.factories import breakdown, make_service, request, typed_request
 
 PAYLOAD = breakdown().model_dump_json()
 
@@ -337,7 +337,7 @@ async def test_failed_call_logs_cause_without_upstream_detail(
         cache_scope="",
     )
     with caplog.at_level(logging.INFO), pytest.raises(LLMError):
-        await service.estimate(EstimateRequest(transcription="Client: we need a booking app."))
+        await service.estimate(typed_request("Client: we need a booking app."))
     await provider.aclose()
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     fields = record.fields  # type: ignore[attr-defined]

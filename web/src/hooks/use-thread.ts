@@ -7,6 +7,9 @@ type Done = Extract<StreamState, { status: "done" }>;
 export type Turn = { id: string; transcription: string; state: StreamState; kept?: Done };
 type StoredTurn = { id: string; transcription: string; state: Done };
 
+// The chat has no typed form: every estimate is sent with the default choices.
+const CHOICES = { project_type: "web_saas", detail_level: "medium", output_format: "phases_table" } as const;
+
 const STORAGE_KEY = "estimator.thread.v1";
 const MAX_STORED = 20;
 
@@ -93,7 +96,7 @@ export const useThread = () => {
       if (latest.status === "done") setFinished(latest);
       setSettled((turns) => [...settle(turns, activeId, latest), { id, transcription, state: { status: "idle" } }]);
       setActiveId(id);
-      start({ transcription });
+      start({ transcription, ...CHOICES });
     },
     [activeId, current, start],
   );
@@ -107,7 +110,7 @@ export const useThread = () => {
       if (latest.status === "done") setFinished(latest);
       setSettled((turns) => settle(turns, activeId, latest));
       setActiveId(turnId);
-      start({ transcription: turn.transcription }, { refresh: true });
+      start({ transcription: turn.transcription, ...CHOICES }, { refresh: true });
     },
     [settled, activeId, current, start],
   );

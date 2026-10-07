@@ -8,7 +8,7 @@ from app.services.errors import UpstreamUnavailable
 from app.services.providers.base import StreamEvent, T, TextDelta
 from app.services.providers.fallback import Cooldown, FallbackProvider
 from tests.api.conftest import ClientFactory
-from tests.factories import TRANSCRIPT
+from tests.factories import request_body
 from tests.fakes import FakeProvider
 
 URL = "/api/v1/estimate/stream"
@@ -25,7 +25,7 @@ def parse_sse(text: str) -> list[tuple[str, dict[str, Any]]]:
 
 
 def test_stream_contract(client: TestClient) -> None:
-    with client.stream("POST", URL, json={"transcription": TRANSCRIPT}) as r:
+    with client.stream("POST", URL, json=request_body()) as r:
         assert r.status_code == 200
         assert r.headers["content-type"].startswith("text/event-stream")
         assert r.headers["x-accel-buffering"] == "no"
@@ -37,19 +37,19 @@ def test_stream_contract(client: TestClient) -> None:
 
 
 def test_over_limit_is_422_json_not_a_stream(client_with_limit_10: TestClient) -> None:
-    r = client_with_limit_10.post(URL, json={"transcription": "x" * 11})
+    r = client_with_limit_10.post(URL, json=request_body(transcription="x" * 11))
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_request"
     assert client_with_limit_10.fake.calls == []
 
 
 def test_at_limit_streams(client_with_limit_10: TestClient) -> None:
-    r = client_with_limit_10.post(URL, json={"transcription": "x" * 10})
+    r = client_with_limit_10.post(URL, json=request_body(transcription="x" * 10))
     assert r.status_code == 200
     assert parse_sse(r.text)[-1][0] == "result"  # never a 200 with an empty body
 
 
 def test_upstream_failure_becomes_an_error_event(client_with_failing_provider: TestClient) -> None:
-    r = client_with_failing_provider.post(URL, json={"transcription": TRANSCRIPT})
+    r = client_with_failing_provider.post(URL, json=request_body())
     events = parse_sse(r.text)
     assert events[-1][0] == "error"
     assert events[-1][1]["code"] == "upstream_unavailable" and events[-1][1]["retryable"] is True
@@ -75,7 +75,7 @@ class MalformedSnapshotsFake(FakeProvider):
 
 def test_malformed_partials_never_break_the_stream(make_client: ClientFactory) -> None:
     with make_client(provider=MalformedSnapshotsFake()) as client:
-        events = parse_sse(client.post(URL, json={"transcription": TRANSCRIPT}).text)
+        events = parse_sse(client.post(URL, json=request_body()).text)
     names = [e for e, _ in events]
     assert names[-1] == "result" and names.count("result") == 1 and "error" not in names
 
@@ -86,7 +86,7 @@ def test_primary_down_before_the_first_token_switches_to_the_fallback(
     primary = FakeProvider(error=UpstreamUnavailable(), model="gpt-4o-mini")
     secondary = FakeProvider(name="anthropic", model="claude-haiku-4-5")
     with make_client(provider=FallbackProvider([primary, secondary], Cooldown())) as client:
-        events = parse_sse(client.post(URL, json={"transcription": TRANSCRIPT}).text)
+        events = parse_sse(client.post(URL, json=request_body()).text)
     statuses = [data for name, data in events if name == "status"]
     assert statuses[0] == {"phase": "calling_llm", "provider": "openai", "model": "gpt-4o-mini"}
     assert statuses[1] == {
@@ -108,7 +108,7 @@ def test_primary_failing_after_tokens_is_an_error_never_a_mixed_answer(
     primary = FakeProvider(stream_error_after_chunks=1, stream_error=UpstreamUnavailable())
     secondary = FakeProvider(name="anthropic")
     with make_client(provider=FallbackProvider([primary, secondary], Cooldown())) as client:
-        events = parse_sse(client.post(URL, json={"transcription": TRANSCRIPT}).text)
+        events = parse_sse(client.post(URL, json=request_body()).text)
     names = [name for name, _ in events]
     assert names[-1] == "error" and "result" not in names
     assert events[-1][1]["code"] == "upstream_unavailable"

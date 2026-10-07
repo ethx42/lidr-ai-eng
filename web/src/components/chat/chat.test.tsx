@@ -70,7 +70,7 @@ describe("Chat", () => {
     expect(input).toHaveFocus();
     expect(screen.getByText("We need a booking portal.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
-    expect(JSON.parse(String(streamCalls()[0][1]?.body))).toEqual({ transcription: "We need a booking portal." });
+    expect(JSON.parse(String(streamCalls()[0][1]?.body))).toEqual({ transcription: "We need a booking portal.", project_type: "web_saas", detail_level: "medium", output_format: "phases_table" });
   });
 
   it("on a touch screen, never moves focus into the transcript, so the on-screen keyboard stays closed", async () => {

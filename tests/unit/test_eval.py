@@ -7,7 +7,14 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import (
+    DetailLevel,
+    EstimateRequest,
+    EstimateResponse,
+    EstimationBreakdown,
+    OutputFormat,
+    ProjectType,
+)
 from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput
 from app.services.llm_service import EstimationService
@@ -19,10 +26,11 @@ from evals.run_eval import (
     expected_language,
     load_golden_cases,
     main,
+    parse_case,
     run_cases,
 )
 from scripts.live_budget import BudgetExceeded, call_bound_usd
-from tests.factories import TRANSCRIPT, breakdown, task
+from tests.factories import TRANSCRIPT, breakdown, make_service, task
 from tests.fakes import FakeProvider
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,6 +43,101 @@ def test_golden_set_loads() -> None:
     names = [case.name for case in cases]
     assert "01-course-meeting" in names
     assert [case.name for case in cases if case.vague] == ["03-vague-marketplace"]
+
+
+def test_golden_cases_declare_the_typed_request() -> None:
+    declared = {
+        c.name: (c.project_type, c.detail_level, c.output_format, c.expects_frontend)
+        for c in load_golden_cases(GOLDEN_DIR)
+    }
+    assert declared == {
+        "01-course-meeting": ("mobile_app", "medium", "phases_table", True),
+        "02-medium-clinic-portal": ("web_saas", "medium", "phases_table", True),
+        "03-vague-marketplace": ("web_saas", "medium", "phases_table", True),
+        "04-injection-es": ("mobile_app", "medium", "phases_table", True),
+        "05-explicit-language": ("web_saas", "medium", "phases_table", True),
+    }
+
+
+TYPED_FRONT_MATTER = {
+    "project_type": "data_pipeline",
+    "detail_level": "detailed",
+    "output_format": "narrative",
+    "expects_frontend": "false",
+}
+
+
+def write_case(directory: Path, meta: dict[str, str]) -> Path:
+    path = directory / "09-case.md"
+    lines = "".join(f"{key}: {value}\n" for key, value in meta.items())
+    path.write_text(f"---\n{lines}---\nClient: we need a nightly import.\n", encoding="utf-8")
+    return path
+
+
+def test_front_matter_parses_the_typed_request(tmp_path: Path) -> None:
+    case = parse_case(write_case(tmp_path, TYPED_FRONT_MATTER | {"output_language": "English"}))
+    assert case.project_type is ProjectType.DATA_PIPELINE
+    assert case.detail_level is DetailLevel.DETAILED
+    assert case.output_format is OutputFormat.NARRATIVE
+    assert case.expects_frontend is False
+    assert case.output_language == "English"
+    assert case.transcript == "Client: we need a nightly import.\n"
+    flagged = parse_case(write_case(tmp_path, TYPED_FRONT_MATTER | {"expects_frontend": "true"}))
+    assert flagged.expects_frontend is True
+
+
+@pytest.mark.parametrize("key", list(TYPED_FRONT_MATTER))
+def test_front_matter_key_is_required(tmp_path: Path, key: str) -> None:
+    meta = {k: v for k, v in TYPED_FRONT_MATTER.items() if k != key}
+    with pytest.raises(ValueError, match=rf"09-case\.md.*{key}"):
+        parse_case(write_case(tmp_path, meta))
+
+
+def test_case_without_front_matter_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "09-case.md"
+    path.write_text("Client: we need a nightly import.\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"09-case\.md.*project_type"):
+        parse_case(path)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [{"expects_frontend": "yes"}, {"project_type": "MOBILE_APP"}, {"detail_level": "brief"}],
+    ids=["flag-not-boolean", "unknown-project-type", "unknown-detail-level"],
+)
+def test_invalid_front_matter_value_names_the_file(
+    tmp_path: Path, override: dict[str, str]
+) -> None:
+    with pytest.raises(ValueError, match=r"09-case\.md"):
+        parse_case(write_case(tmp_path, TYPED_FRONT_MATTER | override))
+
+
+async def test_case_request_carries_the_declared_enums(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = make_service(FakeProvider(result=FULL))
+    sent: list[EstimateRequest] = []
+    estimate = service.estimate
+
+    async def spy(request: EstimateRequest, *, refresh: bool = False) -> EstimateResponse:
+        sent.append(request)
+        return await estimate(request, refresh=refresh)
+
+    monkeypatch.setattr(service, "estimate", spy)
+    case = GoldenCase(
+        "x",
+        TRANSCRIPT,
+        output_language="Spanish",
+        project_type=ProjectType.INTERNAL_TOOL,
+        detail_level=DetailLevel.SUMMARY,
+        output_format=OutputFormat.LINE_ITEMS,
+    )
+    await run_cases(service, [case], provider="openai", model="fake-model")
+    [request] = sent
+    assert request.model_dump(exclude={"transcription"}) == {
+        "output_language": "Spanish",
+        "project_type": "internal_tool",
+        "detail_level": "summary",
+        "output_format": "line_items",
+    }
 
 
 def test_course_transcript_is_in_golden_set() -> None:

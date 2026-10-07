@@ -4,7 +4,7 @@ from dataclasses import replace
 import pytest
 
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest, Usage
+from app.schemas.estimation import Usage
 from app.services.cache import NullCache
 from app.services.errors import (
     Attempt,
@@ -15,7 +15,7 @@ from app.services.errors import (
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider, LLMResult, T
 from app.services.providers.fallback import Cooldown, FallbackProvider
-from tests.factories import TRANSCRIPT, breakdown, request
+from tests.factories import TRANSCRIPT, breakdown, request, typed_request
 from tests.fakes import FakeProvider
 
 
@@ -33,7 +33,7 @@ def service(provider: LLMProvider, rate: float | None = None) -> EstimationServi
 async def test_estimate_pipeline() -> None:
     provider = FakeProvider()
     response = await service(provider, rate=100).estimate(
-        EstimateRequest(transcription=TRANSCRIPT, output_language="Spanish")
+        typed_request(TRANSCRIPT, output_language="Spanish")
     )
     assert response.breakdown.totals.expected_hours == 41.0
     assert response.breakdown.totals.estimated_cost == 4100.0
@@ -51,15 +51,15 @@ async def test_estimate_pipeline() -> None:
 async def test_system_prompt_identical_across_requests() -> None:
     provider = FakeProvider()
     svc = service(provider)
-    await svc.estimate(EstimateRequest(transcription="Client: one", output_language="English"))
-    await svc.estimate(EstimateRequest(transcription="Client: two"))
+    await svc.estimate(typed_request("Client: one", output_language="English"))
+    await svc.estimate(typed_request("Client: two"))
     assert provider.calls[0]["system"] == provider.calls[1]["system"]
     assert "Client: one" not in provider.calls[0]["system"]
 
 
 async def test_cache_key_follows_prompt_version() -> None:
     provider = FakeProvider()
-    request = EstimateRequest(transcription="Client: one")
+    request = typed_request("Client: one")
     await service(provider).estimate(request)
     await service(provider).estimate(request)
     bumped = replace(load_prompt(), version="v99")
@@ -83,16 +83,14 @@ async def test_grounding_flags_fabricated_requirement() -> None:
             {"id": "R2", "statement": "Loyalty", "evidence": "a loyalty program"},
         ]
     )
-    response = await service(FakeProvider(result=fabricated)).estimate(
-        EstimateRequest(transcription=TRANSCRIPT)
-    )
+    response = await service(FakeProvider(result=fabricated)).estimate(typed_request(TRANSCRIPT))
     assert response.grounding.ungrounded_requirement_ids == ["R2"]
     assert "⚠ **R2**" in response.estimation
 
 
 async def test_llm_call_logged_without_transcript(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO):
-        await service(FakeProvider()).estimate(EstimateRequest(transcription=TRANSCRIPT))
+        await service(FakeProvider()).estimate(typed_request(TRANSCRIPT))
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "ok"  # type: ignore[attr-defined]
     assert record.fields["input_tokens"] == 1200  # type: ignore[attr-defined]
@@ -103,9 +101,7 @@ async def test_llm_call_logged_without_transcript(caplog: pytest.LogCaptureFixtu
 
 async def test_provider_error_logged_and_raised(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO), pytest.raises(UpstreamUnavailable):
-        await service(FakeProvider(error=UpstreamUnavailable())).estimate(
-            EstimateRequest(transcription=TRANSCRIPT)
-        )
+        await service(FakeProvider(error=UpstreamUnavailable())).estimate(typed_request(TRANSCRIPT))
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "upstream_unavailable"  # type: ignore[attr-defined]
 

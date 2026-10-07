@@ -18,7 +18,7 @@ const sseBody = () => {
   };
 };
 
-const request = { transcription: "We need a booking portal." };
+const request = { transcription: "We need a booking portal.", project_type: "web_saas", detail_level: "medium", output_format: "phases_table" } as const;
 const breakdown1 = { project_name: "Bo" };
 const breakdown2 = { project_name: "Booking portal", tasks: [{ id: "T1", name: "Back" }] };
 const response = { estimation: "# Booking portal", provider: "openai", model: "gpt-4o-mini", breakdown: breakdown2 };

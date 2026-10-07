@@ -146,6 +146,11 @@ export interface components {
             /** System Prompt */
             system_prompt: string;
         };
+        /**
+         * DetailLevel
+         * @enum {string}
+         */
+        DetailLevel: "summary" | "medium" | "detailed";
         /** EnrichedBreakdown */
         EnrichedBreakdown: {
             /**
@@ -212,16 +217,25 @@ export interface components {
         /**
          * EstimateRequest
          * @example {
+         *       "detail_level": "medium",
+         *       "output_format": "phases_table",
          *       "output_language": "English",
+         *       "project_type": "mobile_app",
          *       "transcription": "Client: We run three yoga studios and want customers to book and pay for classes online from their phones..."
          *     }
          */
         EstimateRequest: {
+            /** @description Granularity of the breakdown. */
+            detail_level: components["schemas"]["DetailLevel"];
+            /** @description Layout of the rendered estimate. */
+            output_format: components["schemas"]["OutputFormat"];
             /**
              * Output Language
              * @description Language for narrative fields. Defaults to the transcription's language.
              */
             output_language?: string | null;
+            /** @description Coarse project category; shapes the prompt. */
+            project_type: components["schemas"]["ProjectType"];
             /**
              * Transcription
              * @description Meeting transcription to estimate. Treated strictly as data.
@@ -369,6 +383,11 @@ export interface components {
             /** Ungrounded Requirement Ids */
             ungrounded_requirement_ids: string[];
         };
+        /**
+         * OutputFormat
+         * @enum {string}
+         */
+        OutputFormat: "phases_table" | "line_items" | "narrative";
         /** PartialEvent */
         PartialEvent: {
             /** Breakdown */
@@ -378,6 +397,11 @@ export interface components {
             /** Seq */
             seq: number;
         };
+        /**
+         * ProjectType
+         * @enum {string}
+         */
+        ProjectType: "mobile_app" | "web_saas" | "internal_tool" | "data_pipeline";
         /** ReferenceView */
         ReferenceView: {
             estimation: components["schemas"]["EstimationBreakdown"];
