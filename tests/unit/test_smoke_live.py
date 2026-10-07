@@ -6,7 +6,7 @@ from app.config import Settings
 from app.prompts.loader import DEFAULT_VERSION
 from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import UpstreamUnavailable
-from app.services.providers.base import LLMResult, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, TextDelta
 from app.services.providers.fallback import FallbackProvider
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.replay_provider import Cassette, ReplayProvider, cassette_key
@@ -35,7 +35,8 @@ async def test_recorder_sends_the_prompt_pair_the_service_sends(sample: Path) ->
     request = typed_request(sample_text(sample))
     [_ async for _ in service.estimate_stream(request)]
     [call] = fake.calls
-    assert prompt_pair(sample, service.prompt_version) == (call["system"], call["user"])
+    system, user = prompt_pair(sample, service.prompt_version)
+    assert (call["system"], call["messages"]) == (system, [ChatMessage("user", user)])
 
 
 async def test_a_recorded_cassette_is_what_replay_serves_for_that_prompt_pair(
@@ -54,7 +55,10 @@ async def test_a_recorded_cassette_is_what_replay_serves_for_that_prompt_pair(
     events = [
         e
         async for e in replay.stream(
-            system=system, user=user, schema=EstimationBreakdown, cache_key="k"
+            system=system,
+            messages=[ChatMessage("user", user)],
+            schema=EstimationBreakdown,
+            cache_key="k",
         )
     ]
     assert [e.text for e in events if isinstance(e, TextDelta)] == [t for _, t in cassette.chunks]

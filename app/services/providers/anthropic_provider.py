@@ -1,5 +1,5 @@
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from functools import cache
 from typing import Any
 
@@ -21,7 +21,7 @@ from app.services.errors import (
     UpstreamUnavailable,
     from_status,
 )
-from app.services.providers.base import LLMResult, StreamEvent, T, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, T, TextDelta
 from app.services.providers.profiles import ModelProfile, request_params
 
 INVALID_STOP_REASONS = {"refusal", "max_tokens", "model_context_window_exceeded"}
@@ -127,27 +127,29 @@ class AnthropicProvider:
         self.params: dict[str, Any] = params | ({"extra_body": sampling} if sampling else {})
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         # Anthropic caches by content (the cache_control block); it takes no routing key.
         # `create` + validation instead of `parse`, which fails on truncated JSON before the
         # stop reason can be read.
         start = time.perf_counter()
         try:
-            message = await self.client.messages.create(**self._request(system, user, schema))
+            message = await self.client.messages.create(**self._request(system, messages, schema))
         except anthropic.APIError as exc:
             raise map_error(exc) from exc
         return self._finish(message, schema, start)
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         # The schema goes raw (no `output_format=`): the parsing helper raises ValidationError on
         # truncated JSON at `content_block_stop`, before `message_delta` says why.
         start = time.perf_counter()
         message: Message | None = None
         try:
-            async with self.client.messages.stream(**self._request(system, user, schema)) as events:
+            async with self.client.messages.stream(
+                **self._request(system, messages, schema)
+            ) as events:
                 async for event in events:
                     match event.type:
                         case "text":
@@ -172,13 +174,13 @@ class AnthropicProvider:
         yield self._finish(message, schema, start)
 
     def _request(
-        self, system: str, user: str, schema: type[BaseModel]
+        self, system: str, messages: Sequence[ChatMessage], schema: type[BaseModel]
     ) -> dict[str, Any]:  # keyword arguments for messages.create/stream
         return {
             **self.params,
             "model": self.model,
             "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            "messages": [{"role": "user", "content": user}],
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
             "output_config": {
                 **self.params.get("output_config", {}),
                 "format": output_format(schema),

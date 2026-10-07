@@ -1,5 +1,5 @@
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from functools import cache
 from typing import Any
 
@@ -8,7 +8,7 @@ import openai
 import pydantic
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.lib._parsing._responses import type_to_text_format_param
-from openai.types.responses import Response, ResponseUsage
+from openai.types.responses import Response, ResponseInputParam, ResponseUsage
 from pydantic import BaseModel
 
 from app.config import Provider, ReasoningEffort
@@ -22,7 +22,7 @@ from app.services.errors import (
     UpstreamUnavailable,
     from_status,
 )
-from app.services.providers.base import LLMResult, StreamEvent, T, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, T, TextDelta
 from app.services.providers.profiles import ModelProfile, request_params
 
 
@@ -30,6 +30,11 @@ from app.services.providers.profiles import ModelProfile, request_params
 def text_format(schema: type[BaseModel]) -> dict[str, Any]:  # JSON request fragment
     """The `text.format` that `responses.parse(text_format=schema)` would send."""
     return {**type_to_text_format_param(schema)}
+
+
+def input_items(messages: Sequence[ChatMessage]) -> ResponseInputParam:
+    # EasyInputMessageParam: an assistant item is read as an earlier answer of the model.
+    return [{"role": m.role, "content": m.content} for m in messages]
 
 
 async def _no_retry_on_quota(response: httpx2.Response) -> None:
@@ -115,7 +120,7 @@ class OpenAIProvider:
         )
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         start = time.perf_counter()
         try:
@@ -123,7 +128,7 @@ class OpenAIProvider:
             raw = await self.client.responses.with_raw_response.parse(
                 model=self.model,
                 instructions=system,
-                input=user,
+                input=input_items(messages),
                 text_format=schema,
                 store=False,
                 prompt_cache_key=cache_key,
@@ -151,7 +156,7 @@ class OpenAIProvider:
         return self._result(parsed, response.usage, start)
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         # The schema goes raw (no `text_format=`): the parsing helper raises ValidationError on
         # truncated JSON before the terminal event says why. Validated once the stream has ended.
@@ -161,7 +166,7 @@ class OpenAIProvider:
             async with self.client.responses.stream(
                 model=self.model,
                 instructions=system,
-                input=user,
+                input=input_items(messages),
                 store=False,
                 prompt_cache_key=cache_key,
                 stream_options={"include_obfuscation": False},  # server-to-server TLS

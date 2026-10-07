@@ -12,11 +12,16 @@ from app.services.errors import (
     UpstreamRateLimited,
     UpstreamUnavailable,
 )
-from app.services.providers.base import LLMResult, ProviderSwitch, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, ProviderSwitch, TextDelta
 from app.services.providers.fallback import Cooldown, FallbackProvider, falls_back
 from tests.fakes import FakeProvider, SlowFakeProvider, SlowToFailProvider
 
-ARGS = {"system": "S", "user": "U", "schema": EstimationBreakdown, "cache_key": "k"}
+ARGS = {
+    "system": "S",
+    "messages": [ChatMessage("user", "U")],
+    "schema": EstimationBreakdown,
+    "cache_key": "k",
+}
 
 
 async def test_falls_back_on_unavailable_and_reports_it() -> None:

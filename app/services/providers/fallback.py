@@ -16,6 +16,7 @@ from app.services.errors import (
     UpstreamUnavailable,
 )
 from app.services.providers.base import (
+    ChatMessage,
     LLMProvider,
     LLMResult,
     ProviderSwitch,
@@ -116,14 +117,14 @@ class FallbackProvider:
         llm_logger.warning("llm_fallback", extra={"fields": fields})
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         attempts, first = self._attempts(), time.perf_counter()
         for provider, attempt in attempts:
             start = time.perf_counter()
             try:
                 result = await provider.generate(
-                    system=system, user=user, schema=schema, cache_key=cache_key
+                    system=system, messages=messages, schema=schema, cache_key=cache_key
                 )
             except LLMError as exc:
                 self._failed(exc, provider, attempt)
@@ -135,7 +136,7 @@ class FallbackProvider:
         raise AssertionError("unreachable: the last attempt returns or raises")
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         attempts, first = self._attempts(), time.perf_counter()
         cause: str | None = "cooldown"  # a first attempt that is not the primary skipped it
@@ -150,7 +151,9 @@ class FallbackProvider:
             start, started = time.perf_counter(), False
             try:
                 async with aclosing(
-                    provider.stream(system=system, user=user, schema=schema, cache_key=cache_key)
+                    provider.stream(
+                        system=system, messages=messages, schema=schema, cache_key=cache_key
+                    )
                 ) as events:
                     async for event in events:
                         started = started or isinstance(event, TextDelta)

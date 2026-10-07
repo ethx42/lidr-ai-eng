@@ -54,7 +54,7 @@ def openai_body(system: str, user: str, *, temperature: float) -> dict[str, Any]
     return {
         "model": OPENAI_MODEL,
         "instructions": system,
-        "input": user,
+        "input": [{"role": "user", "content": user}],
         "store": False,
         "prompt_cache_key": CACHE_KEY,
         "text": {"format": text_format(EstimationBreakdown)},

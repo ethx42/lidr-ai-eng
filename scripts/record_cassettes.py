@@ -22,7 +22,7 @@ from app.schemas.estimation import (
     ProjectType,
 )
 from app.services.pricing import cost_usd
-from app.services.providers.base import LLMProvider, LLMResult, TextDelta
+from app.services.providers.base import ChatMessage, LLMProvider, LLMResult, TextDelta
 from app.services.providers.factory import build_one
 from app.services.providers.replay_provider import Cassette, Chunks, cassette_key
 from evals.run_eval import FRONT_MATTER
@@ -76,7 +76,12 @@ async def record(provider: LLMProvider, system: str, user: str, cache_key: str) 
     chunks: Chunks = []
     first: float | None = None
     async with aclosing(
-        provider.stream(system=system, user=user, schema=EstimationBreakdown, cache_key=cache_key)
+        provider.stream(
+            system=system,
+            messages=[ChatMessage("user", user)],
+            schema=EstimationBreakdown,
+            cache_key=cache_key,
+        )
     ) as events:
         async for event in events:
             match event:

@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from itertools import pairwise
 from typing import Any, TypeVar
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.config import Provider
 from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import UpstreamUnavailable
-from app.services.providers.base import LLMResult, StreamEvent, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, TextDelta
 from tests.factories import breakdown
 
 T = TypeVar("T", bound=BaseModel)
@@ -37,9 +37,20 @@ class FakeProvider:
         self.closed = False
         self.closed_streams = 0
 
-    def _record(self, system: str, user: str, schema: type[BaseModel], cache_key: str) -> None:
+    def _record(
+        self,
+        system: str,
+        messages: Sequence[ChatMessage],
+        schema: type[BaseModel],
+        cache_key: str,
+    ) -> None:
         self.calls.append(
-            {"system": system, "user": user, "schema": schema, "cache_key": cache_key}
+            {
+                "system": system,
+                "messages": list(messages),
+                "schema": schema,
+                "cache_key": cache_key,
+            }
         )
 
     def _result(self, schema: type[T]) -> LLMResult[T]:
@@ -57,17 +68,17 @@ class FakeProvider:
         )
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
-        self._record(system, user, schema, cache_key)
+        self._record(system, messages, schema, cache_key)
         if self.error:
             raise self.error
         return self._result(schema)
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
-        self._record(system, user, schema, cache_key)
+        self._record(system, messages, schema, cache_key)
         if self.error:
             raise self.error
         result = self._result(schema)
@@ -99,9 +110,9 @@ class SlowFakeProvider(FakeProvider):
         self.stream_closed = asyncio.Event()
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
-        self._record(system, user, schema, cache_key)
+        self._record(system, messages, schema, cache_key)
         try:
             yield TextDelta(text=self.first_delta, snapshot=self.first_delta)
             await asyncio.Event().wait()
@@ -118,9 +129,9 @@ class TickingFakeProvider(SlowFakeProvider):
         self.interval = interval
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
-        self._record(system, user, schema, cache_key)
+        self._record(system, messages, schema, cache_key)
         snapshot = self.first_delta
         try:
             while True:
@@ -140,17 +151,19 @@ class SlowToFailProvider(FakeProvider):
         self.delay = delay
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         await asyncio.sleep(self.delay)
-        return await super().generate(system=system, user=user, schema=schema, cache_key=cache_key)
+        return await super().generate(
+            system=system, messages=messages, schema=schema, cache_key=cache_key
+        )
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         await asyncio.sleep(self.delay)
         async for event in super().stream(
-            system=system, user=user, schema=schema, cache_key=cache_key
+            system=system, messages=messages, schema=schema, cache_key=cache_key
         ):
             yield event
 
@@ -163,10 +176,10 @@ class SlowToFinishProvider(FakeProvider):
         self.delay = delay
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         async for event in super().stream(
-            system=system, user=user, schema=schema, cache_key=cache_key
+            system=system, messages=messages, schema=schema, cache_key=cache_key
         ):
             if isinstance(event, LLMResult):
                 await asyncio.sleep(self.delay)

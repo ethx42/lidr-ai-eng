@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 
 import pytest
 
@@ -7,7 +7,7 @@ from app.schemas.estimation import EstimateResponse, Usage
 from app.schemas.stream import PartialEvent, StatusEvent
 from app.services.errors import InvalidModelOutput, UpstreamUnavailable
 from app.services.llm_service import EstimationService
-from app.services.providers.base import ProviderSwitch, StreamEvent, T
+from app.services.providers.base import ChatMessage, ProviderSwitch, StreamEvent, T
 from app.services.providers.fallback import Cooldown, FallbackProvider
 from tests.factories import make_service, request
 from tests.fakes import (
@@ -103,13 +103,13 @@ class SwitchingFake(FakeProvider):
     """Announces a switch to the fallback before the first delta, as the router does."""
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         yield ProviderSwitch(
             provider="anthropic", model="claude-haiku-4-5", cause="timeout", attempt=2
         )
         async for event in super().stream(
-            system=system, user=user, schema=schema, cache_key=cache_key
+            system=system, messages=messages, schema=schema, cache_key=cache_key
         ):
             yield event
 

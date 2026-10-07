@@ -21,7 +21,7 @@ from app.services.errors import (
     UpstreamUnavailable,
 )
 from app.services.providers.anthropic_provider import AnthropicProvider, output_format
-from app.services.providers.base import LLMResult, StreamEvent, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, TextDelta
 from app.services.providers.profiles import get_profile
 from scripts.record_sse_fixture import MAX_OUTPUT_TOKENS, anthropic_body, parse_sse
 
@@ -30,6 +30,8 @@ SSE_HEADERS = {"content-type": "text/event-stream"}
 
 Handler = Callable[[httpx.Request], httpx.Response]
 type JSON = dict[str, Any]  # parsed request/error bodies; tests index into them freely
+MESSAGES = [ChatMessage("user", "u")]
+HISTORY = [ChatMessage("user", "u1"), ChatMessage("assistant", "a1"), ChatMessage("user", "u2")]
 
 
 def fixture(name: str) -> str:
@@ -62,7 +64,7 @@ async def collect(
 ) -> list[StreamEvent[EstimationBreakdown]]:
     events = [] if received is None else received
     async for event in provider.stream(
-        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
     ):
         events.append(event)
     return events
@@ -236,7 +238,9 @@ async def test_http_errors_map_the_same_on_both_paths(
     with pytest.raises(LLMError) as streamed:
         await collect(provider)
     with pytest.raises(LLMError) as blocking:
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+        await provider.generate(
+            system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
+        )
     for info in (streamed, blocking):
         assert type(info.value) is expected
         assert info.value.cause == cause
@@ -317,6 +321,24 @@ async def test_wire_output_config_and_cached_system_block(
     assert ours["stream"] is True
 
 
+async def test_anthropic_sends_history_as_messages() -> None:
+    bodies: list[JSON] = []
+    provider = provider_for(capturing(bodies))
+    with pytest.raises(UpstreamError):
+        await provider.generate(
+            system="SYS", messages=HISTORY, schema=EstimationBreakdown, cache_key="k"
+        )
+    [body] = bodies
+    assert body["system"] == [
+        {"type": "text", "text": "SYS", "cache_control": {"type": "ephemeral"}}
+    ]
+    assert [(m["role"], m["content"]) for m in body["messages"]] == [
+        ("user", "u1"),
+        ("assistant", "a1"),
+        ("user", "u2"),
+    ]
+
+
 async def test_fixture_recorder_sends_the_provider_body() -> None:
     bodies: list[JSON] = []
     provider = provider_for(capturing(bodies), max_output_tokens=MAX_OUTPUT_TOKENS)
@@ -387,7 +409,9 @@ async def test_httpx_stream_misuse_is_not_reported_as_a_protocol_error() -> None
 async def test_closing_the_generator_closes_the_upstream_stream() -> None:
     body = TrackedBody(fixture("completed"))
     provider = provider_for(lambda _: httpx.Response(200, headers=SSE_HEADERS, stream=body))
-    events = provider.stream(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    events = provider.stream(
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
+    )
 
     assert isinstance(await anext(events), TextDelta)
     assert not body.closed

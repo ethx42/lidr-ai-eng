@@ -1,11 +1,11 @@
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
 from fastapi.testclient import TestClient
 
 from app.services.errors import UpstreamUnavailable
-from app.services.providers.base import StreamEvent, T, TextDelta
+from app.services.providers.base import ChatMessage, StreamEvent, T, TextDelta
 from app.services.providers.fallback import Cooldown, FallbackProvider
 from tests.api.conftest import ClientFactory
 from tests.factories import request_body
@@ -62,12 +62,12 @@ class MalformedSnapshotsFake(FakeProvider):
     snapshots = ("", "[1,", "garbage", '"just a string', "123", "null", '{"tasks": [{"id": ', "}{")
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         for snapshot in self.snapshots:
             yield TextDelta(text=snapshot, snapshot=snapshot)
         async for event in super().stream(
-            system=system, user=user, schema=schema, cache_key=cache_key
+            system=system, messages=messages, schema=schema, cache_key=cache_key
         ):
             if not isinstance(event, TextDelta):
                 yield event

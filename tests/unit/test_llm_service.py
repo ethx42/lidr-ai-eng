@@ -13,7 +13,7 @@ from app.services.errors import (
     UpstreamUnavailable,
 )
 from app.services.llm_service import EstimationService
-from app.services.providers.base import LLMProvider, LLMResult, T
+from app.services.providers.base import ChatMessage, LLMProvider, LLMResult, T
 from app.services.providers.fallback import Cooldown, FallbackProvider
 from app.services.rendering import render_markdown
 from tests.factories import TRANSCRIPT, breakdown, request, typed_request
@@ -43,9 +43,10 @@ async def test_estimate_pipeline() -> None:
     assert (response.provider, response.model) == ("openai", "fake-model")
     assert response.usage.cached_input_tokens == 1024
     [call] = provider.calls
-    assert (call["system"], call["user"]) == render_estimation_prompt(request)
-    assert TRANSCRIPT in call["user"]
-    assert "<output_language>Spanish</output_language>" in call["user"]
+    system, user = render_estimation_prompt(request)
+    assert (call["system"], call["messages"]) == (system, [ChatMessage("user", user)])
+    assert TRANSCRIPT in user
+    assert "<output_language>Spanish</output_language>" in user
 
 
 async def test_system_prompt_identical_across_requests() -> None:

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.config import Provider
 from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import InvalidModelOutput
-from app.services.providers.base import LLMResult, StreamEvent, T, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, T, TextDelta
 
 type Chunks = list[tuple[float, str]]  # (ms since the first chunk, text)
 
@@ -56,7 +56,9 @@ class ReplayProvider:
         self.chunk_delay = chunk_delay
         self.model = model
 
-    def _recording(self, key: str) -> tuple[Chunks, Usage]:
+    def _recording(self, system: str, messages: Sequence[ChatMessage]) -> tuple[Chunks, Usage]:
+        # Keyed on the latest message only, so a single-turn call keeps its recorded cassette.
+        key = cassette_key(system, messages[-1].content)
         path = self.cassette_dir / f"{key}.json"
         if path.is_file():
             cassette = Cassette.model_validate_json(path.read_bytes())
@@ -79,17 +81,17 @@ class ReplayProvider:
         )
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         start = time.perf_counter()
-        chunks, usage = self._recording(cassette_key(system, user))
+        chunks, usage = self._recording(system, messages)
         return self._result(schema, "".join(text for _, text in chunks), usage, start)
 
     async def stream(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
         start = time.perf_counter()
-        chunks, usage = self._recording(cassette_key(system, user))
+        chunks, usage = self._recording(system, messages)
         previous, snapshot = 0.0, ""
         for elapsed, text in chunks:
             await asyncio.sleep((elapsed - previous) / 1000 * self.delay_scale)

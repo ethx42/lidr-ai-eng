@@ -19,11 +19,13 @@ from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, Ups
 from app.services.llm_service import EstimationService
 from app.services.pricing import cost_usd
 from app.services.providers.anthropic_provider import AnthropicProvider, anthropic_http_client
+from app.services.providers.base import ChatMessage
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
 from tests.factories import breakdown, make_service, request, typed_request
 
 PAYLOAD = breakdown().model_dump_json()
+MESSAGES = [ChatMessage("user", "u")]
 
 OPENAI_BODY = {
     "id": "resp_1",
@@ -87,7 +89,7 @@ async def test_openai_retries_transient_failure() -> None:
         client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
     )
     result = await provider.generate(
-        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
     )
     assert result.parsed == breakdown()
     assert len(calls) == 2
@@ -105,7 +107,7 @@ async def test_anthropic_retries_transient_failure() -> None:
         **COMMON,
     )
     result = await provider.generate(
-        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
     )
     assert result.parsed == breakdown()
     assert len(calls) == 2
@@ -141,7 +143,9 @@ async def test_openai_quota_is_not_retried(
         client=client, model="gpt-4o-mini", profile=get_profile("gpt-4o-mini", "openai"), **COMMON
     )
     with pytest.raises(expected):
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+        await provider.generate(
+            system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
+        )
     assert len(calls) == attempts
     await provider.aclose()
 
@@ -175,7 +179,9 @@ async def test_anthropic_spend_cap_is_not_retried(
         **COMMON,
     )
     with pytest.raises(expected):
-        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+        await provider.generate(
+            system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
+        )
     assert len(calls) == attempts
     await provider.aclose()
 
@@ -189,7 +195,7 @@ async def test_openai_sends_same_cache_key_on_the_wire() -> None:
     )
     for _ in range(2):
         await provider.generate(
-            system="s", user="u", schema=EstimationBreakdown, cache_key="estimator-v4"
+            system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="estimator-v4"
         )
     keys = {json.loads(r.content)["prompt_cache_key"] for r in calls}
     assert keys == {"estimator-v4"}
@@ -207,7 +213,7 @@ async def test_anthropic_sends_no_routing_key_on_the_wire() -> None:
         **COMMON,
     )
     await provider.generate(
-        system="s", user="u", schema=EstimationBreakdown, cache_key="estimator-v4"
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="estimator-v4"
     )
     assert all("estimator-v4" not in r.content.decode() for r in calls)
     await provider.aclose()
@@ -262,7 +268,10 @@ async def test_debug_logging_leaks_no_transcript(
     marker = "TRANSCRIPT-MARKER-7f3a"
     provider = build(lambda _: httpx.Response(200, json=body))
     await provider.generate(
-        system="s", user=f"Client: {marker}", schema=EstimationBreakdown, cache_key="k"
+        system="s",
+        messages=[ChatMessage("user", f"Client: {marker}")],
+        schema=EstimationBreakdown,
+        cache_key="k",
     )
     await provider.aclose()
     assert caplog.records, "expected library records at INFO and above"
@@ -379,7 +388,9 @@ async def test_anthropic_output_format_matches_sdk_parse() -> None:
         return httpx.Response(200, json=ANTHROPIC_BODY)
 
     provider = anthropic_provider(capture)
-    await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    await provider.generate(
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
+    )
     await provider.client.messages.parse(
         model="claude-haiku-4-5",
         max_tokens=10,

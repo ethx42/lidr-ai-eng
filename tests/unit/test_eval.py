@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -18,7 +19,7 @@ from app.schemas.estimation import (
 from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput
 from app.services.llm_service import EstimationService
-from app.services.providers.base import LLMResult
+from app.services.providers.base import ChatMessage, LLMResult
 from evals.run_eval import (
     GOLDEN_DIR,
     GoldenCase,
@@ -173,13 +174,15 @@ class ScriptedProvider(FakeProvider):
         self.outcomes = outcomes
 
     async def generate(
-        self, *, system: str, user: str, schema: type[T], cache_key: str
+        self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
         self.result = outcome
-        return await super().generate(system=system, user=user, schema=schema, cache_key=cache_key)
+        return await super().generate(
+            system=system, messages=messages, schema=schema, cache_key=cache_key
+        )
 
 
 async def run(outcomes: list[EstimationBreakdown | Exception], names: list[str]) -> dict[str, Any]:
@@ -373,7 +376,8 @@ async def test_explicit_output_language_is_sent_and_checked() -> None:
     )
     case = GoldenCase("x", TRANSCRIPT, output_language="Spanish")
     report = await run_cases(service, [case], provider="openai", model="fake-model")
-    assert "<output_language>Spanish</output_language>" in provider.calls[0]["user"]
+    [message] = provider.calls[0]["messages"]
+    assert "<output_language>Spanish</output_language>" in message.content
     assert report["cases"][0]["checks"]["narrative_language"] is True
 
 

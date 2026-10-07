@@ -23,7 +23,13 @@ from app.services.errors import Attempt, InvalidModelOutput, LLMError
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
 from app.services.pricing import cost_usd
-from app.services.providers.base import LLMProvider, LLMResult, ProviderSwitch, TextDelta
+from app.services.providers.base import (
+    ChatMessage,
+    LLMProvider,
+    LLMResult,
+    ProviderSwitch,
+    TextDelta,
+)
 from app.services.rendering import render_markdown
 from app.services.streaming import PartialSnapshotter
 
@@ -224,7 +230,7 @@ class EstimationService:
         try:
             result = await self.provider.generate(
                 system=prompt.system,
-                user=prompt.user,
+                messages=[ChatMessage("user", prompt.user)],
                 schema=EstimationBreakdown,
                 cache_key=routing_key(prompt),
             )
@@ -264,7 +270,7 @@ class EstimationService:
             async with aclosing(
                 self.provider.stream(
                     system=prompt.system,
-                    user=prompt.user,
+                    messages=[ChatMessage("user", prompt.user)],
                     schema=EstimationBreakdown,
                     cache_key=routing_key(prompt),
                 )

@@ -19,7 +19,7 @@ from app.services.errors import (
     UpstreamRateLimited,
     UpstreamUnavailable,
 )
-from app.services.providers.base import LLMResult, StreamEvent, TextDelta
+from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, TextDelta
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
 from scripts.record_sse_fixture import CACHE_KEY, MAX_OUTPUT_TOKENS, openai_body, parse_sse
@@ -29,6 +29,8 @@ SSE_HEADERS = {"content-type": "text/event-stream"}
 
 Handler = Callable[[httpx.Request], httpx.Response]
 type JSON = dict[str, Any]  # parsed request/error bodies; tests index into them freely
+MESSAGES = [ChatMessage("user", "u")]
+HISTORY = [ChatMessage("user", "u1"), ChatMessage("assistant", "a1"), ChatMessage("user", "u2")]
 
 
 def fixture(name: str) -> str:
@@ -56,7 +58,7 @@ async def collect(
 ) -> list[StreamEvent[EstimationBreakdown]]:
     events = [] if received is None else received
     async for event in provider.stream(
-        system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
     ):
         events.append(event)
     return events
@@ -255,9 +257,26 @@ async def test_wire_text_format_matches_sdk_parse() -> None:
         )
     ours, sdk = bodies
     assert ours["text"]["format"] == sdk["text"]["format"]
+    assert ours["input"] == [{"role": "user", "content": "u"}]
     assert ours["stream"] is True
     assert ours["stream_options"] == {"include_obfuscation": False}
     assert (ours["store"], ours["prompt_cache_key"]) == (False, "k")
+
+
+async def test_openai_sends_history_as_input_items() -> None:
+    bodies: list[JSON] = []
+    provider = provider_for(capturing(bodies))
+    with pytest.raises(UpstreamError):  # `capturing` answers 400
+        await provider.generate(
+            system="SYS", messages=HISTORY, schema=EstimationBreakdown, cache_key="k"
+        )
+    [body] = bodies
+    assert body["instructions"] == "SYS"
+    assert [(i["role"], i["content"]) for i in body["input"]] == [
+        ("user", "u1"),
+        ("assistant", "a1"),
+        ("user", "u2"),
+    ]
 
 
 async def test_text_options_in_params_are_merged_with_the_format() -> None:
@@ -276,7 +295,7 @@ async def test_fixture_recorder_sends_the_provider_body() -> None:
     provider = provider_for(capturing(bodies), max_output_tokens=MAX_OUTPUT_TOKENS)
     with pytest.raises(UpstreamError):
         async for _ in provider.stream(
-            system="s", user="u", schema=EstimationBreakdown, cache_key=CACHE_KEY
+            system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key=CACHE_KEY
         ):
             pass
     assert bodies == [openai_body("s", "u", temperature=0.2)]
@@ -344,7 +363,9 @@ async def test_httpx_stream_misuse_is_not_reported_as_a_protocol_error() -> None
 async def test_closing_the_generator_closes_the_upstream_stream() -> None:
     body = TrackedBody(fixture("completed"))
     provider = provider_for(lambda _: httpx.Response(200, headers=SSE_HEADERS, stream=body))
-    events = provider.stream(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    events = provider.stream(
+        system="s", messages=MESSAGES, schema=EstimationBreakdown, cache_key="k"
+    )
 
     assert isinstance(await anext(events), TextDelta)
     assert not body.closed
