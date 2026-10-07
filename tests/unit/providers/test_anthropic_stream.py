@@ -12,7 +12,7 @@ import pytest
 from anthropic import AsyncAnthropic
 
 from app.config import ReasoningEffort
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import (
     InvalidModelOutput,
     LLMError,
@@ -113,6 +113,18 @@ async def test_invalid_stop_reasons_are_invalid_output(name: str, reason: str) -
         await collect(provider_for(serve(fixture(name))), received)
     assert info.value.cause == f"stop_reason:{reason}"
     assert received and all(isinstance(e, TextDelta) for e in received)
+
+
+@pytest.mark.parametrize("name", ["max_tokens", "context_window_exceeded", "refusal"])
+async def test_invalid_stop_reasons_carry_the_billed_usage(name: str) -> None:
+    body = fixture(name)
+    usage = next(e for e in parse_sse(body) if e["type"] == "message_delta")["usage"]
+    assert usage["output_tokens"] > 0
+    with pytest.raises(InvalidModelOutput) as info:
+        await collect(provider_for(serve(body)))
+    assert info.value.usage == Usage(
+        input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"]
+    )
 
 
 @pytest.mark.parametrize(

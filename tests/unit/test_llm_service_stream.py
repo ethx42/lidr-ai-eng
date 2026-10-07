@@ -3,9 +3,9 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from app.schemas.estimation import EstimateResponse
+from app.schemas.estimation import EstimateResponse, Usage
 from app.schemas.stream import PartialEvent, StatusEvent
-from app.services.errors import UpstreamUnavailable
+from app.services.errors import InvalidModelOutput, UpstreamUnavailable
 from app.services.llm_service import EstimationService
 from app.services.providers.base import ProviderSwitch, StreamEvent, T
 from app.services.providers.fallback import Cooldown, FallbackProvider
@@ -65,6 +65,23 @@ async def test_provider_error_propagates_as_llm_error(
         [i async for i in service_with_failing_fake.estimate_stream(request())]
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "upstream_unavailable" and record.fields["stream"] is True
+
+
+async def test_a_failed_stream_logs_the_usage_the_provider_reported(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    billed = Usage(input_tokens=6500, output_tokens=4096)
+    provider = FakeProvider(
+        name="anthropic",
+        model="claude-haiku-4-5",
+        stream_error_after_chunks=2,
+        stream_error=InvalidModelOutput(reason="stop_reason:max_tokens", usage=billed),
+    )
+    with caplog.at_level(logging.INFO, logger="app.llm"), pytest.raises(InvalidModelOutput):
+        [i async for i in make_service(provider).estimate_stream(request())]
+    [fields] = llm_calls(caplog)
+    assert (fields["input_tokens"], fields["output_tokens"]) == (6500, 4096)
+    assert fields["cost_usd"] == pytest.approx(0.02698)  # Haiku 4.5: 6500 * 1.00 + 4096 * 5.00
 
 
 async def test_stream_logs_one_call_with_stream_fields(caplog: pytest.LogCaptureFixture) -> None:

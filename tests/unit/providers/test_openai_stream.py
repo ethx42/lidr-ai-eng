@@ -11,7 +11,7 @@ import openai
 import pytest
 from openai import AsyncOpenAI
 
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import (
     InvalidModelOutput,
     LLMError,
@@ -104,6 +104,33 @@ async def test_refusal_is_invalid_output_and_streams_no_text() -> None:
         await collect(provider_for(serve(fixture("refusal"))), received)
     assert info.value.cause == "refusal"
     assert received == []
+
+
+BILLED = {
+    "input_tokens": 952,
+    "input_tokens_details": {"cache_write_tokens": 0, "cached_tokens": 512},
+    "output_tokens": 291,
+    "output_tokens_details": {"reasoning_tokens": 0},
+    "total_tokens": 1243,
+}
+
+
+def billed(body: str) -> str:
+    """The body with its terminal event reporting BILLED as usage."""
+    head, terminal = body.rstrip("\n").rsplit("\n\n", 1)
+    event, data = terminal.split("\ndata: ")
+    payload = json.loads(data)
+    payload["response"]["usage"] = BILLED
+    return f"{head}\n\n{event}\ndata: {json.dumps(payload)}\n\n"
+
+
+@pytest.mark.parametrize("name", ["incomplete_max_tokens", "refusal", "failed"])
+async def test_failed_terminal_events_carry_the_billed_usage(name: str) -> None:
+    with pytest.raises(LLMError) as info:
+        await collect(provider_for(serve(billed(fixture(name)))))
+    assert info.value.usage == Usage(
+        input_tokens=952, output_tokens=291, cached_input_tokens=512, cache_write_tokens=0
+    )
 
 
 @pytest.mark.parametrize(

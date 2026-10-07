@@ -6,7 +6,7 @@ import anthropic
 import httpx2 as httpx
 import pytest
 
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import (
     InvalidModelOutput,
     UpstreamError,
@@ -119,6 +119,26 @@ async def test_schema_validation_error_is_invalid_output(text: str) -> None:
     with pytest.raises(InvalidModelOutput) as info:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
     assert info.value.cause == "ValidationError"
+
+
+@pytest.mark.parametrize(
+    "msg",
+    [
+        message(breakdown(), stop_reason="refusal"),
+        message(text='{"project_na', stop_reason="max_tokens"),
+        message(breakdown(), stop_reason="model_context_window_exceeded"),
+        message(None),
+        message(text="{}"),
+    ],
+    ids=["refusal", "max_tokens", "context_window", "no-text", "schema"],
+)
+async def test_invalid_output_carries_the_billed_usage(msg: Any) -> None:
+    provider, _ = make(return_value=msg)
+    with pytest.raises(InvalidModelOutput) as info:
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert info.value.usage == Usage(
+        input_tokens=4300, output_tokens=900, cached_input_tokens=4000, cache_write_tokens=0
+    )
 
 
 def status_error(cls: type[anthropic.APIStatusError], code: int) -> anthropic.APIStatusError:

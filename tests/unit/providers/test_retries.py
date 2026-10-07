@@ -13,14 +13,15 @@ from openai import AsyncOpenAI
 
 from app.observability import CLIENT_LOGGERS, configure_logging
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown
+from app.schemas.estimation import EstimateRequest, EstimationBreakdown, Usage
 from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamError, UpstreamRateLimited
 from app.services.llm_service import EstimationService
+from app.services.pricing import cost_usd
 from app.services.providers.anthropic_provider import AnthropicProvider, anthropic_http_client
 from app.services.providers.openai_provider import OpenAIProvider, openai_http_client
 from app.services.providers.profiles import get_profile
-from tests.factories import breakdown
+from tests.factories import breakdown, make_service, request
 
 PAYLOAD = breakdown().model_dump_json()
 
@@ -346,6 +347,28 @@ async def test_failed_call_logs_cause_without_upstream_detail(
         upstream_status,
     )
     assert all("secret upstream detail" not in str(r.__dict__) for r in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "build,body",
+    [(anthropic_provider, ANTHROPIC_TRUNCATED), (openai_provider, OPENAI_TRUNCATED)],
+    ids=["anthropic-truncated", "openai-truncated"],
+)
+async def test_a_truncated_call_logs_the_tokens_and_cost_it_was_billed(
+    build: Callable[[Handler], OpenAIProvider | AnthropicProvider],
+    body: dict[str, Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    provider = build(lambda _: httpx.Response(200, json=body))
+    with caplog.at_level(logging.INFO), pytest.raises(InvalidModelOutput):
+        await make_service(provider).estimate(request())
+    await provider.aclose()
+    [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
+    fields = record.fields  # type: ignore[attr-defined]
+    billed = Usage(input_tokens=10, output_tokens=5)  # both bodies' usage
+    assert {k: fields[k] for k in Usage.model_fields} == billed.model_dump()
+    expected = cost_usd(provider.model, billed)
+    assert expected is not None and fields["cost_usd"] == expected
 
 
 async def test_anthropic_output_format_matches_sdk_parse() -> None:

@@ -4,7 +4,7 @@ from dataclasses import replace
 import pytest
 
 from app.prompts.loader import load_prompt
-from app.schemas.estimation import EstimateRequest
+from app.schemas.estimation import EstimateRequest, Usage
 from app.services.cache import NullCache
 from app.services.errors import (
     Attempt,
@@ -108,6 +108,28 @@ async def test_provider_error_logged_and_raised(caplog: pytest.LogCaptureFixture
         )
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "upstream_unavailable"  # type: ignore[attr-defined]
+
+
+# A Haiku answer cut at max_tokens: billed, so logged with its tokens and their cost.
+BILLED = Usage(input_tokens=6500, output_tokens=4096)
+
+
+@pytest.mark.parametrize(
+    "usage,tokens,cost",
+    [(BILLED, (6500, 4096), pytest.approx(0.02698)), (None, (0, 0), None)],
+    ids=["reported", "unknown"],
+)
+async def test_a_failed_call_logs_the_usage_the_provider_reported(
+    usage: Usage | None, tokens: tuple[int, int], cost: object, caplog: pytest.LogCaptureFixture
+) -> None:
+    error = InvalidModelOutput(reason="stop_reason:max_tokens", usage=usage)
+    provider = FakeProvider(error=error, name="anthropic", model="claude-haiku-4-5")
+    with caplog.at_level(logging.INFO), pytest.raises(InvalidModelOutput):
+        await service(provider).estimate(request())
+    [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
+    fields = record.fields  # type: ignore[attr-defined]
+    assert (fields["input_tokens"], fields["output_tokens"]) == tokens
+    assert fields["cost_usd"] == cost
 
 
 async def test_blocking_response_carries_metrics(service_with_fake: EstimationService) -> None:
