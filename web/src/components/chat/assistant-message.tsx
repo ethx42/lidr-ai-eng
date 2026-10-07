@@ -128,7 +128,12 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
       )}
       {content && (
         <>
-          <EstimateView data={content} grounding={shown.status === "done" ? shown.result.grounding : undefined} streaming={streaming} />
+          <EstimateView
+            data={content}
+            grounding={shown.status === "done" ? shown.result.grounding : undefined}
+            streaming={streaming}
+            completed={state.status === "done"}
+          />
           <AiDisclosure />
         </>
       )}

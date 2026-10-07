@@ -187,6 +187,25 @@ describe("AssistantMessage after a regenerate that did not finish", () => {
     expect(onRegenerate).toHaveBeenCalledTimes(1);
   });
 
+  // The kept estimate is complete, but this attempt is not: "Estimate ready" would claim the regenerate succeeded.
+  it.each([
+    ["stopped", cancelled],
+    ["failed", failed("upstream_unavailable", { retryable: true })],
+  ])("never announces 'Estimate ready' when the regenerate %s", (_, end) => {
+    const { rerender } = setup(streaming, previous);
+    const ready = within(screen.getByRole("article")).getByRole("status");
+    expect(ready).toBeEmptyDOMElement();
+    rerender(end);
+    expect(within(screen.getByRole("article")).getByRole("status")).toBe(ready); // same region, so a change would be announced
+    expect(ready).toBeEmptyDOMElement();
+  });
+
+  it("announces 'Estimate ready' when the regenerate completes", () => {
+    const { rerender } = setup(streaming, previous);
+    rerender(done);
+    expect(within(screen.getByRole("article")).getByRole("status")).toHaveTextContent("Estimate ready");
+  });
+
   it("shows the new attempt, not the kept estimate, while it streams", () => {
     setup(streaming, previous);
     expect(screen.getByRole("heading", { level: 2, name: "Physiotherapy portal" })).toBeInTheDocument();

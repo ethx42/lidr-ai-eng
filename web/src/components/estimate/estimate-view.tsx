@@ -16,6 +16,8 @@ type Props = {
   data: PartialBreakdown | Schemas["EnrichedBreakdown"];
   grounding?: Schemas["GroundingReport"];
   streaming: boolean;
+  // this snapshot is the result of a stream that just completed (not an earlier estimate kept after a stop or failure)
+  completed?: boolean;
   activeRequirement?: string;
   onRequirementFocus?: (id: string | null) => void;
 };
@@ -47,10 +49,10 @@ const Assumptions = ({ items, streaming }: { items?: EstimateModel["assumptions"
 
 // Renders any snapshot: every value is read through a guard, and whatever is missing shows as a skeleton.
 // While streaming the article is `aria-busy` and nothing inside it is live; one polite region announces completion.
-export const EstimateView = ({ data, grounding, streaming, activeRequirement, onRequirementFocus }: Props) => {
+export const EstimateView = ({ data, grounding, streaming, completed = false, activeRequirement, onRequirementFocus }: Props) => {
   const estimate = readEstimate(data);
   const checks = readGrounding(grounding);
-  const ready = !streaming && estimate.totals !== undefined;
+  const ready = completed && estimate.totals !== undefined;
   return (
     <article aria-busy={streaming} className="group/estimate flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-3">
