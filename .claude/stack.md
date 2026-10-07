@@ -1,7 +1,7 @@
 # Tech stack brief
 
-stack-fingerprint: fdb14250a109
-updated: 2026-10-06
+stack-fingerprint: f152647aca7d
+updated: 2026-10-07
 
 How the installed versions are meant to be used today. Read before writing code against them; update when you learn something new (`stack-grounding` skill). Installed versions win over memory and over docs for other versions.
 
@@ -164,7 +164,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 
 ### jiter 0.17.0 (partial JSON)
 - **Use:** `jiter.from_json(snapshot.encode(), partial_mode="trailing-strings")` on the accumulated snapshot. Input must be `bytes`; `str` raises `TypeError` (verified).
-  - **Make it a direct dependency** (`jiter>=0.17.0`). Today it is only transitive: openai 3.19.0 requires `jiter>=0.16.0,<1` and anthropic 1.8.0 requires `jiter>=0.4.0,<1` (both METADATA). It is MIT-licensed, released 2026-09-12, and is the latest version.
+  - **Direct dependency** (`jiter>=0.17.0`, added 2026-10-07 by Task 3; `app/services/streaming.py`). openai 3.19.0 (`jiter>=0.16.0,<1`) and anthropic 1.8.0 (`jiter>=0.4.0,<1`) also pull it in (both METADATA). It is MIT-licensed, released 2026-09-12, and is the latest version.
 - **Patterns (verified probe):**
 
   | Input tail | `True`/`"on"` | `"trailing-strings"` |
@@ -178,7 +178,10 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   | `[{"a": 1}, {"a": 2` | partial objects included | same |
   | `''` / whitespace | `ValueError` | `ValueError` |
   | `{"a": 1} x` | `{'a': 1}` (trailing garbage ignored) | same (`partial_mode=False` raises "trailing characters") |
+  | `garbage {`, `\x00`, `[` × 5000 (recursion limit), `"\ud800"` (lone surrogate escape) | `ValueError` | `ValueError` |
+  | `{"a": 1e999`, `{"a": NaN` | `inf`, `nan` (`allow_inf_nan=True` default) | same |
 
+  - Every failure seen is a `ValueError`, and `str.encode()` of a lone surrogate raises `UnicodeEncodeError` (a `ValueError` subclass), so one `except ValueError` around `from_json(s.encode(), ...)` covers malformed partials (verified 2026-10-07).
   - Send partials as plain dicts. Validate only the final text with the strict model.
   - Pydantic's `TypeAdapter.validate_json(..., experimental_allow_partial="trailing-strings")` raises for a `BaseModel` with required fields. It only helps for `list[Model]` (it drops the incomplete last item) or a `TypedDict` with `NotRequired` fields (verified).
 - **Performance (measured):** re-parsing the whole 10 KB snapshot on each of 2,500 deltas took 4 µs per delta, 10 ms in total. A full parse is about 2x faster than `json.loads`. That is O(n²) but negligible at LLM output sizes. Throttle SSE emits for bandwidth (emit only when the dict changed, or every N ms), not for CPU.
