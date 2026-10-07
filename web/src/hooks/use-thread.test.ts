@@ -245,4 +245,68 @@ describe("useThread", () => {
     sessionStorage.setItem(KEY, JSON.stringify([...malformed, doneTurn("ok")]));
     expect(renderHook(useThread).result.current.turns).toEqual([doneTurn("ok")]);
   });
+
+  describe("lastCall (what the inspector shows): the last call that finished", () => {
+    const regenerating = async (result: { current: ReturnType<typeof useThread> }, turnId: string) => {
+      act(() => result.current.regenerate(turnId));
+      streams[0].push(frame("partial", { seq: 1, breakdown: { project_name: "Fresh" } }));
+      await waitFor(() => expect(result.current.turns.find(({ id }) => id === turnId)?.state).toMatchObject({ status: "streaming", partial: { project_name: "Fresh" } }));
+    };
+
+    it("is the latest completed estimate; a turn that is still streaming does not count", async () => {
+      const { result } = renderHook(useThread);
+      expect(result.current.lastCall).toBeUndefined();
+      act(() => result.current.send("First"));
+      expect(result.current.lastCall).toBeUndefined();
+      await complete(result, 0);
+      expect(result.current.lastCall).toEqual(result.current.turns[0].state);
+
+      act(() => result.current.send("Second"));
+      expect(result.current.lastCall).toEqual(result.current.turns[0].state);
+      streams[1].push(frame("result", { ...fullResponse, model: "gpt-4o" }));
+      await waitFor(() => expect(result.current.lastCall?.result.model).toBe("gpt-4o"));
+    });
+
+    it("stays on the only turn's estimate while that turn regenerates", async () => {
+      sessionStorage.setItem(KEY, JSON.stringify([doneTurn("a")]));
+      const { result } = renderHook(useThread);
+      await regenerating(result, "a");
+      expect(result.current.lastCall?.requestId).toBe("req-a");
+      streams[0].push(frame("result", { ...fullResponse, model: "gpt-4o" }));
+      await waitFor(() => expect(result.current.lastCall).toMatchObject({ result: { model: "gpt-4o" }, requestId: "req-1" }));
+    });
+
+    it("stays on the latest turn's estimate while it regenerates, never jumping to an older turn", async () => {
+      sessionStorage.setItem(KEY, JSON.stringify([doneTurn("a"), doneTurn("b")]));
+      const { result } = renderHook(useThread);
+      await regenerating(result, "b");
+      expect(result.current.lastCall?.requestId).toBe("req-b");
+    });
+
+    it("is the latest stored estimate after a reload, then a regenerated older turn, kept while the next turn streams", async () => {
+      sessionStorage.setItem(KEY, JSON.stringify([doneTurn("a"), doneTurn("b")]));
+      const { result } = renderHook(useThread);
+      expect(result.current.lastCall?.requestId).toBe("req-b");
+
+      await regenerating(result, "a");
+      expect(result.current.lastCall?.requestId).toBe("req-b");
+      streams[0].push(frame("result", { ...fullResponse, model: "gpt-4o" }));
+      await waitFor(() => expect(result.current.lastCall).toMatchObject({ result: { model: "gpt-4o" }, requestId: "req-1" }));
+
+      act(() => result.current.send("Third"));
+      expect(result.current.turns.at(-1)?.state.status).toBe("streaming");
+      expect(result.current.lastCall).toMatchObject({ result: { model: "gpt-4o" }, requestId: "req-1" }); // a′, not b
+    });
+
+    it("keeps the last finished call when a regenerate is stopped", () => {
+      sessionStorage.setItem(KEY, JSON.stringify([doneTurn("a"), doneTurn("b")]));
+      const { result } = renderHook(useThread);
+      act(() => result.current.regenerate("b"));
+      act(() => result.current.stop());
+      expect(result.current.lastCall?.requestId).toBe("req-b"); // the estimate b kept
+      act(() => result.current.regenerate("a"));
+      act(() => result.current.stop());
+      expect(result.current.lastCall?.requestId).toBe("req-b"); // a's kept estimate is older than b's
+    });
+  });
 });

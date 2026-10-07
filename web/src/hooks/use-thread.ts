@@ -74,6 +74,8 @@ export const useThread = () => {
   const { state, start, stop, current } = useEstimateStream();
   const [settled, setSettled] = useState<Turn[]>(load);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // The last call that finished before the current stream started; after a reload, the latest stored estimate.
+  const [finished, setFinished] = useState(() => settled.map(lastDone).findLast((done) => done !== undefined));
 
   const turns = useMemo(() => settled.map((turn) => (turn.id === activeId ? withState(turn, state) : turn)), [settled, activeId, state]);
   const streaming = state.status === "streaming";
@@ -88,6 +90,7 @@ export const useThread = () => {
       if (!transcription.trim()) return;
       const id = newId();
       const latest = current();
+      if (latest.status === "done") setFinished(latest);
       setSettled((turns) => [...settle(turns, activeId, latest), { id, transcription, state: { status: "idle" } }]);
       setActiveId(id);
       start({ transcription });
@@ -101,6 +104,7 @@ export const useThread = () => {
       const turn = settled.find(({ id }) => id === turnId);
       if (!turn) return;
       const latest = current();
+      if (latest.status === "done") setFinished(latest);
       setSettled((turns) => settle(turns, activeId, latest));
       setActiveId(turnId);
       start({ transcription: turn.transcription }, { refresh: true });
@@ -108,5 +112,8 @@ export const useThread = () => {
     [settled, activeId, current, start],
   );
 
-  return { turns, send, stop, regenerate };
+  // The call the inspector shows: the last one that finished. A stopped or failed stream never replaces it.
+  const lastCall = state.status === "done" ? state : finished;
+
+  return { turns, lastCall, send, stop, regenerate };
 };

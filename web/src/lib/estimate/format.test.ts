@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHours, formatProvider, formatRange, formatUsd } from "./format";
+import { formatHours, formatMs, formatProvider, formatRange, formatUsd } from "./format";
 
 describe("formatHours", () => {
   it.each([
@@ -49,5 +49,15 @@ describe("formatProvider", () => {
     ["mistral", "Mistral"],
   ])("%s → %s", (provider, expected) => {
     expect(formatProvider(provider)).toBe(expected);
+  });
+});
+
+describe("formatMs", () => {
+  it.each([
+    [650, "650 ms"],
+    [4200, "4,200 ms"],
+    [0, "0 ms"],
+  ])("%s → %s", (ms, expected) => {
+    expect(formatMs(ms)).toBe(expected);
   });
 });

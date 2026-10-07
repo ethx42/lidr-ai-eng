@@ -31,6 +31,7 @@ const PHASES: Record<TaskPhase, true> = { discovery: true, ux_ui: true, backend:
 const isWire = (value: unknown): value is Wire => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown) => (typeof value === "string" && value.trim() !== "" ? value : undefined);
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
+const bool = (value: unknown) => (typeof value === "boolean" ? value : undefined);
 const isMember = <K extends string>(options: Record<K, true>, value: unknown): value is K => typeof value === "string" && Object.hasOwn(options, value);
 const oneOf = <K extends string>(options: Record<K, true>, value: unknown) => (isMember(options, value) ? value : undefined);
 const list = <T>(value: unknown, read: (item: Wire) => T) => (Array.isArray(value) ? value.filter(isWire).map(read) : undefined);
@@ -83,11 +84,48 @@ export const readGrounding = (grounding: unknown): GroundingChecks => {
 
 export const readText = text;
 
-// What the status steps need from a `result` frame, which is as unchecked as a partial.
-export const readCallStatus = (result: unknown) => {
+// What the inspector shows about a finished call; `undefined` is a value the result did not carry or that was malformed.
+export const readCallMetrics = (result: unknown) => {
   const response: Wire = isWire(result) ? result : {};
   const metrics: Wire = isWire(response.metrics) ? response.metrics : {};
-  return { cacheHit: metrics.cache_hit === true, fallbackProvider: metrics.fallback_used === true ? text(response.provider) : undefined };
+  const usage: Wire = isWire(response.usage) ? response.usage : {};
+  return {
+    projectName: isWire(response.breakdown) ? text(response.breakdown.project_name) : undefined,
+    provider: text(response.provider),
+    model: text(response.model),
+    promptVersion: text(response.prompt_version),
+    fallbackUsed: metrics.fallback_used === true,
+    cacheHit: bool(metrics.cache_hit),
+    inputTokens: num(usage.input_tokens),
+    cachedTokens: num(usage.cached_input_tokens),
+    outputTokens: num(usage.output_tokens),
+    latencyMs: num(metrics.latency_ms),
+    ttftMs: num(metrics.ttft_ms),
+    costUsd: num(metrics.cost_usd),
+  };
+};
+
+// What the status steps need from a `result` frame, which is as unchecked as a partial.
+export const readCallStatus = (result: unknown) => {
+  const { cacheHit, fallbackUsed, provider } = readCallMetrics(result);
+  return { cacheHit: cacheHit === true, fallbackProvider: fallbackUsed ? provider : undefined };
+};
+
+export type ReferenceModel = { size?: string; meetingSummary: string; projectName?: string; estimation?: Wire };
+
+// `GET /api/context` past the fields the shell checks; a reference without a meeting summary is dropped.
+export const readContext = (context: unknown) => {
+  const data: Wire = isWire(context) ? context : {};
+  const references = list(data.references, (r): ReferenceModel | undefined => {
+    const meetingSummary = text(r.meeting_summary);
+    const estimation = isWire(r.estimation) ? r.estimation : undefined;
+    return meetingSummary ? { size: text(r.size), meetingSummary, projectName: text(estimation?.project_name), estimation } : undefined;
+  });
+  return {
+    promptVersion: text(data.prompt_version),
+    systemPrompt: text(data.system_prompt),
+    references: references?.filter((r) => r !== undefined) ?? [],
+  };
 };
 
 // The list to render, or `undefined` while it is pending: missing, or empty only because its first item has not arrived yet.

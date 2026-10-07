@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { useServiceContext } from "@/components/service-context";
 import { formatProvider } from "@/lib/estimate/format";
 import { ThemeToggle } from "./theme-toggle";
@@ -40,11 +41,12 @@ const ModelChain = () => {
   );
 };
 
-export const AppHeader = () => (
+export const AppHeader = ({ actions }: { actions?: ReactNode }) => (
   <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4 sm:px-6">
     <h1 className="text-sm font-semibold">Estimator</h1>
     <ModelChain />
-    <div className="ml-auto flex items-center">
+    <div className="ml-auto flex items-center gap-1">
+      {actions}
       <ThemeToggle />
     </div>
   </header>

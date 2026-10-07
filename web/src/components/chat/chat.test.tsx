@@ -88,6 +88,21 @@ describe("Chat", () => {
     expect(input).toHaveValue("Something else");
   });
 
+  it("shows the latest completed call in the inspector panel", async () => {
+    const result = `event: result\ndata: ${JSON.stringify(fullResponse)}\n\n`;
+    stream = () => new Response(result, { headers: { "content-type": "text/event-stream", "x-request-id": "req-7" } });
+    const { user, input, send } = setup();
+    expect(screen.getByRole("button", { name: "Inspector" })).toHaveAttribute("aria-haspopup", "dialog"); // the sheet below 1024 px
+    const inspector = screen.getByRole("complementary", { name: "Inspector" });
+    await user.click(within(inspector).getByRole("tab", { name: "Last call" }));
+    expect(within(inspector).getByText("Run an estimate to see its metrics.")).toBeInTheDocument();
+
+    await user.type(input, "We need a booking portal.");
+    await user.click(send);
+    expect(await within(inspector).findByText("req-7")).toBeInTheDocument();
+    expect(within(inspector).getByText("Physiotherapy patient portal")).toBeInTheDocument();
+  });
+
   it("renders a skeleton, not the stored thread, on the server", () => {
     sessionStorage.setItem("estimator.thread.v1", JSON.stringify([{ id: "a", transcription: "Stored transcript", state: { status: "done", result: fullResponse } }]));
     const html = renderToString(<Chat samples={SAMPLES} />);

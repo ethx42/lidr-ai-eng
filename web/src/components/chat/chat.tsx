@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { AppHeader } from "@/components/app-header";
+import { InspectorPanel, InspectorSheet } from "@/components/inspector/inspector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Replacement, useDraft } from "@/hooks/use-draft";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -27,11 +28,13 @@ const ThreadSkeleton = () => (
 );
 
 export const Chat = ({ samples }: { samples: Sample[] }) => {
-  const { turns, send, stop, regenerate } = useThread();
+  const { turns, lastCall, send, stop, regenerate } = useThread();
   const draft = useDraft();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inspectorRef = useRef<HTMLElement>(null);
   // The thread comes from sessionStorage, which the server render cannot see: show it once hydrated.
   const hydrated = useHydrated();
+  const call = hydrated ? lastCall : undefined;
 
   // When the draft must be confirmed first, the composer moves focus to that question instead.
   const fillComposer = (next: Replacement) => {
@@ -45,25 +48,30 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      <AppHeader />
-      {/* `relative` contains the sr-only (absolute) descendants, so only this region scrolls, never the page. */}
-      <main aria-busy={!hydrated} className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
-          {hydrated ? (
-            <Thread
-              turns={turns}
-              samples={samples}
-              onPickSample={(sample) => fillComposer(sampleDraft(sample))}
-              onStop={stop}
-              onRegenerate={regenerate}
-              onEditTranscript={(text) => fillComposer({ text, what: "the transcript to shorten" })}
-            />
-          ) : (
-            <ThreadSkeleton />
-          )}
+      <AppHeader actions={<InspectorSheet call={call} panelRef={inspectorRef} />} />
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* `relative` contains the sr-only (absolute) descendants, so only this region scrolls, never the page. */}
+          <main aria-busy={!hydrated} className="relative min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+              {hydrated ? (
+                <Thread
+                  turns={turns}
+                  samples={samples}
+                  onPickSample={(sample) => fillComposer(sampleDraft(sample))}
+                  onStop={stop}
+                  onRegenerate={regenerate}
+                  onEditTranscript={(text) => fillComposer({ text, what: "the transcript to shorten" })}
+                />
+              ) : (
+                <ThreadSkeleton />
+              )}
+            </div>
+          </main>
+          <Composer inputRef={inputRef} draft={draft} onSend={submit} samples={samples} />
         </div>
-      </main>
-      <Composer inputRef={inputRef} draft={draft} onSend={submit} samples={samples} />
+        <InspectorPanel ref={inspectorRef} call={call} />
+      </div>
     </div>
   );
 };
