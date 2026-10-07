@@ -4,7 +4,7 @@ from dataclasses import replace
 import pytest
 
 from app.prompts.loader import DEFAULT_VERSION, render_estimation_prompt
-from app.schemas.estimation import Usage
+from app.schemas.estimation import EstimateResponse, OutputFormat, Usage
 from app.services.cache import NullCache
 from app.services.errors import (
     Attempt,
@@ -15,6 +15,7 @@ from app.services.errors import (
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider, LLMResult, T
 from app.services.providers.fallback import Cooldown, FallbackProvider
+from app.services.rendering import render_markdown
 from tests.factories import TRANSCRIPT, breakdown, request, typed_request
 from tests.fakes import FakeProvider
 
@@ -133,6 +134,21 @@ async def test_blocking_response_carries_metrics(service_with_fake: EstimationSe
     assert response.metrics.attempts == 1
     assert response.metrics.ttft_ms is None
     assert response.provider == "openai" and response.model == "fake-model"
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("layout", list(OutputFormat))
+async def test_the_markdown_follows_the_requested_output_format(
+    service_with_fake: EstimationService, layout: OutputFormat, stream: bool
+) -> None:
+    body = typed_request(output_format=layout)
+    if stream:
+        *_, response = [i async for i in service_with_fake.estimate_stream(body)]
+        assert isinstance(response, EstimateResponse)
+    else:
+        response = await service_with_fake.estimate(body)
+    expected = render_markdown(response.breakdown, response.grounding, layout)
+    assert response.estimation == expected
 
 
 class ServedByFallback(FakeProvider):

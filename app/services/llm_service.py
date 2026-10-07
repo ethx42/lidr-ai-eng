@@ -60,11 +60,24 @@ class EstimationService:
         self.cache_scope = cache_scope
         self.primary_attempt = Attempt(provider.name, provider.model)
 
-    def _render(self, request: EstimateRequest, prompt_version: str | None) -> RenderedPrompt:
+    def _prepare(
+        self, request: EstimateRequest, prompt_version: str | None
+    ) -> tuple[RenderedPrompt, str]:
+        """The rendered prompt and its cache key: one path for both endpoints and cache_key_for."""
         prompt = render(request, self.prompt_version if prompt_version is None else prompt_version)
         # Before any provider call: the router's llm_fallback records read it.
         prompt_version_var.set(prompt.version)
-        return prompt
+        key = cache_key(
+            prompt_version=prompt.version,
+            system=prompt.system,
+            user=prompt.user,
+            scope=self.cache_scope,
+            schema_name=EstimationBreakdown.__name__,
+        )
+        return prompt, key
+
+    def cache_key_for(self, request: EstimateRequest, prompt_version: str | None = None) -> str:
+        return self._prepare(request, prompt_version)[1]
 
     def _log_call(
         self,
@@ -151,7 +164,7 @@ class EstimationService:
                 extra={"fields": grounding.model_dump(exclude={"requirements_grounded"})},
             )
         return EstimateResponse(
-            estimation=render_markdown(breakdown, grounding),
+            estimation=render_markdown(breakdown, grounding, request.output_format),
             breakdown=breakdown,
             grounding=grounding,
             model=result.model,
@@ -165,20 +178,6 @@ class EstimationService:
                 attempts=result.attempts,
                 fallback_used=result.fallback_used,
             ),
-        )
-
-    def _cache_key(self, prompt: RenderedPrompt) -> str:
-        return cache_key(
-            prompt_version=prompt.version,
-            system=prompt.system,
-            user=prompt.user,
-            scope=self.cache_scope,
-            schema_name=EstimationBreakdown.__name__,
-        )
-
-    def cache_key_for(self, request: EstimateRequest, prompt_version: str | None = None) -> str:
-        return self._cache_key(
-            render(request, self.prompt_version if prompt_version is None else prompt_version)
         )
 
     async def _lookup(
@@ -215,8 +214,7 @@ class EstimationService:
     async def estimate(
         self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
     ) -> EstimateResponse:
-        prompt = self._render(request, prompt_version)
-        key = self._cache_key(prompt)
+        prompt, key = self._prepare(request, prompt_version)
         cached, lookup = await self._lookup(
             key, version=prompt.version, refresh=refresh, stream=False
         )
@@ -247,8 +245,7 @@ class EstimationService:
     async def estimate_stream(
         self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
     ) -> AsyncGenerator[StreamItem]:
-        prompt = self._render(request, prompt_version)
-        key = self._cache_key(prompt)
+        prompt, key = self._prepare(request, prompt_version)
         cached, lookup = await self._lookup(
             key, version=prompt.version, refresh=refresh, stream=True
         )

@@ -64,9 +64,10 @@ def test_stream_operation_documents_every_event_payload() -> None:
     assert operation["responses"]["422"]
 
 
-def query_params(path: str) -> dict[str, dict[str, Any]]:
+def query_params(path: str) -> dict[str, dict[str, Any]]:  # Any: OpenAPI parameter objects are JSON
     params = create_app().openapi()["paths"][path]["post"]["parameters"]
     assert {p["name"] for p in params} == {"refresh", "prompt_version"}
+    assert len(params) == 2
     return {p["name"]: p for p in params}
 
 
