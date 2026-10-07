@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # Prompt template version (app/prompts/estimation/<version>/); checked against the templates
     # at startup, since importing the loader here would be circular.
     prompt_version: str = "v2"
+    # Conversational sessions (app/sessions.py): a turn is one user + assistant pair; the history
+    # keeps the last MAX_TURNS and drops the oldest past MAX_HISTORY_CHARS (never the latest).
+    max_turns: int = Field(default=6, gt=0)
+    max_history_chars: int = Field(default=60_000, gt=0)
+    session_ttl_seconds: int = Field(default=7200, gt=0)
+    max_sessions: int = Field(default=1000, gt=0)
 
     @property
     def chain(self) -> list[tuple[Provider, str]]:

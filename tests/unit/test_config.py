@@ -22,6 +22,10 @@ ENV_VARS = [
     "LLM_COOLDOWN_SECONDS",
     "ALLOWED_HOSTS",
     "PROMPT_VERSION",
+    "MAX_TURNS",
+    "MAX_HISTORY_CHARS",
+    "SESSION_TTL_SECONDS",
+    "MAX_SESSIONS",
 ]
 
 
@@ -52,6 +56,21 @@ def test_defaults_with_only_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.blended_hourly_rate is None
     assert settings.weekly_capacity_hours == 30
     assert settings.prompt_version == "v2"
+    assert settings.max_turns == 6
+    assert settings.max_history_chars == 60_000
+    assert settings.session_ttl_seconds == 7200
+    assert settings.max_sessions == 1000
+
+
+@pytest.mark.parametrize(
+    "var", ["MAX_TURNS", "MAX_HISTORY_CHARS", "SESSION_TTL_SECONDS", "MAX_SESSIONS"]
+)
+def test_non_positive_session_limits_rejected(monkeypatch: pytest.MonkeyPatch, var: str) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "replay")
+    monkeypatch.setenv("LLM_FALLBACKS", "none")
+    monkeypatch.setenv(var, "0")
+    with pytest.raises(ValidationError, match=var.lower()):
+        load()
 
 
 def test_replay_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
