@@ -12,6 +12,7 @@ from app.prompts.loader import (
     DEFAULT_VERSION,
     EVIDENCE_REMINDER,
     PromptParams,
+    available_versions,
     render,
     render_estimation_prompt,
     render_system,
@@ -110,6 +111,14 @@ def test_published_versions_never_change(version: str) -> None:
     assert digest == PINNED_SHA256[version], (
         f"estimation/{version} changed, but published versions never change: revert the edit "
         f"and make it in a new version directory (vN+1) with its own pin. Digest now: {digest}"
+    )
+
+
+def test_every_version_has_a_pin() -> None:
+    assert set(PINNED_SHA256) == set(available_versions()), (
+        "every version in app/prompts/estimation/ needs a pin: add the new version to "
+        "PINNED_SHA256 with any digest, and test_published_versions_never_change prints "
+        "the real one"
     )
 
 

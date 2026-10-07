@@ -147,7 +147,7 @@ The repository SHALL ship `v1`, a faithful port of M1's prompt `v4` (M1's `app/p
 - **THEN** `prompt_version` equals the version that rendered its prompt
 
 #### Scenario: Render logged without content
-- **WHEN** a prompt is rendered for a transcription
+- **WHEN** a prompt is rendered for an estimation request
 - **THEN** one `prompt_rendered` record carries the version and the prompt's SHA-256
 - **AND** no log record contains the transcription
 
