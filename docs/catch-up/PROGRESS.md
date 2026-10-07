@@ -24,8 +24,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - [x] Task 15: Exact-match response cache (e23222f)
 - [x] Task 16: Cassette recorder and live smoke test (97ecb2b, d78d6a4, 74cfd38)
 - [x] Task 17: Docker and Compose (6667c42, 9bf9744, 86c246f)
-- [ ] Task 18: End-to-end tests, accessibility and media
-- [ ] Task 19: CI
+- [x] Task 18: End-to-end tests, accessibility and media (724905e)
+- [x] Task 19: CI (e66aade)
 - [ ] Task 20: Branch close-out
 - [ ] Review panel findings resolved
 - Gate:
@@ -75,3 +75,5 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 
 - PAUSED 2026-10-07 (usage limit). Worktrees: `../lidr-ai-eng-wt/s03-ai` (branch `pre-session-03-ai`, Tasks 12–14 done, head af9a0a2) and `../lidr-ai-eng-wt/s03-web` (branch `pre-session-03-web`, Tasks 6–9 done at de272e3; Task 10 implementer may have committed after that, unreviewed). Resume: review Task 10, then Task 11 (web) and Tasks 15–16 (AI), merge both tracks with `--no-ff`, `make openapi && make web-types`, then Tasks 17–20. Orchestrator ledger: `.superpowers/sdd/plan-session-03/progress.md`. Live spend so far: US$0.004369 (in the AI worktree's `spend.jsonl`).
 - Owner action: `.env.example` writes are blocked by the permission rule on `.env*`, so its `REPLAY_*` and `LIVE_BUDGET_USD` documentation is pending. Proposed content: `.superpowers/sdd/plan-session-03/env-example.proposed` (apply with `cp .superpowers/sdd/plan-session-03/env-example.proposed .env.example`, then commit `docs(env): document replay and live budget settings`).
+- Accepted deviation (Task 18): composer shortcut hint opacity raised 70→80 % to pass WCAG 1.4.3 contrast found by the axe gate.
+- S3 review panel (Workflow, 4 reviewers + 4 adversarial verifiers): 17 findings, 10 confirmed (1 important: short-viewport layout collapses the thread; 9 minor: failed-call logs drop billed tokens, Anthropic mid-stream upstream_status=200, BFF Host allowlist vs DNS rebinding, eval budget bound, stale "Estimate ready" after a stopped regenerate, touch keyboard over results, hover contrast, inspector polish, toast tokens), 7 refuted. Fixes run as two parallel waves (AI, web) with a failing test first; selected deferred minors from task reviews are folded in.
