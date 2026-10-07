@@ -91,3 +91,9 @@ down:
 
 logs:
 	docker compose logs -f
+
+# End-to-end tests (Playwright + axe) against the offline Compose stack: replay provider, no keys, zero spend.
+# MEDIA=1 make e2e also writes the screenshots and GIF in docs/media/session-03/; a plain run writes nothing tracked.
+.PHONY: e2e
+e2e:
+	pnpm -C web exec playwright install chromium && docker compose -f compose.yaml -f compose.e2e.yaml up --build --wait && pnpm -C web exec playwright test; status=$$?; docker compose -f compose.yaml -f compose.e2e.yaml down; exit $$status
