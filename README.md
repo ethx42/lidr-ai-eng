@@ -96,7 +96,7 @@ make down               # stop and remove the containers
 make dev                # dev images: reload, compose watch syncs ./app and ./web, rebuilds on lockfile changes
 ```
 
-- Only `web` publishes a port: http://localhost:3000. The AI service and Redis are reachable only on the Compose network; the browser calls the Next.js BFF, which calls `http://ai-service:8000`. `make dev` also publishes the AI service on http://localhost:8000.
+- Only `web` publishes a port, on loopback: http://localhost:3000 (there is no auth, and the BFF spends the AI service's keys, so nothing is reachable from the LAN). The AI service and Redis are reachable only on the Compose network; the browser calls the Next.js BFF, which calls `http://ai-service:8000`. `make dev` also publishes the AI service on http://localhost:8000 (loopback). `tests/test_compose.py` enforces both rules.
 - The AI service reads `.env` through `env_file` (optional), so a key exported in the host shell never reaches a container. Compose points `REDIS_URL` at its own Redis.
 - `compose.e2e.yaml` runs the stack offline for end-to-end tests (`docker compose -f compose.yaml -f compose.e2e.yaml up --build --wait`): `LLM_PROVIDER=replay`, `LLM_FALLBACKS=none`, no cache, `tests/cassettes` mounted read-only.
 

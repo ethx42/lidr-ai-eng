@@ -1,10 +1,12 @@
-# Production-like stack (make up). Only web publishes a port; the AI service and Redis are reachable
+# Production-like stack (make up). Only web publishes a port, on loopback (the app has no auth and the
+# BFF spends the AI service's keys, so it stays off the LAN); the AI service and Redis are reachable
 # only on the Compose network. API keys reach only the AI service, from .env through env_file: never
 # interpolate them here (${...}), or a key exported in the host shell would leak in.
+# tests/test_compose.py enforces these rules.
 services:
   web:
     build: { context: ./web, target: runtime }
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
     environment:
       AI_SERVICE_URL: "http://ai-service:8000"
     depends_on:

@@ -1,10 +1,11 @@
 # Local development (make dev): docker compose -f compose.yaml -f compose.dev.yaml up --build --watch
 # Dev images with reload; watch syncs source edits into the containers and rebuilds on dependency
-# changes. Synced paths are never bind-mounted.
+# changes. Synced paths are never bind-mounted. The AI service holds the real keys and has no auth, so
+# its port is published on loopback only.
 services:
   ai-service:
     build: { target: dev }
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
     develop:
       watch:
         - { action: sync, path: ./app, target: /app/app }
