@@ -582,7 +582,7 @@ export interface components {
             output_format: components["schemas"]["OutputFormat"];
             /**
              * Output Language
-             * @description Empty means not given: the transcription's language.
+             * @description At most 40 characters. Empty means not given: the transcription's language.
              */
             output_language?: string | null;
             project_type: components["schemas"]["ProjectType"];

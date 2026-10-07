@@ -215,6 +215,9 @@ class OutputFormat(StrEnum):
     NARRATIVE = "narrative"
 
 
+MAX_LANGUAGE_CHARS = 40
+
+
 class EstimateRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -241,7 +244,11 @@ class EstimateRequest(BaseModel):
     detail_level: DetailLevel = Field(description="Granularity of the breakdown.")
     output_format: OutputFormat = Field(description="Layout of the rendered estimate.")
     output_language: (
-        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)] | None
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_LANGUAGE_CHARS),
+        ]
+        | None
     ) = Field(
         default=None,
         description="Language for narrative fields. Defaults to the transcription's language.",

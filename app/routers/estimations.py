@@ -55,19 +55,25 @@ ServiceDep = Annotated[EstimationService, Depends(get_service)]
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 
 
-def checked_request(body: EstimateRequest, settings: SettingsDep) -> EstimateRequest:
-    """Length check as a dependency: it runs before a stream starts, so it can still answer 422."""
+def check_transcript_length(transcript: str, field: str, settings: Settings) -> None:
+    """The one transcript limit (`max_transcription_chars`, which the context endpoint advertises)
+    for every path; `field` names the body field that carried the transcript."""
     limit = settings.max_transcription_chars
-    if len(body.transcription) > limit:
+    if len(transcript) > limit:
         raise RequestValidationError(
             [
                 {
-                    "loc": ("body", "transcription"),
+                    "loc": ("body", field),
                     "msg": f"Transcription exceeds {limit} characters.",
                     "type": "string_too_long",
                 }
             ]
         )
+
+
+def checked_request(body: EstimateRequest, settings: SettingsDep) -> EstimateRequest:
+    """Length check as a dependency: it runs before a stream starts, so it can still answer 422."""
+    check_transcript_length(body.transcription, "transcription", settings)
     return body
 
 

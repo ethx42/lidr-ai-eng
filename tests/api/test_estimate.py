@@ -2,6 +2,7 @@ import json
 import logging
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.services.errors import (
     InvalidModelOutput,
@@ -70,6 +71,17 @@ def test_validation_422_without_provider_call(
         assert body["error"]["code"] == "invalid_request"
         assert body["request_id"] == "v-1"
         assert client.fake.calls == []
+
+
+def test_an_over_long_transcription_names_its_field(client_with_limit_10: TestClient) -> None:
+    r = client_with_limit_10.post(URL, json=request_body(transcription="x" * 11))
+    assert r.json()["error"]["details"] == [
+        {
+            "loc": ["body", "transcription"],
+            "msg": "Transcription exceeds 10 characters.",
+            "type": "string_too_long",
+        }
+    ]
 
 
 def test_json_content_type_required(make_client: ClientFactory) -> None:
