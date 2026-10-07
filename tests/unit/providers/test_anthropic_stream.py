@@ -12,7 +12,7 @@ import pytest
 from anthropic import AsyncAnthropic
 
 from app.config import ReasoningEffort
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import (
     InvalidModelOutput,
     LLMError,
@@ -115,6 +115,18 @@ async def test_invalid_stop_reasons_are_invalid_output(name: str, reason: str) -
     assert received and all(isinstance(e, TextDelta) for e in received)
 
 
+@pytest.mark.parametrize("name", ["max_tokens", "context_window_exceeded", "refusal"])
+async def test_invalid_stop_reasons_carry_the_billed_usage(name: str) -> None:
+    body = fixture(name)
+    usage = next(e for e in parse_sse(body) if e["type"] == "message_delta")["usage"]
+    assert usage["output_tokens"] > 0
+    with pytest.raises(InvalidModelOutput) as info:
+        await collect(provider_for(serve(body)))
+    assert info.value.usage == Usage(
+        input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"]
+    )
+
+
 @pytest.mark.parametrize(
     "name,kind,expected",
     [
@@ -139,6 +151,14 @@ async def test_error_events_inside_the_stream_are_mapped_by_type(
     assert isinstance(upstream, anthropic.APIStatusError)
     assert upstream.status_code == 200
     assert received and all(isinstance(e, TextDelta) for e in received)
+
+
+@pytest.mark.parametrize("name", ["overloaded_midstream", "rate_limit_midstream"])
+async def test_error_events_inside_the_stream_report_no_upstream_status(name: str) -> None:
+    # The 200 is the stream's: logged next to an unavailable outcome, it would mislead.
+    with pytest.raises(LLMError) as info:
+        await collect(provider_for(serve(fixture(name))))
+    assert info.value.upstream_status is None
 
 
 async def test_other_error_events_inside_the_stream_are_upstream_errors() -> None:
@@ -220,6 +240,7 @@ async def test_http_errors_map_the_same_on_both_paths(
     for info in (streamed, blocking):
         assert type(info.value) is expected
         assert info.value.cause == cause
+        assert info.value.upstream_status == status
 
 
 def without(body: str, *types: str) -> str:
@@ -335,10 +356,12 @@ def broken(after: int, error: Exception) -> Handler:
     return lambda _: httpx.Response(200, headers=SSE_HEADERS, stream=body)
 
 
+# Every httpx2.RequestError raised while reading the body, as OpenAI's SDK wraps them.
 TRANSPORT_ERRORS = [
     httpx.ReadTimeout("stalled"),
     httpx.RemoteProtocolError("peer closed connection"),
     httpx.ReadError("connection reset"),
+    httpx.DecodingError("corrupt content encoding"),
 ]
 
 

@@ -215,10 +215,14 @@ async def main(
     parser.add_argument("--report", type=Path, help="write the JSON report to exactly this path")
     args = parser.parse_args(argv)
 
-    if ledger:
-        live_budget.ensure_budget(0.10, ledger=ledger)
     # Primary only: a fallback would mix two models' answers into one score.
     resolved = settings or Settings(llm_fallbacks="")
+    cases = load_golden_cases()
+    bound = 0.0
+    if ledger:
+        # Every case at its worst; a model with no price cannot be bounded, so it is refused.
+        bound = live_budget.call_bound_usd(resolved.llm_model, resolved.llm_max_output_tokens)
+        live_budget.ensure_budget(max(0.10, len(cases) * bound), ledger=ledger)
     provider = provider_factory(resolved)
     # Never cached: every case must reach the model being scored.
     service = EstimationService(
@@ -229,15 +233,14 @@ async def main(
         cache=NullCache(),
         cache_scope=cache_scope(resolved),
     )
+    spent = len(cases) * bound  # until the cases report their cost
     try:
-        report = await run_cases(
-            service, load_golden_cases(), provider=provider.name, model=provider.model
-        )
+        report = await run_cases(service, cases, provider=provider.name, model=provider.model)
+        spent = sum(bound if r["cost_usd"] is None else r["cost_usd"] for r in report["cases"])
     finally:
+        if ledger:
+            live_budget.record_spend("eval", spent, ledger=ledger)
         await provider.aclose()
-    if ledger:
-        cost = sum(r["cost_usd"] or 0.0 for r in report["cases"])
-        live_budget.record_spend("eval", cost, ledger=ledger)
     path = write_report(report, args.report)
     print(summary_table(report))
     print(f"report: {path}")

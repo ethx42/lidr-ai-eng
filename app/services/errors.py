@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from app.schemas.estimation import Usage
+
 # The reason every provider gives exhausted credits or spend limits; the fallback router keys on it.
 QUOTA = "insufficient_quota"
 
@@ -21,9 +23,12 @@ class LLMError(Exception):
     code = "upstream_error"
     message = "The LLM provider rejected the request."
 
-    def __init__(self, message: str | None = None, *, reason: str | None = None) -> None:
+    def __init__(
+        self, message: str | None = None, *, reason: str | None = None, usage: Usage | None = None
+    ) -> None:
         super().__init__(message or self.message)
         self.reason = reason
+        self.usage = usage  # a failed call's usage, when the provider reported it; None if unknown
         self.attempt: Attempt | None = None  # set by the fallback router: which call raised it
 
     @property
@@ -33,8 +38,10 @@ class LLMError(Exception):
 
     @property
     def upstream_status(self) -> int | None:
+        """The upstream's HTTP error status; None for an error inside a 200 stream (Anthropic's
+        SDK raises it as a status error that carries the stream's 200)."""
         status = getattr(self.__cause__, "status_code", None)
-        return status if isinstance(status, int) else None
+        return status if isinstance(status, int) and status >= 400 else None
 
 
 class UpstreamRateLimited(LLMError):

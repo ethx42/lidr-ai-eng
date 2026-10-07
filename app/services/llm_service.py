@@ -68,24 +68,27 @@ class EstimationService:
         stream: bool = False,
         ttft_ms: int | None = None,
     ) -> None:
-        """`attempt` names the call that failed or was cancelled; a result names its own."""
+        """`attempt` names the call that failed or was cancelled; a result names its own. A failure
+        logs the usage (and cost) the provider reported for it; unknown usage logs 0 tokens and a
+        null cost."""
         attempt = (
             Attempt(result.provider, result.model, result.attempts, result.fallback_used)
             if result
             else attempt or self.primary_attempt
         )
+        usage = result.usage if result else error.usage if error else None
         log_llm_call(
             provider=attempt.provider,
             model=attempt.model,
             prompt_version=self.prompt.version,
-            usage=result.usage if result else None,
+            usage=usage,
             latency_ms=latency_ms,
             outcome=error.code if error else "ok",
             cause=error.cause if error else None,
             upstream_status=error.upstream_status if error else None,
             stream=stream,
             ttft_ms=ttft_ms,
-            cost_usd=cost_usd(result.model, result.usage) if result else None,
+            cost_usd=cost_usd(attempt.model, usage) if usage else None,
             attempt=attempt.number,
             fallback=attempt.fallback,
             cache=cache,

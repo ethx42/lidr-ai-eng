@@ -7,7 +7,7 @@ import openai
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.errors import (
     InvalidModelOutput,
     UpstreamError,
@@ -43,6 +43,13 @@ def raw(resp: Any, incomplete: str | None = None, parse_error: Exception | None 
     envelope = {
         "status": resp.status,
         "incomplete_details": {"reason": incomplete} if incomplete else None,
+        "usage": {
+            "input_tokens": resp.usage.input_tokens,
+            "input_tokens_details": vars(resp.usage.input_tokens_details),
+            "output_tokens": resp.usage.output_tokens,
+            "output_tokens_details": {"reasoning_tokens": 0},
+            "total_tokens": resp.usage.input_tokens + resp.usage.output_tokens,
+        },
     }
     return SimpleNamespace(
         http_response=SimpleNamespace(json=lambda: envelope),
@@ -130,6 +137,25 @@ async def test_schema_validation_error_is_invalid_output() -> None:
     with pytest.raises(InvalidModelOutput) as info:
         await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
     assert info.value.cause == "ValidationError"
+
+
+@pytest.mark.parametrize(
+    "resp",
+    [
+        raw(response(None)),
+        raw(response(None, refusal=True)),
+        raw(response(None, status="incomplete"), "max_output_tokens"),
+        raw(response(), parse_error=ValidationError.from_exception_data("Breakdown", [])),
+    ],
+    ids=["no-parse", "refusal", "incomplete", "schema"],
+)
+async def test_invalid_output_carries_the_billed_usage(resp: Any) -> None:
+    provider, _ = make(return_value=resp)
+    with pytest.raises(InvalidModelOutput) as info:
+        await provider.generate(system="s", user="u", schema=EstimationBreakdown, cache_key="k")
+    assert info.value.usage == Usage(
+        input_tokens=2000, output_tokens=900, cached_input_tokens=512, cache_write_tokens=1024
+    )
 
 
 def status_error(

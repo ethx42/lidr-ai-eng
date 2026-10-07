@@ -2,7 +2,6 @@
 tests use a real socket, or drive the ASGI app directly with a client that stops reading."""
 
 import asyncio
-import contextlib
 import json
 import logging
 
@@ -55,7 +54,7 @@ async def test_client_disconnect_closes_upstream(
             await asyncio.wait_for(slow_fake.stream_closed.wait(), timeout=1)
     finally:
         server.should_exit = True
-        await task
+        await asyncio.wait_for(task, timeout=5)  # a server that never stops must not hang the run
     [record] = [rec for rec in caplog.records if rec.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "cancelled"
     assert await redis_client.keys("estimate:*") == []
@@ -101,16 +100,17 @@ async def test_slow_client_disconnect_closes_upstream_in_the_request_context(
         "client": ("127.0.0.1", 50000),
         "server": ("127.0.0.1", 8000),
     }
-    with caplog.at_level(logging.INFO, logger="app.llm"):
+    with caplog.at_level(logging.INFO):
         async with app.router.lifespan_context(app):
             request = asyncio.create_task(app(scope, receive, send))
             await asyncio.sleep(1)  # several partials: the buffers fill and the producer parks
             disconnected.set()
             await asyncio.wait_for(provider.stream_closed.wait(), timeout=1)
-            # FastAPI 0.141.1 itself ends such a request with BrokenResourceError (its keep-alive
-            # task was blocked on the stream it just closed); a hang would still fail here.
-            with contextlib.suppress(ExceptionGroup):
-                await asyncio.wait_for(request, timeout=1)
+            await asyncio.wait_for(request, timeout=1)  # ends cleanly: a client left, no fault
     [record] = [rec for rec in caplog.records if rec.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "cancelled"
     assert record.request_id == "slow-reader"
+    # FastAPI 0.141.1's keep-alive task fails with BrokenResourceError on the stream it just closed.
+    assert [rec for rec in caplog.records if rec.levelno >= logging.WARNING] == []
+    [left] = [rec for rec in caplog.records if rec.getMessage() == "client_disconnected"]
+    assert left.levelno == logging.INFO

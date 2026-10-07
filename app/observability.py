@@ -8,7 +8,9 @@ from typing import Any
 from app.schemas.estimation import Usage
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
-# Set by the service for each request, so records logged below it (llm_fallback) carry it too.
+# Set by the service at the start of each request, so records logged below it (llm_fallback)
+# carry it too: the router is only ever called after that. Never reset, on purpose: a reset inside
+# the stream's async generator can run in another task's context and raise ValueError.
 prompt_version_var: ContextVar[str | None] = ContextVar("prompt_version", default=None)
 
 llm_logger = logging.getLogger("app.llm")

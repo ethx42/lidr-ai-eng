@@ -21,6 +21,7 @@ from evals.run_eval import (
     main,
     run_cases,
 )
+from scripts.live_budget import BudgetExceeded, call_bound_usd
 from tests.factories import TRANSCRIPT, breakdown, task
 from tests.fakes import FakeProvider
 
@@ -290,3 +291,79 @@ async def test_eval_runs_the_primary_provider_only(
 
     await main(["--report", str(tmp_path / "r.json")], provider_factory=factory)
     assert [s.chain for s in seen] == [[("openai", "gpt-4o-mini")]]
+
+
+def ledger_entries(ledger: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in ledger.read_text().splitlines()] if ledger.exists() else []
+
+
+async def test_the_eval_guard_covers_every_case_at_its_worst(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Five Haiku cases at their worst (~$0.15) do not fit in $0.12, though the old fixed $0.10 did.
+    monkeypatch.setenv("LIVE_BUDGET_USD", "0.12")
+    called: list[Settings] = []
+
+    def factory(resolved: Settings) -> FakeProvider:
+        called.append(resolved)
+        return FakeProvider(result=FULL)
+
+    settings = Settings(
+        _env_file=None,
+        anthropic_api_key="test-key",
+        llm_provider="anthropic",
+        llm_model="claude-haiku-4-5",
+        llm_fallbacks="",
+        llm_max_output_tokens=4096,
+    )
+    worst = len(load_golden_cases()) * call_bound_usd("claude-haiku-4-5", 4096)
+    assert worst > 0.12
+    with pytest.raises(BudgetExceeded):
+        await main(
+            ["--report", str(tmp_path / "r.json")],
+            settings=settings,
+            provider_factory=factory,
+            ledger=tmp_path / "spend.jsonl",
+        )
+    assert called == []
+
+
+async def test_eval_refuses_a_model_it_cannot_price(tmp_path: Path) -> None:
+    ledger = tmp_path / "spend.jsonl"
+    settings = Settings(
+        _env_file=None, openai_api_key="test-key", llm_model="gpt-4.1", llm_fallbacks=""
+    )
+    with pytest.raises(ValueError, match="cannot bound live spend"):
+        await main(
+            ["--report", str(tmp_path / "r.json")],
+            settings=settings,
+            provider_factory=lambda _: FakeProvider(result=FULL, model="gpt-4.1"),
+            ledger=ledger,
+        )
+    assert ledger_entries(ledger) == []
+
+
+@pytest.mark.parametrize(
+    "error,raised",
+    [(InvalidModelOutput(), None), (RuntimeError("cut off"), RuntimeError)],
+    ids=["failed-cases", "run-raises-midway"],
+)
+async def test_eval_spend_without_a_reported_cost_is_recorded_at_its_bound(
+    error: Exception, raised: type[Exception] | None, tmp_path: Path
+) -> None:
+    ledger = tmp_path / "spend.jsonl"
+    settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
+    run_eval = main(
+        ["--report", str(tmp_path / "r.json")],
+        settings=settings,
+        provider_factory=lambda _: FakeProvider(error=error, model="gpt-4o-mini"),
+        ledger=ledger,
+    )
+    if raised:
+        with pytest.raises(raised):
+            await run_eval
+    else:
+        await run_eval
+    [entry] = ledger_entries(ledger)
+    bound = call_bound_usd("gpt-4o-mini", settings.llm_max_output_tokens)
+    assert entry["cost_usd"] == pytest.approx(len(load_golden_cases()) * bound)

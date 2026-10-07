@@ -44,16 +44,16 @@ def openai_http_client(**kwargs: Any) -> DefaultAsyncHttpxClient:
     return DefaultAsyncHttpxClient(event_hooks={"response": [_no_retry_on_quota]}, **kwargs)
 
 
-def stream_error(code: str | None) -> LLMError:
+def stream_error(code: str | None, usage: Usage | None = None) -> LLMError:
     """An error reported inside a 200 stream: an `error` event, `response.failed` or a payload."""
     if code == QUOTA:
-        return UpstreamError(reason=QUOTA)
+        return UpstreamError(reason=QUOTA, usage=usage)
     reason = f"stream_error:{code}" if code else "stream_error"
     if code == "server_error":
-        return UpstreamUnavailable(reason=reason)
+        return UpstreamUnavailable(reason=reason, usage=usage)
     if code == "rate_limit_exceeded":
-        return UpstreamRateLimited(reason=reason)
-    return UpstreamError(reason=reason)
+        return UpstreamRateLimited(reason=reason, usage=usage)
+    return UpstreamError(reason=reason, usage=usage)
 
 
 def map_error(exc: openai.APIError) -> LLMError:
@@ -85,6 +85,11 @@ def _usage(usage: ResponseUsage | None) -> Usage:
         cached_input_tokens=(details.cached_tokens or 0) if details else 0,
         cache_write_tokens=(details.cache_write_tokens or 0) if details else 0,
     )
+
+
+def _billed(usage: ResponseUsage | None) -> Usage | None:
+    """A failed response's usage, when it reports one."""
+    return _usage(usage) if usage else None
 
 
 class OpenAIProvider:
@@ -128,17 +133,21 @@ class OpenAIProvider:
             raise map_error(exc) from exc
 
         envelope = raw.http_response.json()
+        # Built without validation, as the SDK builds responses: read even when `parse()` fails.
+        reported = envelope.get("usage")
+        usage = _billed(ResponseUsage.construct(**reported) if reported else None)
         if envelope.get("status") == "incomplete":
             details = envelope.get("incomplete_details") or {}
-            raise InvalidModelOutput(reason=f"incomplete:{details.get('reason')}")
+            raise InvalidModelOutput(reason=f"incomplete:{details.get('reason')}", usage=usage)
         try:
             response = raw.parse()
         except pydantic.ValidationError as exc:
-            raise InvalidModelOutput() from exc
+            raise InvalidModelOutput(usage=usage) from exc
 
         parsed = response.output_parsed
         if parsed is None:
-            raise InvalidModelOutput(reason="refusal" if _refused(response) else "no_parsed_output")
+            reason = "refusal" if _refused(response) else "no_parsed_output"
+            raise InvalidModelOutput(reason=reason, usage=usage)
         return self._result(parsed, response.usage, start)
 
     async def stream(
@@ -184,17 +193,19 @@ class OpenAIProvider:
     ) -> LLMResult[T]:
         if terminal is None:
             raise UpstreamUnavailable(reason="no_terminal_event")
+        usage = _billed(terminal.usage)
         if terminal.status == "incomplete":
             details = terminal.incomplete_details
-            raise InvalidModelOutput(reason=f"incomplete:{details.reason if details else None}")
+            reason = f"incomplete:{details.reason if details else None}"
+            raise InvalidModelOutput(reason=reason, usage=usage)
         if terminal.status == "failed":
-            raise stream_error(terminal.error.code if terminal.error else None)
+            raise stream_error(terminal.error.code if terminal.error else None, usage)
         if _refused(terminal):
-            raise InvalidModelOutput(reason="refusal")
+            raise InvalidModelOutput(reason="refusal", usage=usage)
         try:
             parsed = schema.model_validate_json(terminal.output_text)
         except pydantic.ValidationError as exc:
-            raise InvalidModelOutput() from exc
+            raise InvalidModelOutput(usage=usage) from exc
         return self._result(parsed, terminal.usage, start)
 
     def _result(self, parsed: T, usage: ResponseUsage | None, start: float) -> LLMResult[T]:

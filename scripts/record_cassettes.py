@@ -14,13 +14,13 @@ from pathlib import Path
 from app.config import Settings
 from app.observability import configure_logging
 from app.prompts.loader import PromptBundle, build_user_message, load_prompt
-from app.schemas.estimation import EstimateRequest, EstimationBreakdown, Usage
+from app.schemas.estimation import EstimateRequest, EstimationBreakdown
 from app.services.pricing import cost_usd
 from app.services.providers.base import LLMProvider, LLMResult, TextDelta
 from app.services.providers.factory import build_one
 from app.services.providers.replay_provider import Cassette, Chunks, cassette_key
 from evals.run_eval import FRONT_MATTER
-from scripts.live_budget import ensure_budget, record_spend
+from scripts.live_budget import call_bound_usd, ensure_budget, record_spend
 
 ROOT = Path(__file__).resolve().parent.parent
 CASSETTES = ROOT / "tests" / "cassettes"
@@ -35,21 +35,6 @@ SAMPLES = tuple(
 )
 MODEL = "gpt-4o-mini"
 ESTIMATE_USD = 0.01
-# Above any request here: system prompt, schema and sample measured 6.4k-6.6k input tokens.
-PROMPT_TOKENS_BOUND = 8_000
-
-
-def call_bound_usd(model: str, max_output_tokens: int) -> float:
-    """One call's worst case: the whole prompt billed as a cache write, then every output token."""
-    usage = Usage(
-        input_tokens=PROMPT_TOKENS_BOUND,
-        cache_write_tokens=PROMPT_TOKENS_BOUND,
-        output_tokens=max_output_tokens,
-    )
-    cost = cost_usd(model, usage)
-    if cost is None:
-        raise ValueError(f"no price for {model}: cannot bound live spend")
-    return cost
 
 
 def guard_usd(max_output_tokens: int) -> float:

@@ -46,3 +46,30 @@ def test_empty_whitespace_and_non_object_snapshots_are_ignored() -> None:
     assert s.feed("   ") is None
     assert s.feed('["x"') is None
     assert s.feed("garbage {") is None
+
+
+def test_a_change_after_the_interval_is_the_next_partial() -> None:
+    clock = Clock()
+    s = PartialSnapshotter(min_interval=0.1, clock=clock)
+    assert s.feed('{"a": "x') is not None
+    clock.now = 0.0999
+    assert s.feed('{"a": "xy') is None  # just inside the interval
+    clock.now = 0.1  # exactly one interval later
+    second = s.feed('{"a": "xyz')
+    assert second is not None and second.seq == 2 and second.breakdown == {"a": "xyz"}
+    clock.now = 0.15
+    assert s.feed('{"a": "xyzw') is None  # the interval restarts at the last emit
+
+
+def test_unparseable_snapshots_are_skipped_without_breaking_the_stream() -> None:
+    clock = Clock()
+    s = PartialSnapshotter(clock=clock)
+    for snapshot in (
+        '{"a": "\ud800',  # a lone surrogate in the text: it cannot be encoded
+        '{"a": "\\ud800"}',  # a lone surrogate escape: jiter rejects it
+        '{"a": ' + "[" * 5000,  # past jiter's nesting limit
+    ):
+        assert s.feed(snapshot) is None
+        clock.now += 1
+    event = s.feed('{"a": "ok"}')
+    assert event is not None and event.seq == 1 and event.breakdown == {"a": "ok"}

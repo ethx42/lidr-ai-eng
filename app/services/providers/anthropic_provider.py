@@ -89,6 +89,18 @@ def map_error(exc: anthropic.APIError) -> LLMError:
     return InvalidModelOutput()
 
 
+def _usage(usage: anthropic.types.Usage) -> Usage:
+    cache_read = usage.cache_read_input_tokens or 0
+    cache_write = usage.cache_creation_input_tokens or 0
+    # Anthropic reports uncached input separately; report the total like OpenAI does.
+    return Usage(
+        input_tokens=usage.input_tokens + cache_read + cache_write,
+        output_tokens=usage.output_tokens,
+        cached_input_tokens=cache_read,
+        cache_write_tokens=cache_write,
+    )
+
+
 class AnthropicProvider:
     name: Provider = "anthropic"
 
@@ -144,8 +156,9 @@ class AnthropicProvider:
                             message = event.message
         except anthropic.APIError as exc:
             raise map_error(exc) from exc
-        except httpx2.TransportError as exc:
-            # Unlike OpenAI's, this SDK does not wrap errors raised while reading the body.
+        except httpx2.RequestError as exc:
+            # Unlike OpenAI's, this SDK does not wrap errors raised while reading the body
+            # (transport and decoding errors alike).
             raise UpstreamUnavailable(reason="stream_transport") from exc
         except httpx2.StreamError:
             raise  # a RuntimeError, but our misuse of the response, not the upstream's
@@ -173,28 +186,20 @@ class AnthropicProvider:
         }
 
     def _finish(self, message: Message, schema: type[T], start: float) -> LLMResult[T]:
+        # Read first: an invalid answer is billed too, and its error reports the usage.
+        usage = _usage(message.usage)
         if message.stop_reason in INVALID_STOP_REASONS:
-            raise InvalidModelOutput(reason=f"stop_reason:{message.stop_reason}")
+            raise InvalidModelOutput(reason=f"stop_reason:{message.stop_reason}", usage=usage)
         text = "".join(block.text for block in message.content if block.type == "text")
         if not text:
-            raise InvalidModelOutput(reason="no_parsed_output")
+            raise InvalidModelOutput(reason="no_parsed_output", usage=usage)
         try:
             parsed = schema.model_validate_json(text)
         except pydantic.ValidationError as exc:
-            raise InvalidModelOutput() from exc
-        usage = message.usage
-        cache_read = usage.cache_read_input_tokens or 0
-        cache_write = usage.cache_creation_input_tokens or 0
-        # Anthropic reports uncached input separately; report the total like OpenAI does.
-        input_tokens = usage.input_tokens + cache_read + cache_write
+            raise InvalidModelOutput(usage=usage) from exc
         return LLMResult(
             parsed=parsed,
-            usage=Usage(
-                input_tokens=input_tokens,
-                output_tokens=usage.output_tokens,
-                cached_input_tokens=cache_read,
-                cache_write_tokens=cache_write,
-            ),
+            usage=usage,
             latency_ms=round((time.perf_counter() - start) * 1000),
             provider=self.name,
             model=self.model,
