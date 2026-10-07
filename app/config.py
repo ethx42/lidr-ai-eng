@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     attachment_max_pages: int = Field(default=200, gt=0)
     attachment_max_chars: int = Field(default=50_000, gt=0)
     attachment_max_docx_uncompressed: int = Field(default=50 * 1024 * 1024, gt=0)
+    # The extraction child process: killed after the timeout; the memory cap is its address space
+    # (RLIMIT_AS, enforced on Linux only; an idle child maps about 60 MB).
+    attachment_timeout_seconds: float = Field(default=10, gt=0, le=120)
+    attachment_max_memory_bytes: int = Field(
+        default=512 * 1024 * 1024, ge=128 * 1024 * 1024, le=8 * 1024**3
+    )
     blended_hourly_rate: float | None = Field(default=None, gt=0)
     weekly_capacity_hours: float = Field(default=30, gt=0)
     replay_cassette_dir: Path = Path("tests/cassettes")
@@ -103,6 +109,8 @@ class Settings(BaseSettings):
             max_pages=self.attachment_max_pages,
             max_chars=self.attachment_max_chars,
             max_docx_uncompressed=self.attachment_max_docx_uncompressed,
+            timeout_seconds=self.attachment_timeout_seconds,
+            max_memory_bytes=self.attachment_max_memory_bytes,
         )
 
     def key_for(self, provider: Provider) -> str:

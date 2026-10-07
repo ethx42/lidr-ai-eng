@@ -360,7 +360,8 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   - Import cost: about 73 ms (python-docx about 50 ms). `AttachmentLimits` lives in the stdlib-only `app/attachments/limits.py`, so `app.config` loads neither (subprocess test).
   - **CPU cost (measured, fix round 1):** page content parses at about 0.75–1 s per MB decoded, and pages that share one content stream re-parse it each. Every font *name* in a page's `/Resources /Font` is built (ToUnicode CMap parsed, about 0.17 s per MB) before the first operator, even when the names point at the same font object: 100 names sharing one 256 KB CMap took 4.3 s for a 3.7 KB upload, linear in the count. Neither a check between pages nor `visitor_operand_before` can stop that.
   - Form XObjects: a form without `/Resources` is skipped unparsed. Each `Do` re-parses the form's content (`xform_maximum_invocations_per_extraction`, default 5,000 per page), and `_extract_text__xform` swallows any `Exception` from a form with a WARNING, so an abort raised inside a form must be a `BaseException`.
-  - **Hard deadline that works:** a `sys.settrace` hook (per thread; return `None` so only `call` events fire) that raises a `BaseException` subclass once `time.monotonic()` passes the deadline. pypdf has no bare or `BaseException` handlers (grep, 6.19.0). It stopped the 1,000-font page at 5.00 s and works in worker threads without touching other threads. Cost: pypdf runs about 2.4 times slower (1 MB of `Tj` content, 0.62 s to 1.51 s). `app/attachments/extractor.py` uses it with `PARSE_SECONDS = 5` and lowers `zlib`/`array_based_stream`/`lzw`/`run_length` output caps to 4 MB. A 4 MB decoded stream is about 4 s of parsing.
+  - **Bounding time:** only a separate process that can be killed gives a hard bound (fix round 2: `app/attachments/isolation.py`; see "multiprocessing + resource" below). `extractor.py` keeps a check between pages against `AttachmentLimits.timeout_seconds` and lowers the `zlib`/`array_based_stream`/`lzw`/`run_length` output caps to 4 MB, as defence in depth. A 4 MB decoded stream is about 4 s of parsing.
+  - **Superseded (fix round 1):** a `sys.settrace` deadline hook worked: a `BaseException` raised from `call` events, about 2.4 times slower. It was fragile, though. The first Python call after the deadline can be a garbage-collector weakref callback or a generator `close()`. An exception raised there is only printed, and CPython then switches the tracer off for good. It was replaced by process isolation.
   - The per-filter caps are `Configuration` fields used in `filters.py` (`zlib_maximum_output_length`, `lzw_maximum_output_length`, `run_length_maximum_output_length`) and `generic/_data_structures.py` (`array_based_stream_maximum_output_length` for `/Contents` arrays, `maximum_declared_stream_length` for raw `/Length`).
 
 ### python-docx 1.2.0 + licenses
@@ -396,11 +397,36 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   - **More exceptions on malformed packages (verified by rewriting one member of a real .docx, then fuzzed with 1,500 byte mutations):** a broken `word/document.xml` or `_rels/.rels` raises lxml's `XMLSyntaxError`, which is a builtin `SyntaxError` subclass (catch `SyntaxError`; importing `lxml` in `app/` would make it a direct dependency under `tests/test_structure.py`); a document part whose root is another element raises `AttributeError`; a corrupt deflate member raises `zlib.error`. Wrap the parse the same way: re-raise your own errors and `MemoryError`, and log only the type name.
   - **The declared-size sum alone is not a zip-bomb guard (verified, CPython 3.12 `zipfile`):** `ZipExtFile` cuts each member at the central directory's `file_size`, but only *after* inflating. `read()` (what python-docx's `ZipFile.read(name)` calls) asks the decompressor for up to `MAX_N` (`1 << 31 - 1`, i.e. 1 GiB) at once. A 1.4 MB .docx whose `word/document.xml` declares 1 KB but inflates to 600 MB took peak RSS from 47 MB to 651 MB before failing. `read(n)` is bounded (`decompress(data, max(n, 4096))`). So: check `sum(info.file_size ...)` for the clear "too large" error, then copy every member with `shutil.copyfileobj(source.open(info), copy.open(info.filename, "w"))` into a new uncompressed `ZipFile(BytesIO(), "w")` and hand that to `Document` (`repacked` in `app/attachments/extractor.py`; regression test with `tracemalloc`). A lying member then stops at its declared size and usually fails its CRC (`BadZipFile`).
   - Internal DTD entities are not expanded (`resolve_entities=False`): `&b;` comes out as an empty run, so "billion laughs" yields nothing.
-  - **Element count, not bytes, drives memory and CPU:** `Document()` on 1M empty `<w:p/>` (6 MB XML) took +134 MB and 0.07 s; on 5M (a 78 KB upload) +477 MB, and iterating them took 34 s and +771 MB. `extractor.py` counts `<` bytes in the `.xml`/`.rels` members while repacking (cap 1M; Word writes about 25 per paragraph) and runs the parse under the same 5 s deadline as PDFs.
+  - **Element count, not bytes, drives memory and CPU:** `Document()` on 1M empty `<w:p/>` (6 MB XML) took +134 MB and 0.07 s; on 5M (a 78 KB upload) +477 MB, and iterating them took 34 s and +771 MB. `extractor.py` counts `<` bytes in the `.xml`/`.rels` members while repacking (cap 1M; Word writes about 25 per paragraph) and the parse runs in the killable child process (`extract_all_isolated`).
   - **More `zipfile` traps (CPython 3.12):**
     - The bzip2 and LZMA readers call `decompress(data)` with no output limit, so even `read(64 KiB)` can inflate without bound. Reject any member whose `compress_type` is not `ZIP_STORED` or `ZIP_DEFLATED` (all Word writes) before reading.
     - Besides `BadZipFile`, the `ZipFile()` constructor raises `UnicodeDecodeError` (a name flagged UTF-8 that is not) and `NotImplementedError` ("zip file version 9.5"). Found by fuzzing 40,000 central directories.
     - Writing a duplicate name emits a `UserWarning` that quotes the name; check the names for duplicates first.
+
+### multiprocessing + resource (CPython 3.12.11): killable extraction child (2026-10-07, session 5 Task 4 fix round 2)
+- **Sources:** Context7 `/websites/python_3_12_library` (multiprocessing contexts and start methods, `set_forkserver_preload`, `Pipe`, `connection.wait`, `Process.join`/`exitcode`; `resource.setrlimit`/`getrlimit`). Also the installed stdlib source (`multiprocessing/forkserver.py`, `process.py`, `context.py`) and probes on macOS 15 (arm64) and in the `python:3.12-slim-trixie` image (Linux aarch64, Docker 29.4).
+- **Start method: `forkserver`, via `multiprocessing.get_context("forkserver")`.** A library should not call `set_start_method`.
+  - The server is launched with `spawnv_passfds`, meaning fork+exec, so starting it from a threaded server is safe. It is single-threaded, and every child forks from it.
+  - `set_forkserver_preload([...])` is process-wide and only takes effect before the server starts. `ImportError` is ignored.
+  - Passing an explicit list drops the default `['__main__']`, so neither uvicorn's nor pytest's main module is re-imported.
+  - The server gets the parent's `sys.path` from the spawn preparation data. That is how test-module targets unpickle in the child.
+- **Measured overhead:**
+  - forkserver: about 11 ms per child on Linux (7 ms on macOS) after a one-off 91–114 ms start.
+  - spawn: 108–160 ms per child on Linux (435 ms cold) and 115–210 ms on macOS.
+  - `extract_all_isolated` on the three fixtures: median 15.8 ms against 6.2 ms in-process on Linux (14.6 against 4.4 ms on macOS). The first call takes 119–137 ms.
+  - A child stuck on a 1,000-font page is killed at 2.00 s with a 2 s timeout and at 10.01 s with a 10 s timeout.
+- **Pipe pattern:** `receive, send = ctx.Pipe(duplex=False)`. Start the process, then `send.close()` in the parent.
+  - The child's death then shows up as `receive.poll(t)` returning True and `recv()` raising `EOFError`.
+  - `poll(timeout)` with the remaining time gives the hard timeout. Then `kill()` (SIGKILL) if `is_alive()`, `join()` and `close()`.
+  - `exitcode` is negative for a signal.
+  - Use `daemon=True` so children die with the parent.
+- **Pickling across the boundary:** an exception pickles as `(cls, args)`. Its traceback, `__cause__` and `__context__` do not cross, so a parser message chained inside never leaves the child. Frozen dataclasses round-trip.
+- **`resource.setrlimit(RLIMIT_AS, (soft, hard))`:**
+  - It raises `ValueError` when soft is greater than hard, or when raising the hard limit.
+  - On macOS, any 512 MB cap fails with `ValueError: current limit exceeds maximum limit`, because the address space already reserved is far larger. Suppress the error there.
+  - On Linux it is enforced: `bytearray(1 GiB)` under a 512 MB cap raises `MemoryError` in the child. An idle child with pypdf, python-docx and lxml imported maps about 62 MB (`VmSize`), so 128 MiB is a sane floor.
+  - Lower only the soft limit and keep the current hard one.
+- **Logging in the child:** a forked child has no handlers, so `logging.lastResort` would print WARNING and above to stderr, unformatted (pypdf's included). Add a `NullHandler` to the root logger in the child and forward only the extractor's type-name records through the pipe.
 
 ### httpx2 2.13.0: async integration tests
 - **Use:** `httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://test")`. The signature is `ASGITransport(app, raise_app_exceptions=True, root_path="", client=("127.0.0.1", 123))`. It does **not** run the lifespan (verified: no startup and no `app.state`). The httpx2 docs call lifespan out of scope.
@@ -466,7 +492,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
     - Use `pypdf[crypto]`, and catch `PyPdfError` *and* `DependencyError`.
     - Zip-size-guard `.docx` uploads before opening them, then repack them in bounded reads (a lying header otherwise inflates up to 1 GiB per member).
     - Both parsers raise bare builtin exceptions on malformed files (see the pypdf and python-docx "Installed and used" notes); `app/attachments/extractor.py` maps any parser failure to `AttachmentError`.
-    - Bound wall-clock time with a per-thread `sys.settrace` deadline, not per-page checks (see pypdf "CPU cost"); bound DOCX memory by element count, not just bytes.
+    - Bound wall-clock time and memory by extracting in a killable child process (`extract_all_isolated`, called through `asyncio.to_thread`); checks between pages cannot stop one expensive page. Bound DOCX memory by element count, not just bytes.
     - An all-empty `extract_text()` is an unsupported (scanned) PDF.
 12. **Redis fail-open:**
     - Use `from_url` (no retries) with timeouts of about 0.25–0.5 s, not the 5 s defaults.

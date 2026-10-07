@@ -1,19 +1,21 @@
 import io
 import logging
+import os
+import signal
 import struct
 import subprocess
 import sys
 import time
 import tracemalloc
 import warnings
-import weakref
 import zipfile
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pypdf
 import pytest
+from pydantic import ValidationError
 from pypdf import PdfWriter
 
 from app.attachments import extractor
@@ -21,10 +23,12 @@ from app.attachments.extractor import (
     Attachment,
     AttachmentError,
     AttachmentLimits,
+    ExtractedAttachment,
     detect_kind,
     extract_all,
     format_attachments,
 )
+from app.attachments.isolation import extract_all_isolated, run_isolated
 from app.config import Settings
 
 FIX = "tests/fixtures/attachments/"
@@ -211,15 +215,35 @@ def test_docx_with_lying_sizes_is_inflated_in_bounded_chunks() -> None:
     assert peak < 20 * 1024 * 1024  # zipfile's read() would inflate all 100 MB before cutting
 
 
+def settings(**limits: float) -> Settings:
+    return Settings(_env_file=None, llm_provider="replay", llm_fallbacks="none", **limits)
+
+
 def test_settings_carry_the_attachment_limits() -> None:
-    settings = Settings(
-        _env_file=None,
-        llm_provider="replay",
-        llm_fallbacks="none",
+    loaded = settings(
         attachment_max_files=2,
         attachment_max_chars=1_000,
+        attachment_timeout_seconds=2.5,
+        attachment_max_memory_bytes=256 * 1024 * 1024,
     )
-    assert settings.attachment_limits == AttachmentLimits(max_files=2, max_chars=1_000)
+    assert loaded.attachment_limits == AttachmentLimits(
+        max_files=2, max_chars=1_000, timeout_seconds=2.5, max_memory_bytes=256 * 1024 * 1024
+    )
+
+
+@pytest.mark.parametrize(
+    "limit",
+    [
+        {"attachment_timeout_seconds": 0},
+        {"attachment_timeout_seconds": 121},
+        {"attachment_max_memory_bytes": 64 * 1024 * 1024},
+        {"attachment_max_memory_bytes": 9 * 1024**3},
+    ],
+    ids=["timeout-zero", "timeout-too-long", "memory-too-small", "memory-too-large"],
+)
+def test_child_process_limits_are_bounded(limit: dict[str, float]) -> None:
+    with pytest.raises(ValidationError):
+        settings(**limit)
 
 
 # Fix round 1: every decompressor and every PDF page bounded, parser failures surfaced.
@@ -332,32 +356,6 @@ def test_files_after_the_char_budget_are_listed_not_parsed(monkeypatch: pytest.M
     assert (skipped.kind, skipped.text, skipped.pages, calls) == ("pdf", "\n[truncated]", None, [])
 
 
-@pytest.mark.parametrize(
-    "build",
-    [
-        pytest.param(lambda: pdf_pages(NOOP * 20_000, pages=10), id="pages-sharing-a-stream"),
-        # One page: a per-page check never fires; the fonts are built before the first operator.
-        pytest.param(lambda: pdf_pages(TEXT, fonts=40, cmap=cmap(5_000)), id="one-page-of-fonts"),
-    ],
-)
-def test_pdf_parsing_has_a_deadline(
-    monkeypatch: pytest.MonkeyPatch, build: Callable[[], bytes]
-) -> None:
-    monkeypatch.setattr(extractor, "PARSE_SECONDS", 0.05)
-    with pytest.raises(AttachmentError, match=r"^slow\.pdf: took too long to read$"):
-        extract_all([Attachment("slow.pdf", build())], AttachmentLimits())
-
-
-def test_docx_parsing_has_a_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(extractor, "PARSE_SECONDS", 0.05)
-    body = b"<w:document %s><w:body>%s</w:body></w:document>" % (W_NS, b"<w:p/>" * 200_000)
-    with pytest.raises(AttachmentError, match="took too long to read"):
-        extract_all(
-            [Attachment("long.docx", rewrite_docx({"word/document.xml": body}))],
-            AttachmentLimits(),
-        )
-
-
 def test_pdf_stream_inflating_past_the_cap_is_unreadable() -> None:
     content = NOOP * (5 * 1024 * 1024 // len(NOOP))  # 5 MB decoded, about 5 KB on the wire
     with pytest.raises(AttachmentError, match="unreadable PDF"):
@@ -441,34 +439,128 @@ def test_docx_with_too_many_xml_elements_is_rejected(monkeypatch: pytest.MonkeyP
         )
 
 
-class Item:
-    pass
+# Fix round 2: extraction in a killable child process. The targets below run in the child, which
+# imports this module to unpickle them.
 
 
-def finalizer_bait(case: str) -> tuple[list[object], weakref.WeakSet[Item]]:
-    """An object whose release runs code where a raised exception is only printed and the tracer
-    is switched off: a weakref callback in the stdlib, or an abandoned parser generator's close."""
-    alive: weakref.WeakSet[Item] = weakref.WeakSet()
-    if case == "weakref-callback":
-        item = Item()
-        alive.add(item)
-        return [item], alive
-    namespace: dict[str, object] = {"__name__": "pypdf.fake"}
-    exec("def pages():\n    yield 1\n    yield 2\n", namespace)  # noqa: S102  (a fixed literal)
-    pages = namespace["pages"]()
-    next(pages)
-    return [pages], alive
+def die_by_signal(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    on_file("victim.pdf")
+    os.kill(os.getpid(), signal.SIGKILL)  # as the kernel's OOM killer would
+    return []
 
 
-@pytest.mark.parametrize("case", ["weakref-callback", "abandoned-parser-generator"])
-def test_deadline_survives_finalizers(case: str) -> None:
-    held, _ = finalizer_bait(case)
-    spec = load("spec.pdf").data
+def exit_without_a_result(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    os._exit(3)
 
-    def parse() -> int:
-        time.sleep(0.02)
-        held.clear()  # C call: the finalizer is the first Python code after the deadline
-        return len(pypdf.PdfReader(io.BytesIO(spec)).pages)  # must still be stopped
 
-    with pytest.raises(AttachmentError, match="took too long to read"):
-        extractor.within(0.01, parse)
+def run_out_of_memory(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    on_file("huge.docx")
+    raise MemoryError
+
+
+def allocate_past_the_cap(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    on_file("huge.docx")
+    bytearray(2 * limits.max_memory_bytes)
+    return []
+
+
+def fail_quoting_the_document(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    on_file("bad.docx")
+    raise KeyError("SECRETMARKER")
+
+
+def test_isolated_extraction_matches_in_process() -> None:
+    files = [load("spec.pdf"), load("spec.docx"), load("notes.txt")]
+    assert extract_all_isolated(files, AttachmentLimits()) == extract_all(files, AttachmentLimits())
+
+
+def test_isolated_rejections_cross_the_process_boundary() -> None:
+    with pytest.raises(AttachmentError, match=r"^encrypted\.pdf: password-protected PDFs"):
+        extract_all_isolated([load("notes.txt"), load("encrypted.pdf")], AttachmentLimits())
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(lambda: pdf_pages(NOOP * 20_000, pages=50), id="pages-sharing-a-stream"),
+        # One page: no check between pages can fire; the fonts are built before any operator.
+        pytest.param(lambda: pdf_pages(TEXT, fonts=200, cmap=cmap(5_000)), id="one-page-of-fonts"),
+    ],
+)
+def test_isolated_extraction_is_killed_at_the_timeout(build: Callable[[], bytes]) -> None:
+    upload = Attachment("slow.pdf", build())
+    started = time.monotonic()
+    with pytest.raises(AttachmentError, match=r"^slow\.pdf: took too long to read$"):
+        extract_all_isolated([upload], AttachmentLimits(timeout_seconds=0.5))
+    assert time.monotonic() - started < 0.5 + 1.0
+
+
+def test_pdf_pages_stop_at_the_timeout_in_process() -> None:
+    with pytest.raises(AttachmentError, match=r"^slow\.pdf: took too long to read$"):
+        extract_all(
+            [Attachment("slow.pdf", pdf_pages(NOOP * 20_000, pages=50))],
+            AttachmentLimits(timeout_seconds=0.05),
+        )
+
+
+@pytest.mark.parametrize(
+    ("target", "message"),
+    [
+        (die_by_signal, r"^victim\.pdf: could not be read$"),
+        (exit_without_a_result, r"^attachments: could not be read$"),
+    ],
+    ids=["killed", "exited"],
+)
+def test_a_child_that_dies_is_an_attachment_error(
+    target: Callable[..., list[ExtractedAttachment]], message: str
+) -> None:
+    with pytest.raises(AttachmentError, match=message):
+        run_isolated(target, [load("notes.txt")], AttachmentLimits())
+
+
+def test_memory_errors_in_the_child_are_too_large_to_read() -> None:
+    with pytest.raises(AttachmentError, match=r"^huge\.docx: too large to read$"):
+        run_isolated(run_out_of_memory, [load("notes.txt")], AttachmentLimits())
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="only Linux enforces RLIMIT_AS")
+def test_the_memory_cap_is_enforced_on_linux() -> None:
+    with pytest.raises(AttachmentError, match=r"^huge\.docx: too large to read$"):
+        run_isolated(
+            allocate_past_the_cap,
+            [load("notes.txt")],
+            AttachmentLimits(max_memory_bytes=256 * 1024 * 1024),
+        )
+
+
+def test_unexpected_child_failures_log_the_type_only(caplog: pytest.LogCaptureFixture) -> None:
+    with (
+        caplog.at_level(logging.WARNING),
+        pytest.raises(AttachmentError, match=r"^bad\.docx: could not be read$"),
+    ):
+        run_isolated(fail_quoting_the_document, [load("notes.txt")], AttachmentLimits())
+    assert "attachment worker failed: KeyError" in caplog.text
+    assert "SECRETMARKER" not in caplog.text
+
+
+def test_child_parse_failures_reach_the_log_without_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    data = rewrite_docx({"word/document.xml": b"<a><SECRETMARKER></a>"})
+    with (
+        caplog.at_level(logging.WARNING),
+        pytest.raises(AttachmentError, match=r"^bad\.docx: unreadable DOCX$"),
+    ):
+        extract_all_isolated([Attachment("bad.docx", data)], AttachmentLimits())
+    assert "attachment parse failed: XMLSyntaxError" in caplog.text
+    assert "SECRETMARKER" not in caplog.text

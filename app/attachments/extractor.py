@@ -1,15 +1,12 @@
-"""Local text extraction for turn attachments (PDF, DOCX, plain text). Sync and CPU-bound:
-callers run `extract_all` in a worker thread."""
+"""Local text extraction for turn attachments (PDF, DOCX, plain text). Sync and CPU-bound: the
+service runs it through `app.attachments.isolation.extract_all_isolated`, in a child process."""
 
-import inspect
 import io
 import logging
-import sys
 import time
 import zipfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from types import FrameType
 from typing import Literal
 
 import pypdf
@@ -36,8 +33,6 @@ MAX_NAME_CHARS = 120
 TRUNCATED = "\n[truncated]"
 UNSUPPORTED = "unsupported file type (PDF, DOCX or plain text only)"
 NO_TEXT = "no extractable text"
-# Wall-clock budget for parsing one PDF or DOCX upload.
-PARSE_SECONDS = 5.0
 # Decoded size cap for any one PDF stream; pypdf parses page content at about 1 s per MB.
 PDF_STREAM_BYTES = 4 * 1024 * 1024
 # What Word writes. zipfile's bzip2 and LZMA readers inflate a whole chunk in one call.
@@ -45,8 +40,6 @@ DOCX_COMPRESSION = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
 # "<" bytes across the XML parts: lxml holds about 130 bytes per element, and Word writes about
 # 25 per paragraph, so this allows some 40,000 paragraphs in about 130 MB.
 DOCX_MAX_TAGS = 1_000_000
-PARSER_PACKAGES = {"pypdf", "docx"}
-GENERATOR_FLAGS = inspect.CO_GENERATOR | inspect.CO_COROUTINE | inspect.CO_ASYNC_GENERATOR
 
 logger = logging.getLogger(__name__)
 # Malformed PDFs make pypdf log a warning per repaired object.
@@ -69,37 +62,6 @@ class ExtractedAttachment:
 
 class AttachmentError(ValueError):
     """The message is safe to show to the user."""
-
-
-class Overtime(BaseException):
-    """A BaseException, so pypdf's `except Exception` around form XObjects cannot swallow it."""
-
-
-def within[T](seconds: float, parse: Callable[[], T]) -> T:
-    """Run `parse` under a hard deadline: a trace hook checks the clock on every Python call in
-    this thread. Checking between pages is not enough, since one page can build thousands of fonts
-    before its first operator. The hook makes pypdf about 2.4 times slower."""
-    end = time.monotonic() + seconds
-
-    def check(frame: FrameType, event: str, arg: object) -> None:
-        # Raise only in plain parser functions. Weakref callbacks and generator closes also run
-        # mid-parse (garbage collection), and an exception there is printed and switches the
-        # tracer off for good; pypdf and python-docx define neither finalizers nor callbacks.
-        if (
-            time.monotonic() > end
-            and not frame.f_code.co_flags & GENERATOR_FLAGS
-            and frame.f_globals.get("__name__", "").partition(".")[0] in PARSER_PACKAGES
-        ):
-            raise Overtime
-
-    previous = sys.gettrace()
-    sys.settrace(check)
-    try:
-        return parse()
-    except Overtime:
-        raise AttachmentError("took too long to read") from None
-    finally:
-        sys.settrace(previous)
 
 
 def unreadable(label: str, exc: Exception) -> AttachmentError:
@@ -145,7 +107,9 @@ def detect_kind(data: bytes) -> Kind:
     raise AttachmentError(UNSUPPORTED)
 
 
-def pdf_text(data: bytes, pages_left: int, max_pages: int, chars_left: int) -> tuple[str, int]:
+def pdf_text(
+    data: bytes, pages_left: int, max_pages: int, chars_left: int, deadline: float
+) -> tuple[str, int]:
     texts: list[str] = []
     try:
         with pypdf.apply_configuration(
@@ -166,6 +130,9 @@ def pdf_text(data: bytes, pages_left: int, max_pages: int, chars_left: int) -> t
             for page in reader.pages:
                 if extracted >= chars_left:
                     break
+                # Defence in depth: the child process is killed at the same timeout anyway.
+                if time.monotonic() > deadline:
+                    raise AttachmentError("took too long to read")
                 if text := page.extract_text().strip():
                     texts.append(text)
                     extracted += len(text) + 2
@@ -230,7 +197,7 @@ def docx_text(data: bytes, max_uncompressed: int) -> str:
 
 
 def extract_one(
-    data: bytes, limits: AttachmentLimits, pages_left: int, chars_left: int
+    data: bytes, limits: AttachmentLimits, pages_left: int, chars_left: int, deadline: float
 ) -> tuple[Kind, str | None, int | None]:
     """Kind, text (None when the character budget is already spent) and PDF page count."""
     if len(data) > limits.max_bytes:
@@ -239,12 +206,10 @@ def extract_one(
     if not chars_left:
         return kind, None, None
     if kind == "pdf":
-        text, pages = within(
-            PARSE_SECONDS, lambda: pdf_text(data, pages_left, limits.max_pages, chars_left)
-        )
+        text, pages = pdf_text(data, pages_left, limits.max_pages, chars_left, deadline)
         return kind, text, pages
     if kind == "docx":
-        text = within(PARSE_SECONDS, lambda: docx_text(data, limits.max_docx_uncompressed))
+        text = docx_text(data, limits.max_docx_uncompressed)
     else:
         text = data.decode("utf-8-sig")
     if not text.strip():
@@ -252,15 +217,24 @@ def extract_one(
     return kind, text, None
 
 
-def extract_all(files: Sequence[Attachment], limits: AttachmentLimits) -> list[ExtractedAttachment]:
+def extract_all(
+    files: Sequence[Attachment],
+    limits: AttachmentLimits,
+    *,
+    on_file: Callable[[str], None] | None = None,
+) -> list[ExtractedAttachment]:
+    """`on_file` gets each sanitised name before that file is read (the child reports progress)."""
     if len(files) > limits.max_files:
         raise AttachmentError(f"too many attachments (at most {limits.max_files} per turn)")
     chars_left, pages_left = limits.max_chars, limits.max_pages
+    deadline = time.monotonic() + limits.timeout_seconds
     extracted: list[ExtractedAttachment] = []
     for file in files:
         name = sanitise_name(file.filename)
+        if on_file:
+            on_file(name)
         try:
-            kind, text, pages = extract_one(file.data, limits, pages_left, chars_left)
+            kind, text, pages = extract_one(file.data, limits, pages_left, chars_left, deadline)
         # No chained cause: parser messages can quote the document.
         except AttachmentError as exc:
             raise AttachmentError(f"{name}: {exc}") from None
