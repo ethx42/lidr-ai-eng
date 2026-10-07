@@ -408,16 +408,15 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 - **Start method: `forkserver`, via `multiprocessing.get_context("forkserver")`.** A library should not call `set_start_method`.
   - The server is launched with `spawnv_passfds`, meaning fork+exec, so starting it from a threaded server is safe. It is single-threaded, and every child forks from it.
   - `set_forkserver_preload([...])` is process-wide and only takes effect before the server starts. `ImportError` is ignored.
-  - **Correction (fix round 4):** an explicit list without `"__main__"` does not stop main from being re-imported. It moves the work into every child: `spawn.prepare()` re-runs the parent's main *script* (`init_main_from_path`) in each child, unless the child inherited a `__main__` whose `__file__` matches.
-    - A `-m` main (`init_main_from_name` ending in `.__main__`) is never re-run.
-    - With uvicorn's console script as `__main__`, a child cost a median of 35.5 ms against 11.6 ms once the server had loaded the script (macOS, `uvicorn --app-dir … probe_app:app`, 20 calls on the three fixtures).
+  - **Correction (fix round 4):** an explicit list without `"__main__"` does not stop main from being re-imported. It moves the work into every child: `spawn.prepare()` re-runs the parent's main *script* (`init_main_from_path`) in each child, unless the child inherited a `__main__` whose `__file__` matches. A `-m` main (`init_main_from_name` ending in `.__main__`) is never re-run.
   - **`["__main__", ...]` is a no-op on CPython 3.12.11:** `forkserver.ensure_running` keeps only `{'main_path', 'sys_path'}` from `spawn.get_preparation_data()`, which emits `init_main_from_path`, so `main_path` is always `None` in the server. Verified in source and by measurement.
-  - **Workaround in `app/attachments/isolation.py`:**
-    - The parent exports its script path (`ATTACHMENTS_PARENT_MAIN`) before the server starts.
-    - When the module is imported as a preload inside the server, it calls `spawn.import_main_path(path)` (in `spawn.__all__`). It recognises the server by `sys.orig_argv[-1]` starting with `from multiprocessing.forkserver import main`.
-    - Children then skip the re-run. Test: a script counts its own executions, and three children leave the count at 2 (the parent and the server).
+  - **Measured cost, accepted (fix round 5 ruling):**
+    - With uvicorn's console script as `__main__`, each child re-runs it, which mostly means importing `uvicorn.main`.
+    - The median `extract_all_isolated` call on the three fixtures takes about 37 ms on Linux (Docker `python:3.12-slim-trixie`, aarch64) and about 36 ms on macOS (arm64), against 13 and 12 ms once the server has loaded the script. Measured with `uvicorn --app-dir <probe> probe_app:app`, 20 calls.
+    - A workaround did remove the cost: the parent exported its script path and the forkserver preload called `spawn.import_main_path`. It was dropped, because it depended on CPython internals (the forkserver's `-c` command, the preparation-data keys) and added an environment variable, all to save about 25 ms per upload. That is small next to the LLM call that follows.
+    - Running the service as `python -m uvicorn` would avoid the re-run without any code; the Docker CMD uses the console script.
   - The server gets the parent's `sys.path` from the spawn preparation data. That is how test-module targets unpickle in the child.
-- **Measured overhead:**
+- **Measured overhead** (a small probe script as `__main__`; with uvicorn's console script, add about 25 ms per child, as above):
   - forkserver: about 11 ms per child on Linux (7 ms on macOS) after a one-off 91–114 ms start.
   - spawn: 108–160 ms per child on Linux (435 ms cold) and 115–210 ms on macOS.
   - `extract_all_isolated` on the three fixtures: median 15.8 ms against 6.2 ms in-process on Linux (14.6 against 4.4 ms on macOS). The first call takes 119–137 ms.

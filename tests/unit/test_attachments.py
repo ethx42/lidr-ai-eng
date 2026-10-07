@@ -696,25 +696,3 @@ def test_a_failed_start_closes_both_pipe_ends(monkeypatch: pytest.MonkeyPatch) -
 def test_the_child_cpu_limit_follows_the_timeout() -> None:
     with pytest.raises(AttachmentError, match=r"^4$"):  # ceil(2.5) + 1 CPU seconds
         run_isolated(report_cpu_limit, [load("notes.txt")], AttachmentLimits(timeout_seconds=2.5))
-
-
-MAIN_SCRIPT = """
-import sys
-sys.path.insert(0, {root!r})
-with open({counter!r}, "a") as runs:
-    runs.write("x")  # each execution of this script, as __main__ or as __mp_main__
-if __name__ == "__main__":
-    from app.attachments.extractor import Attachment, AttachmentLimits
-    from app.attachments.isolation import extract_all_isolated
-    for _ in range(3):
-        extract_all_isolated([Attachment("n.txt", b"hello")], AttachmentLimits())
-"""
-
-
-def test_children_do_not_rerun_the_parent_main_script(tmp_path: Path) -> None:
-    counter = tmp_path / "runs.txt"
-    script = tmp_path / "main_script.py"
-    script.write_text(MAIN_SCRIPT.format(root=str(ROOT), counter=str(counter)))
-    subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # noqa: S603  (own script)
-    # Once as __main__, once in the forkserver; never in the three children.
-    assert counter.read_text() == "xx"

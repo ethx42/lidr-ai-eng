@@ -5,13 +5,10 @@ import contextlib
 import logging
 import math
 import multiprocessing
-import os
 import resource
-import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
-from multiprocessing import spawn
 from multiprocessing.connection import Connection
 from typing import Protocol
 
@@ -22,22 +19,11 @@ logger = logging.getLogger(__name__)
 parse_logger = logging.getLogger("app.attachments.extractor")
 
 # forkserver: every child forks from one single-threaded server that has already imported the
-# parsers (about 10 ms per extraction after a one-off start of about 100 ms; spawn pays 110 to
-# 160 ms each time). Never fork the threaded web server itself. The preload list is process-wide.
+# parsers. Never fork the threaded web server itself. The preload list is process-wide. A child
+# costs about 37 ms behind uvicorn's console script, because it re-runs that script (accepted:
+# see .claude/stack.md); spawn pays 110 to 160 ms per child.
 CONTEXT = multiprocessing.get_context("forkserver")
-CONTEXT.set_forkserver_preload(["__main__", __name__])
-
-# Each child re-runs the parent's main script unless the server has already loaded it (uvicorn's
-# console script: about 25 ms per child). The "__main__" preload above should do that, but
-# CPython 3.12's forkserver reads "main_path" where spawn sends "init_main_from_path", so it never
-# fires. The parent therefore names its script in the environment the server inherits, and the
-# server, importing this module as a preload, loads it once; children then skip it.
-PARENT_MAIN_ENV = "ATTACHMENTS_PARENT_MAIN"
-if sys.orig_argv[-1].startswith("from multiprocessing.forkserver import main"):
-    if parent_main := os.environ.get(PARENT_MAIN_ENV):
-        spawn.import_main_path(parent_main)
-elif main_script := getattr(sys.modules["__main__"], "__file__", None):
-    os.environ[PARENT_MAIN_ENV] = os.path.abspath(main_script)
+CONTEXT.set_forkserver_preload([__name__])
 
 # At most `max_concurrent` children at once, process-wide. Callers wait in worker threads
 # (asyncio.to_thread), so a thread semaphore fits. Sized from the limits on first use: the
