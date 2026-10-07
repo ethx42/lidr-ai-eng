@@ -26,7 +26,21 @@ specs:
 	$(OPENSPEC) validate --archived --no-interactive
 
 # Same checks, same order as CI
-check: lint typecheck test specs
+check: lint typecheck test specs web-check
+
+.PHONY: web-install web-types web-check
+web-install:
+	pnpm -C web install --frozen-lockfile
+
+# Regenerate web/src/lib/ai-service/schema.d.ts from contracts/openapi.json
+web-types:
+	pnpm -C web gen:types
+
+web-check:
+	pnpm -C web lint
+	pnpm -C web typecheck
+	pnpm -C web test
+	pnpm -C web check:types
 
 # Live prompt evaluation against the golden set (needs API keys; never part of `check`)
 eval:

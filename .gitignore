@@ -20,3 +20,9 @@ evals/reports/*.json
 .DS_Store
 .idea/
 .vscode/
+
+# Web
+web/node_modules
+web/.next
+web/test-results
+web/playwright-report
