@@ -2,7 +2,7 @@
 
 Source of truth for the overnight run. Tick a task only after its commit exists; put the short SHA after it. Blocked tasks: replace `[ ]` with `[!]` and add a line below with the command, the last error lines and what was tried.
 
-Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
+Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.048279
 
 ## pre-session-03
 
@@ -23,7 +23,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - [x] Task 14: Fallback router with cooldown (af9a0a2)
 - [x] Task 15: Exact-match response cache (e23222f)
 - [x] Task 16: Cassette recorder and live smoke test (97ecb2b, d78d6a4, 74cfd38)
-- [ ] Task 17: Docker and Compose
+- [x] Task 17: Docker and Compose (6667c42, 9bf9744, 86c246f)
 - [ ] Task 18: End-to-end tests, accessibility and media
 - [ ] Task 19: CI
 - [ ] Task 20: Branch close-out
@@ -74,3 +74,4 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - Ruling (S5): session endpoints use `estimation/v3`; single-shot keeps the S4 default; S4 evidence highlighting stays inside each turn card; e2e on synthetic replay; the replay GIF gets a caption.
 
 - PAUSED 2026-10-07 (usage limit). Worktrees: `../lidr-ai-eng-wt/s03-ai` (branch `pre-session-03-ai`, Tasks 12–14 done, head af9a0a2) and `../lidr-ai-eng-wt/s03-web` (branch `pre-session-03-web`, Tasks 6–9 done at de272e3; Task 10 implementer may have committed after that, unreviewed). Resume: review Task 10, then Task 11 (web) and Tasks 15–16 (AI), merge both tracks with `--no-ff`, `make openapi && make web-types`, then Tasks 17–20. Orchestrator ledger: `.superpowers/sdd/plan-session-03/progress.md`. Live spend so far: US$0.004369 (in the AI worktree's `spend.jsonl`).
+- Owner action: `.env.example` writes are blocked by the permission rule on `.env*`, so its `REPLAY_*` and `LIVE_BUDGET_USD` documentation is pending. Proposed content: `.superpowers/sdd/plan-session-03/env-example.proposed` (apply with `cp .superpowers/sdd/plan-session-03/env-example.proposed .env.example`, then commit `docs(env): document replay and live budget settings`).
