@@ -28,7 +28,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - [x] Task 19: CI (e66aade)
 - [x] Task 20: Branch close-out (7e8260b, 2ce0c49, 2a18ccd)
 - [x] Review panel findings resolved (10 confirmed fixed: AI 5a1e64d, web 9b1f700, final 0b6a5d1)
-- Gate:
+- Gate: GATE PASS pre-session-03 9af03a1de94dc7d7da7d0b854c8911f2e130105b (2026-10-07; recorded on pre-session-04 so the gated commit stays untouched)
 
 ## pre-session-04
 
@@ -73,8 +73,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - Ruling (S4): v2 becomes the default if its score ≥ v1 − 0.02 and its `covers_frontend` pass rate ≥ v1's.
 - Ruling (S5): session endpoints use `estimation/v3`; single-shot keeps the S4 default; S4 evidence highlighting stays inside each turn card; e2e on synthetic replay; the replay GIF gets a caption.
 
-- PAUSED 2026-10-07 (usage limit). Worktrees: `../lidr-ai-eng-wt/s03-ai` (branch `pre-session-03-ai`, Tasks 12–14 done, head af9a0a2) and `../lidr-ai-eng-wt/s03-web` (branch `pre-session-03-web`, Tasks 6–9 done at de272e3; Task 10 implementer may have committed after that, unreviewed). Resume: review Task 10, then Task 11 (web) and Tasks 15–16 (AI), merge both tracks with `--no-ff`, `make openapi && make web-types`, then Tasks 17–20. Orchestrator ledger: `.superpowers/sdd/plan-session-03/progress.md`. Live spend so far: US$0.004369 (in the AI worktree's `spend.jsonl`).
 - Owner action: `.env.example` writes are blocked by the permission rule on `.env*`, so its `REPLAY_*` and `LIVE_BUDGET_USD` documentation is pending. Proposed content: `.superpowers/sdd/plan-session-03/env-example.proposed` (apply with `cp .superpowers/sdd/plan-session-03/env-example.proposed .env.example`, then commit `docs(env): document replay and live budget settings`). The proposal now also documents `ALLOWED_HOSTS` (AI-service Host allowlist); once committed, trim the README sentence that says `.env.example` does not list these yet.
 - Accepted deviation (Task 18): composer shortcut hint opacity raised 70→80 % to pass WCAG 1.4.3 contrast found by the axe gate.
 - S3 review panel (Workflow, 4 reviewers + 4 adversarial verifiers): 17 findings, 10 confirmed (1 important: short-viewport layout collapses the thread; 9 minor: failed-call logs drop billed tokens, Anthropic mid-stream upstream_status=200, BFF Host allowlist vs DNS rebinding, eval budget bound, stale "Estimate ready" after a stopped regenerate, touch keyboard over results, hover contrast, inspector polish, toast tokens), 7 refuted. Fixes run as two parallel waves (AI, web) with a failing test first; selected deferred minors from task reviews are folded in.
-- PAUSED again (usage limit). State: all S3 tasks 1–19 done; Task 20 docs (README, specs, takeaways) committed and reviewed; review panel run; AI fix wave merged (5a1e64d). Web fix wave is committed on local branch `s03-fix-web` (worktree `../lidr-ai-eng-wt/s03-fix-web`, 11 commits, e2e 9/9) but NOT yet reviewed or merged. Resume: scoped re-review of `2a18ccd..3e0c943` on `s03-fix-web` (findings list `.superpowers/sdd/plan-session-03/fix-web.md`, report `fix-web-report.md`), merge `--no-ff`, `make openapi && make web-types`, small docs touch-up (status event on `validating`, "same as CI" wording), then tick "Review panel findings resolved", push, `make gate BRANCH=pre-session-03`.
+- S3 paused twice on usage limits and resumed; a transient GitHub 500 on push (request E6FD:103FE5:1F85C7:24FFF0:6AC660F0) cleared after 4 retries. S4 was started in a worktree while the push retried.
+- S4 plan re-checked against the real S3 code before Task 1 (cassette re-record in Task 2, `.env.example` changes as owner proposals, caller lists, web workspace replacing `chat.tsx`). Rulings: slice in a worktree; OpenAPI example uses the code-default prompt version; `CACHE_SCHEMA` bump on the layout change.
