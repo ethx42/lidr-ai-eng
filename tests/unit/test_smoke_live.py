@@ -10,11 +10,10 @@ from app.services.providers.fallback import FallbackProvider
 from app.services.providers.openai_provider import OpenAIProvider
 from app.services.providers.replay_provider import Cassette, ReplayProvider, cassette_key
 from scripts import record_cassettes, smoke_live
+from scripts.live_budget import PROMPT_TOKENS_BOUND, call_bound_usd
 from scripts.record_cassettes import (
     CASSETTES,
-    PROMPT_TOKENS_BOUND,
     SAMPLES,
-    call_bound_usd,
     prompt_pair,
     record,
     sample_text,

@@ -5,7 +5,12 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.schemas.estimation import Usage
+from app.services.pricing import cost_usd
+
 LEDGER = Path(__file__).resolve().parent.parent / "docs" / "catch-up" / "spend.jsonl"
+# Above any request here: system prompt, schema and sample measured 6.4k-6.6k input tokens.
+PROMPT_TOKENS_BOUND = 8_000
 
 
 class BudgetExceeded(RuntimeError):
@@ -35,3 +40,16 @@ def ensure_budget(
     if estimated_usd > remaining:
         raise BudgetExceeded(f"estimate ${estimated_usd:.4f} exceeds remaining ${remaining:.4f}")
     return remaining
+
+
+def call_bound_usd(model: str, max_output_tokens: int) -> float:
+    """One call's worst case: the whole prompt billed as a cache write, then every output token."""
+    usage = Usage(
+        input_tokens=PROMPT_TOKENS_BOUND,
+        cache_write_tokens=PROMPT_TOKENS_BOUND,
+        output_tokens=max_output_tokens,
+    )
+    cost = cost_usd(model, usage)
+    if cost is None:
+        raise ValueError(f"no price for {model}: cannot bound live spend")
+    return cost
