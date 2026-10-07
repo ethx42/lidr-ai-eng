@@ -59,3 +59,11 @@ def test_stream_operation_documents_every_event_payload() -> None:
     refs = {item["$ref"].rsplit("/", 1)[1] for item in content["schema"]["oneOf"]}
     assert refs == {"StatusEvent", "PartialEvent", "EstimateResponse", "ErrorEvent"}
     assert operation["responses"]["422"]
+
+
+@pytest.mark.parametrize("path", ["/api/v1/estimate", "/api/v1/estimate/stream"])
+def test_estimate_operations_accept_refresh(path: str) -> None:
+    [param] = create_app().openapi()["paths"][path]["post"]["parameters"]
+    schema = param["schema"]
+    assert (param["name"], param["in"], param["required"]) == ("refresh", "query", False)
+    assert (schema["type"], schema["default"]) == ("boolean", False)

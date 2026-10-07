@@ -901,6 +901,20 @@
       "post": {
         "description": "Send the body as JSON with `Content-Type: application/json`; other content types are rejected with `422 invalid_request`.",
         "operationId": "estimate_api_v1_estimate_post",
+        "parameters": [
+          {
+            "description": "Skip the cache lookup and regenerate; the fresh result replaces the entry.",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Skip the cache lookup and regenerate; the fresh result replaces the entry.",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1153,6 +1167,20 @@
       "post": {
         "description": "Same body as `POST /api/v1/estimate`; validation errors return `422` JSON before the stream\nstarts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq` is\nalso the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`\n(`ErrorEvent`).",
         "operationId": "estimate_stream_api_v1_estimate_stream_post",
+        "parameters": [
+          {
+            "description": "Skip the cache lookup and regenerate; the fresh result replaces the entry.",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Skip the cache lookup and regenerate; the fresh result replaces the entry.",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1224,7 +1252,17 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    ]
                   },
                   "title": "Response Health Health Get",
                   "type": "object"

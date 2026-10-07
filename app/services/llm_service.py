@@ -1,4 +1,5 @@
-"""The LLM call: CAG prompt -> provider -> computed totals -> grounding -> markdown."""
+"""The LLM call: cache lookup -> CAG prompt -> provider -> computed totals -> grounding -> markdown
+-> cache write."""
 
 import asyncio
 import logging
@@ -6,7 +7,9 @@ import time
 from collections.abc import AsyncGenerator
 from contextlib import aclosing
 
-from app.observability import log_llm_call
+import anyio
+
+from app.observability import llm_logger, log_llm_call, prompt_version_var
 from app.prompts.loader import PromptBundle, build_user_message
 from app.schemas.estimation import (
     CallMetrics,
@@ -15,7 +18,8 @@ from app.schemas.estimation import (
     EstimationBreakdown,
 )
 from app.schemas.stream import PartialEvent, StatusEvent
-from app.services.errors import InvalidModelOutput, LLMError
+from app.services.cache import CacheStatus, ResponseCache, cache_key
+from app.services.errors import Attempt, InvalidModelOutput, LLMError
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
 from app.services.pricing import cost_usd
@@ -40,13 +44,18 @@ class EstimationService:
         prompt: PromptBundle,
         weekly_capacity_hours: float,
         hourly_rate: float | None,
+        cache: ResponseCache,
+        cache_scope: str,
     ) -> None:
         self.provider = provider
         self.prompt = prompt
         self.weekly_capacity_hours = weekly_capacity_hours
         self.hourly_rate = hourly_rate
+        self.cache = cache
+        self.cache_scope = cache_scope
         # Provider-side prompt-cache routing key (OpenAI `prompt_cache_key`), not a response cache.
         self.prompt_cache_key = f"estimator-{prompt.version}"
+        self.primary_attempt = Attempt(provider.name, provider.model)
 
     def _log_call(
         self,
@@ -54,12 +63,20 @@ class EstimationService:
         latency_ms: int,
         error: LLMError | None = None,
         *,
+        cache: CacheStatus,
+        attempt: Attempt | None = None,
         stream: bool = False,
         ttft_ms: int | None = None,
     ) -> None:
+        """`attempt` names the call that failed or was cancelled; a result names its own."""
+        attempt = (
+            Attempt(result.provider, result.model, result.attempts, result.fallback_used)
+            if result
+            else attempt or self.primary_attempt
+        )
         log_llm_call(
-            provider=result.provider if result else self.provider.name,
-            model=result.model if result else self.provider.model,
+            provider=attempt.provider,
+            model=attempt.model,
             prompt_version=self.prompt.version,
             usage=result.usage if result else None,
             latency_ms=latency_ms,
@@ -69,20 +86,26 @@ class EstimationService:
             stream=stream,
             ttft_ms=ttft_ms,
             cost_usd=cost_usd(result.model, result.usage) if result else None,
-            attempt=result.attempts if result else 1,
-            fallback=result.fallback_used if result else False,
+            attempt=attempt.number,
+            fallback=attempt.fallback,
+            cache=cache,
         )
 
-    def _log_cancelled(self, latency_ms: int, ttft_ms: int | None) -> None:
+    def _log_cancelled(
+        self, attempt: Attempt, latency_ms: int, ttft_ms: int | None, cache: CacheStatus
+    ) -> None:
         log_llm_call(
-            provider=self.provider.name,
-            model=self.provider.model,
+            provider=attempt.provider,
+            model=attempt.model,
             prompt_version=self.prompt.version,
             usage=None,
             latency_ms=latency_ms,
             outcome="cancelled",
             stream=True,
             ttft_ms=ttft_ms,
+            attempt=attempt.number,
+            fallback=attempt.fallback,
+            cache=cache,
         )
 
     def _respond(
@@ -90,10 +113,11 @@ class EstimationService:
         result: LLMResult[EstimationBreakdown],
         request: EstimateRequest,
         *,
+        cache: CacheStatus,
         stream: bool = False,
         ttft_ms: int | None = None,
     ) -> EstimateResponse:
-        self._log_call(result, result.latency_ms, stream=stream, ttft_ms=ttft_ms)
+        self._log_call(result, result.latency_ms, cache=cache, stream=stream, ttft_ms=ttft_ms)
         breakdown = enrich(
             result.parsed,
             weekly_capacity_hours=self.weekly_capacity_hours,
@@ -122,25 +146,85 @@ class EstimationService:
             ),
         )
 
-    async def estimate(self, request: EstimateRequest) -> EstimateResponse:
+    def _cache_key(self, user: str) -> str:
+        return cache_key(
+            prompt_version=self.prompt.version,
+            system=self.prompt.system_text,
+            user=user,
+            scope=self.cache_scope,
+            schema_name=EstimationBreakdown.__name__,
+        )
+
+    async def _lookup(
+        self, key: str, *, refresh: bool, stream: bool
+    ) -> tuple[EstimateResponse | None, CacheStatus]:
+        """A hit carries this request's metrics: no LLM call, so no cost, attempts or TTFT."""
+        if refresh:
+            return None, "bypass"
+        start = time.perf_counter()
+        cached, status = await self.cache.get(key)
+        if cached is None:
+            return None, status
+        metrics = CallMetrics(latency_ms=_ms_since(start), cost_usd=0, cache_hit=True, attempts=0)
+        llm_logger.info(
+            "estimate_cache_hit",
+            extra={
+                "fields": {
+                    "provider": cached.provider,
+                    "model": cached.model,
+                    "prompt_version": self.prompt.version,
+                    "latency_ms": metrics.latency_ms,
+                    "stream": stream,
+                    "cache": status,
+                }
+            },
+        )
+        return cached.model_copy(update={"metrics": metrics}), status
+
+    async def _store(self, key: str, response: EstimateResponse, lookup: CacheStatus) -> None:
+        # Redis just failed the lookup: a second timeout would double the latency it adds.
+        if lookup != "error":
+            await self.cache.set(key, response)
+
+    async def estimate(
+        self, request: EstimateRequest, *, refresh: bool = False
+    ) -> EstimateResponse:
+        prompt_version_var.set(self.prompt.version)
+        user = build_user_message(request.transcription, request.output_language)
+        key = self._cache_key(user)
+        cached, lookup = await self._lookup(key, refresh=refresh, stream=False)
+        if cached:
+            return cached
         start = time.perf_counter()
         try:
             result = await self.provider.generate(
                 system=self.prompt.system_text,
-                user=build_user_message(request.transcription, request.output_language),
+                user=user,
                 schema=EstimationBreakdown,
                 cache_key=self.prompt_cache_key,
             )
         except LLMError as exc:
-            self._log_call(None, _ms_since(start), exc)
+            self._log_call(None, _ms_since(start), exc, cache=lookup, attempt=exc.attempt)
             raise
-        return self._respond(result, request)
+        response = self._respond(result, request, cache=lookup)
+        await self._store(key, response, lookup)
+        return response
 
-    async def estimate_stream(self, request: EstimateRequest) -> AsyncGenerator[StreamItem]:
+    async def estimate_stream(
+        self, request: EstimateRequest, *, refresh: bool = False
+    ) -> AsyncGenerator[StreamItem]:
+        prompt_version_var.set(self.prompt.version)
         user = build_user_message(request.transcription, request.output_language)
+        key = self._cache_key(user)
+        cached, lookup = await self._lookup(key, refresh=refresh, stream=True)
+        if cached:
+            yield StatusEvent(phase="cache_hit", provider=cached.provider, model=cached.model)
+            yield cached
+            return
         start = time.perf_counter()
         snapshotter = PartialSnapshotter()
         snapshot, ttft_ms, result = "", None, None
+        in_flight = self.primary_attempt
         yield StatusEvent(
             phase="calling_llm", provider=self.provider.name, model=self.provider.model
         )
@@ -161,6 +245,9 @@ class EstimationService:
                             if partial := snapshotter.feed(snapshot):
                                 yield partial
                         case ProviderSwitch():
+                            in_flight = Attempt(
+                                event.provider, event.model, event.attempt, fallback=True
+                            )
                             yield StatusEvent(
                                 phase="fallback", provider=event.provider, model=event.model
                             )
@@ -169,17 +256,30 @@ class EstimationService:
             if result is None:
                 raise InvalidModelOutput(reason="no_final_result")
         except LLMError as exc:
-            self._log_call(None, _ms_since(start), exc, stream=True, ttft_ms=ttft_ms)
+            self._log_call(
+                None,
+                _ms_since(start),
+                exc,
+                cache=lookup,
+                attempt=in_flight,
+                stream=True,
+                ttft_ms=ttft_ms,
+            )
             raise
         # Disconnect mid-await (CancelledError) or aclose() while parked at a yield (GeneratorExit).
         # Sync logging only: any await here would be cancelled again.
         except (asyncio.CancelledError, GeneratorExit):
-            self._log_cancelled(_ms_since(start), ttft_ms)
+            self._log_cancelled(in_flight, _ms_since(start), ttft_ms, lookup)
             raise
         # Built (and logged) before the trailing events: the upstream call is complete, so a client
         # leaving now must still leave exactly one llm_call record.
-        response = self._respond(result, request, stream=True, ttft_ms=ttft_ms)
+        response = self._respond(result, request, cache=lookup, stream=True, ttft_ms=ttft_ms)
         if partial := snapshotter.flush(snapshot):
             yield partial
         yield StatusEvent(phase="validating")
         yield response
+        # Reached only once the consumer took the result and asked for more: a client that left
+        # at any yield above caches nothing. Shielded so a disconnect cannot cut the write short,
+        # and bounded so it cannot hold the stream open.
+        with anyio.move_on_after(0.5, shield=True):
+            await self._store(key, response, lookup)

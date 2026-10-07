@@ -1,3 +1,19 @@
+from dataclasses import dataclass
+
+# The reason every provider gives exhausted credits or spend limits; the fallback router keys on it.
+QUOTA = "insufficient_quota"
+
+
+@dataclass(frozen=True)
+class Attempt:
+    """One provider call within a request, numbered from 1; `fallback` when not the primary."""
+
+    provider: str
+    model: str
+    number: int = 1
+    fallback: bool = False
+
+
 class LLMError(Exception):
     """Domain failure from an LLM provider, mapped to HTTP by the API layer."""
 
@@ -8,6 +24,7 @@ class LLMError(Exception):
     def __init__(self, message: str | None = None, *, reason: str | None = None) -> None:
         super().__init__(message or self.message)
         self.reason = reason
+        self.attempt: Attempt | None = None  # set by the fallback router: which call raised it
 
     @property
     def cause(self) -> str | None:

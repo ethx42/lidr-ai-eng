@@ -64,3 +64,15 @@ gate:
 .PHONY: openapi
 openapi:
 	uv run python -m scripts.export_openapi
+
+# Live, budget-guarded recordings (scripts/live_budget.py): replay cassettes for the UI's sample
+# transcripts into tests/cassettes/, or with SSE=<provider> a raw SSE fixture into
+# tests/fixtures/sse/<provider>/: make record-cassettes [SSE=openai|anthropic]
+.PHONY: record-cassettes
+record-cassettes:
+	uv run python -m $(if $(SSE),scripts.record_sse_fixture $(SSE),scripts.record_cassettes)
+
+# Live, budget-guarded: one streamed estimate per provider and a forced fallback (exit 1 on failure)
+.PHONY: smoke-live
+smoke-live:
+	uv run python -m scripts.smoke_live

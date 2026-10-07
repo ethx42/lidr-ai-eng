@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.main import create_app
 from app.observability import JsonFormatter
+from app.services.cache import NullCache
 from tests.api.conftest import ClientFactory
 from tests.fakes import FakeProvider
 
@@ -20,8 +21,22 @@ def test_health(make_client: ClientFactory) -> None:
             "environment": "development",
             "provider": "openai",
             "model": "gpt-4o-mini",
+            "chain": ["openai:gpt-4o-mini"],
         }
         assert client.fake.calls == []
+
+
+def test_health_reports_the_chain_that_serves(make_client: ClientFactory) -> None:
+    with make_client(llm_provider="replay") as client:
+        body = client.get("/health").json()
+    assert (body["provider"], body["model"], body["chain"]) == (
+        "replay",
+        "replay",
+        ["replay:replay"],
+    )
+    with make_client(anthropic_api_key="k", llm_fallbacks="anthropic:claude-haiku-4-5") as client:
+        body = client.get("/health").json()
+    assert body["chain"] == ["openai:gpt-4o-mini", "anthropic:claude-haiku-4-5"]
 
 
 def test_docs_and_openapi(make_client: ClientFactory) -> None:
@@ -64,7 +79,9 @@ def test_provider_created_once_and_closed_on_shutdown(make_client: ClientFactory
 
     from app.config import Settings
 
-    app = create_app(Settings(_env_file=None, openai_api_key="k"), provider_factory=factory)
+    app = create_app(
+        Settings(_env_file=None, openai_api_key="k", llm_fallbacks=""), provider_factory=factory
+    )
     with TestClient(app) as client:
         for text in ("Client: one", "Client: two"):
             assert client.post("/api/v1/estimate", json={"transcription": text}).status_code == 200
@@ -72,6 +89,20 @@ def test_provider_created_once_and_closed_on_shutdown(make_client: ClientFactory
     assert len(created) == 1
     assert len(provider.calls) == 2
     assert provider.closed
+
+
+def test_cache_closed_on_shutdown(make_client: ClientFactory) -> None:
+    class ClosingCache(NullCache):
+        closed = False
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    cache = ClosingCache()
+    with make_client(cache=cache) as client:
+        assert client.post("/api/v1/estimate", json={"transcription": "Client: one"}).is_success
+        assert not cache.closed
+    assert cache.closed
 
 
 def test_unhandled_error_returns_json_500_with_request_id(

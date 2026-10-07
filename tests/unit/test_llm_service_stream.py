@@ -8,8 +8,14 @@ from app.schemas.stream import PartialEvent, StatusEvent
 from app.services.errors import UpstreamUnavailable
 from app.services.llm_service import EstimationService
 from app.services.providers.base import ProviderSwitch, StreamEvent, T
+from app.services.providers.fallback import Cooldown, FallbackProvider
 from tests.factories import make_service, request
-from tests.fakes import FakeProvider, SlowFakeProvider
+from tests.fakes import (
+    FakeProvider,
+    SlowFakeProvider,
+    SlowToFailProvider,
+    SlowToFinishProvider,
+)
 
 
 async def test_stream_yields_status_partials_then_result(
@@ -82,7 +88,9 @@ class SwitchingFake(FakeProvider):
     async def stream(
         self, *, system: str, user: str, schema: type[T], cache_key: str
     ) -> AsyncGenerator[StreamEvent[T]]:
-        yield ProviderSwitch(provider="anthropic", model="claude-haiku-4-5", cause="timeout")
+        yield ProviderSwitch(
+            provider="anthropic", model="claude-haiku-4-5", cause="timeout", attempt=2
+        )
         async for event in super().stream(
             system=system, user=user, schema=schema, cache_key=cache_key
         ):
@@ -101,3 +109,89 @@ async def test_both_paths_send_the_same_prompt_cache_key(fake: FakeProvider) -> 
     await service.estimate(request())
     [_ async for _ in service.estimate_stream(request())]
     assert [c["cache_key"] for c in fake.calls] == [service.prompt_cache_key] * 2
+
+
+def llm_calls(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
+    return [r.fields for r in caplog.records if r.getMessage() == "llm_call"]
+
+
+def attempt_fields(fields: dict[str, object]) -> tuple[object, ...]:
+    return tuple(fields[k] for k in ("provider", "model", "attempt", "fallback", "outcome"))
+
+
+async def test_cancel_after_a_fallback_logs_the_provider_in_flight(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    slow = SlowFakeProvider()
+    slow.name, slow.model = "anthropic", "claude-haiku-4-5"
+    router = FallbackProvider([FakeProvider(error=UpstreamUnavailable()), slow], Cooldown())
+    gen = make_service(router).estimate_stream(request())
+    assert [(await anext(gen)).phase for _ in range(2)] == ["calling_llm", "fallback"]
+    assert isinstance(await anext(gen), PartialEvent)
+    with caplog.at_level(logging.INFO, logger="app.llm"):
+        await gen.aclose()
+    assert slow.closed_streams == 1
+    [fields] = llm_calls(caplog)
+    assert attempt_fields(fields) == ("anthropic", "claude-haiku-4-5", 2, True, "cancelled")
+
+
+async def test_stream_error_after_a_fallback_logs_the_attempt_that_failed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secondary = FakeProvider(
+        name="anthropic",
+        model="claude-haiku-4-5",
+        stream_error_after_chunks=1,
+        stream_error=UpstreamUnavailable(),
+    )
+    router = FallbackProvider([FakeProvider(error=UpstreamUnavailable()), secondary], Cooldown())
+    with caplog.at_level(logging.INFO, logger="app.llm"), pytest.raises(UpstreamUnavailable):
+        [i async for i in make_service(router).estimate_stream(request())]
+    [fields] = llm_calls(caplog)
+    assert attempt_fields(fields) == (
+        "anthropic",
+        "claude-haiku-4-5",
+        2,
+        True,
+        "upstream_unavailable",
+    )
+    [fallback] = [r for r in caplog.records if r.getMessage() == "llm_fallback"]
+    assert (fallback.fields["provider"], fallback.fields["attempt"]) == ("openai", 1)
+
+
+async def test_metrics_after_a_fallback_are_end_to_end(caplog: pytest.LogCaptureFixture) -> None:
+    secondary = SlowToFinishProvider(name="anthropic", model="claude-haiku-4-5")
+    router = FallbackProvider([SlowToFailProvider(model="gpt-4o-mini"), secondary], Cooldown())
+    service = make_service(router)
+    with caplog.at_level(logging.INFO, logger="app.llm"):
+        response = [i async for i in service.estimate_stream(request())][-1]
+    assert isinstance(response, EstimateResponse)
+    metrics = response.metrics
+    assert metrics.ttft_ms is not None and 50 <= metrics.ttft_ms < metrics.latency_ms
+    [served] = llm_calls(caplog)
+    assert served["latency_ms"] == metrics.latency_ms
+    [failed] = [r.fields for r in caplog.records if r.getMessage() == "llm_fallback"]
+    assert 50 <= failed["latency_ms"] < metrics.latency_ms
+    assert (failed["stream"], failed["fallback"], failed["prompt_version"]) == (
+        True,
+        False,
+        service.prompt.version,
+    )
+
+
+async def test_a_cooldown_skip_streams_a_fallback_status_and_logs_attempt_1(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    primary = FakeProvider(error=UpstreamUnavailable())
+    secondary = FakeProvider(name="anthropic", model="claude-haiku-4-5")
+    service = make_service(FallbackProvider([primary, secondary], Cooldown(failures=1)))
+    await service.estimate(request())  # the primary fails once and cools down
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="app.llm"):
+        items = [i async for i in service.estimate_stream(request())]
+    statuses = [(i.phase, i.provider) for i in items if isinstance(i, StatusEvent)]
+    assert statuses == [("calling_llm", "openai"), ("fallback", "anthropic"), ("validating", None)]
+    assert len(primary.calls) == 1
+    [fields] = llm_calls(caplog)
+    assert attempt_fields(fields) == ("anthropic", "claude-haiku-4-5", 1, True, "ok")
+    assert [r for r in caplog.records if r.getMessage() == "llm_fallback"] == []

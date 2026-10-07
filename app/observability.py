@@ -8,6 +8,8 @@ from typing import Any
 from app.schemas.estimation import Usage
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
+# Set by the service for each request, so records logged below it (llm_fallback) carry it too.
+prompt_version_var: ContextVar[str | None] = ContextVar("prompt_version", default=None)
 
 llm_logger = logging.getLogger("app.llm")
 # Client libraries log request bodies (the transcription) at DEBUG; keep them at INFO or above.

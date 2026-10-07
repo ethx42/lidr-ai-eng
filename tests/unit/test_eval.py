@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.config import Settings
 from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimationBreakdown
+from app.services.cache import NullCache
 from app.services.errors import InvalidModelOutput
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMResult
@@ -72,7 +73,12 @@ class ScriptedProvider(FakeProvider):
 async def run(outcomes: list[EstimationBreakdown | Exception], names: list[str]) -> dict[str, Any]:
     provider = ScriptedProvider(outcomes)
     service = EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     cases = [GoldenCase(name, TRANSCRIPT) for name in names]
     return await run_cases(service, cases, provider="openai", model="fake-model")
@@ -124,7 +130,7 @@ async def test_provider_failure_counts_all_checks_failed() -> None:
 
 async def test_explicit_report_path(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     target = tmp_path / "nested" / "report.json"
-    settings = Settings(_env_file=None, openai_api_key="test-key")
+    settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
     fake = FakeProvider(result=FULL)
     path = await main(["--report", str(target)], settings=settings, provider_factory=lambda _: fake)
     assert path == target
@@ -142,7 +148,7 @@ async def test_default_report_name_includes_version(
     from evals import run_eval
 
     monkeypatch.setattr(run_eval, "REPORTS_DIR", tmp_path)
-    settings = Settings(_env_file=None, openai_api_key="test-key")
+    settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
     path = await main([], settings=settings, provider_factory=lambda _: FakeProvider(result=FULL))
     assert path.parent == tmp_path
     assert path.name.startswith("v4-")
@@ -195,6 +201,8 @@ async def test_unknown_expected_language_fails_check() -> None:
         prompt=load_prompt(),
         weekly_capacity_hours=30,
         hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     case = GoldenCase("x", "Stripe. SAP. OK.")
     report = await run_cases(service, [case], provider="openai", model="fake-model")
@@ -227,7 +235,12 @@ async def test_matching_narrative_language_passes_check() -> None:
 async def test_explicit_output_language_is_sent_and_checked() -> None:
     provider = ScriptedProvider([SPANISH_NARRATIVE])
     service = EstimationService(
-        provider=provider, prompt=load_prompt(), weekly_capacity_hours=30, hourly_rate=None
+        provider=provider,
+        prompt=load_prompt(),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+        cache=NullCache(),
+        cache_scope="",
     )
     case = GoldenCase("x", TRANSCRIPT, output_language="Spanish")
     report = await run_cases(service, [case], provider="openai", model="fake-model")
@@ -237,7 +250,7 @@ async def test_explicit_output_language_is_sent_and_checked() -> None:
 
 async def test_ledger_guards_and_records_eval_spend(tmp_path: Path) -> None:
     ledger = tmp_path / "spend.jsonl"
-    settings = Settings(_env_file=None, openai_api_key="test-key")
+    settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
     await main(
         ["--report", str(tmp_path / "r.json")],
         settings=settings,
@@ -249,7 +262,7 @@ async def test_ledger_guards_and_records_eval_spend(tmp_path: Path) -> None:
 
 async def test_eval_spend_is_the_summed_call_cost(tmp_path: Path) -> None:
     ledger = tmp_path / "spend.jsonl"
-    settings = Settings(_env_file=None, openai_api_key="test-key")
+    settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
     path = await main(
         ["--report", str(tmp_path / "r.json")],
         settings=settings,
@@ -260,3 +273,20 @@ async def test_eval_spend_is_the_summed_call_cost(tmp_path: Path) -> None:
     assert all(cost > 0 for cost in costs)
     recorded = json.loads(ledger.read_text().splitlines()[-1])["cost_usd"]
     assert recorded == pytest.approx(sum(costs))
+
+
+async def test_eval_runs_the_primary_provider_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for var in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY", "LLM_FALLBACKS"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.chdir(tmp_path)  # no .env here
+    seen: list[Settings] = []
+
+    def factory(settings: Settings) -> FakeProvider:
+        seen.append(settings)
+        return FakeProvider(result=FULL)
+
+    await main(["--report", str(tmp_path / "r.json")], provider_factory=factory)
+    assert [s.chain for s in seen] == [[("openai", "gpt-4o-mini")]]
