@@ -164,7 +164,7 @@ Brief: React chat that sends a transcript, keeps the conversation visible, strea
 3. `FallbackProvider` + cooldown (§4.2); settings refactor (`key_for(provider)`; chain validation).
 4. `pricing.py` + `CallMetrics` (§4.3).
 5. `ResponseCache` (§4.5) with `RedisCache` (`redis.asyncio`) and `NullCache`; tests with `fakeredis`.
-6. `replay` provider (D7; `LLM_PROVIDER=replay` needs no key) + `make record-cassettes` (live, budget-guarded) for the sample transcripts used by the UI; cassettes in `tests/cassettes/` keyed by the SHA-256 of the rendered prompt pair.
+6. `replay` provider (D7; `LLM_PROVIDER=replay` needs no key of its own; with the default chain it still needs the fallback's key, so offline runs set `LLM_FALLBACKS=none`) + `make record-cassettes` (live, budget-guarded) for the sample transcripts used by the UI; cassettes in `tests/cassettes/` keyed by the SHA-256 of the rendered prompt pair.
 7. `EstimationService.estimate_stream()` sharing enrichment, grounding and rendering with `estimate()`; `/api/v1/estimate/stream` (§4.4); `/api/v1/context` (§4.7).
 8. `contracts/openapi.json` + `make openapi` / snapshot check in `make check`.
 9. Logging fields (§4.6).

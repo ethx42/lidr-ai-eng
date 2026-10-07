@@ -11,16 +11,16 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - [x] Task 2: Streaming contract, pricing and call metrics (ebac836)
 - [x] Task 3: Partial snapshots from streamed JSON (a1df623)
 - [x] Task 4: Replay provider (9103f21)
-- [ ] Task 5: Streaming service, SSE endpoint and context endpoint
-- [ ] Task 6: Web scaffold, design tokens and typed client
-- [ ] Task 7: BFF route handlers
-- [ ] Task 8: useEstimateStream hook
-- [ ] Task 9: Estimate view (progressive rendering)
+- [x] Task 5: Streaming service, SSE endpoint and context endpoint (e159973, 92dbe31)
+- [x] Task 6: Web scaffold, design tokens and typed client (1c76f90)
+- [x] Task 7: BFF route handlers (9ad502a)
+- [x] Task 8: useEstimateStream hook (e918f9b)
+- [x] Task 9: Estimate view (progressive rendering) (de272e3)
 - [ ] Task 10: Chat page
 - [ ] Task 11: Inspector panel
-- [ ] Task 12: OpenAI streaming
-- [ ] Task 13: Anthropic streaming and mid-stream error mapping
-- [ ] Task 14: Fallback router with cooldown
+- [x] Task 12: OpenAI streaming (95f9454)
+- [x] Task 13: Anthropic streaming and mid-stream error mapping (780db0c)
+- [x] Task 14: Fallback router with cooldown (af9a0a2)
 - [ ] Task 15: Exact-match response cache
 - [ ] Task 16: Cassette recorder and live smoke test
 - [ ] Task 17: Docker and Compose
@@ -73,3 +73,4 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - Ruling (S4): v2 becomes the default if its score ≥ v1 − 0.02 and its `covers_frontend` pass rate ≥ v1's.
 - Ruling (S5): session endpoints use `estimation/v3`; single-shot keeps the S4 default; S4 evidence highlighting stays inside each turn card; e2e on synthetic replay; the replay GIF gets a caption.
 
+- PAUSED 2026-10-07 (usage limit). Worktrees: `../lidr-ai-eng-wt/s03-ai` (branch `pre-session-03-ai`, Tasks 12–14 done, head af9a0a2) and `../lidr-ai-eng-wt/s03-web` (branch `pre-session-03-web`, Tasks 6–9 done at de272e3; Task 10 implementer may have committed after that, unreviewed). Resume: review Task 10, then Task 11 (web) and Tasks 15–16 (AI), merge both tracks with `--no-ff`, `make openapi && make web-types`, then Tasks 17–20. Orchestrator ledger: `.superpowers/sdd/plan-session-03/progress.md`. Live spend so far: US$0.004369 (in the AI worktree's `spend.jsonl`).
