@@ -14,7 +14,7 @@ Browser
   ▼
 web/  Next.js 16 App Router, port 3000 (published on 127.0.0.1 only)
   ├─ React UI        chat thread, composer, progressive estimate view, inspector panel
-  └─ BFF handlers    fixed upstream paths, header allowlist, 2 MB body cap, abort propagation
+  └─ BFF handlers    Host allowlist, same-origin POSTs, fixed upstream paths, header allowlist, 2 MB body cap, abort propagation
   │  http://ai-service:8000, Compose network only (AI_SERVICE_URL, server-side)
   ▼
 ai-service  FastAPI (repository root, app/)
@@ -119,6 +119,7 @@ Web (`web/`):
 | Variable | Default | Notes |
 |---|---|---|
 | `AI_SERVICE_URL` | — | absolute http(s) URL of the AI service, read per request on the server only; Compose sets `http://ai-service:8000` |
+| `ALLOWED_HOSTS` | `localhost:3000,127.0.0.1:3000` | comma-separated `host:port` values the BFF answers (the browser's `Host` header); anything else gets `403`. Add the name and port you browse to if it is not one of these. Server-only; an empty value keeps the default |
 
 Live tooling (read from the process environment, not by the app):
 
@@ -146,7 +147,7 @@ make down               # stop and remove the containers
 make dev                # dev images: reload, compose watch syncs ./app and ./web, rebuilds on lockfile changes
 ```
 
-- Open http://localhost:3000. Only `web` publishes a port, and only on loopback: there is no auth and the BFF spends the AI service's keys, so nothing is reachable from the LAN. `make dev` also publishes the AI service on http://localhost:8000, again loopback only. `tests/test_compose.py` enforces both rules.
+- Open http://localhost:3000. Only `web` publishes a port, and only on loopback: there is no auth and the BFF spends the AI service's keys, so nothing is reachable from the LAN. The BFF also answers only requests whose `Host` is in `ALLOWED_HOSTS` and refuses cross-site POSTs (`Sec-Fetch-Site`, `Origin`), so a web page that rebinds its own name to 127.0.0.1 (DNS rebinding) cannot spend the keys either. `make dev` also publishes the AI service on http://localhost:8000, again loopback only. `tests/test_compose.py` enforces both rules.
 - `make up` uses your `.env`, so it makes live calls with your keys. For a zero-spend demo, run the offline stack the e2e tests use: `docker compose -f compose.yaml -f compose.e2e.yaml up --build --wait`. It sets `LLM_PROVIDER=replay` and `LLM_FALLBACKS=none`, disables the cache, mounts `tests/cassettes` read-only and drops `env_file` entirely (`!reset`), so the stack never holds a key. The three sample transcripts in the UI replay real recorded streams; anything else gets a synthesised stream.
 - The AI service runs one uvicorn worker (cooldown state is per process) with a 30 s graceful shutdown, so open streams can drain on `make down`.
 
@@ -212,7 +213,7 @@ Stream events, in order:
 
 Exactly one terminal event per stream; keep-alive comments every 15 s. A cache hit streams `status{cache_hit}` then `result`. A client disconnect closes the upstream provider stream, logs `outcome=cancelled` and caches nothing.
 
-Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
+Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `403 forbidden` (a `Host` outside `ALLOWED_HOSTS`, or a cross-site POST), `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
 
 ## Quality gates
 
@@ -330,7 +331,7 @@ Produced by `MEDIA=1 make e2e` against the offline stack. The inspector therefor
 - A cancelled call logs zero tokens and no cost (usage arrives with the final event), so the logs under-report what Stop still cost.
 - Cooldown state is per process and has no half-open probe.
 - A cache hit is observable (flag, zero cost, lookup-sized latency), so a caller can tell whether a transcript was estimated before; the cache key gains a tenant once auth exists.
-- Deferred BFF and container hardening: upstream method fixed per helper, `redirect: "error"` on the upstream fetch, `no-new-privileges`/`cap_drop`, a separate backend network.
+- Deferred container hardening: `no-new-privileges`/`cap_drop`, a separate backend network.
 
 ## M1 (session 2) verification checklist
 

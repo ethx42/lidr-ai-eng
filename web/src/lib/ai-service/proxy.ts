@@ -16,6 +16,19 @@ const requestIdOf = (request: Request) => {
 const errorResponse = (status: number, code: string, message: string, requestId: string) =>
   Response.json({ error: { code, message }, request_id: requestId }, { status, headers: { "x-request-id": requestId } });
 
+// The app has no auth and the AI service spends real keys, so the BFF answers only its own pages. DNS rebinding makes a
+// foreign page same-origin with it, but that page's requests still carry the foreign name in Host (a header pages
+// cannot set, unlike X-Forwarded-Host). Cross-site POSTs, which browsers mark with Sec-Fetch-Site and Origin, are
+// refused too; a client that sends neither (curl) passes.
+const rejection = (request: Request, method: "GET" | "POST", allowedHosts: string[]) => {
+  const host = request.headers.get("host")?.toLowerCase();
+  if (!host || !allowedHosts.includes(host)) return "host";
+  if (method === "GET") return null;
+  const site = request.headers.get("sec-fetch-site");
+  const origin = request.headers.get("origin");
+  return (site && site !== "same-origin") || (origin && URL.parse(origin)?.host !== host) ? "cross_site" : null;
+};
+
 const forwardedHeaders = (request: Request, requestId: string) => {
   const headers = new Headers({ "x-request-id": requestId });
   for (const name of FORWARDED_HEADERS) {
@@ -77,6 +90,12 @@ const proxy = async (
   respond: (upstream: Response, requestId: string) => Response,
 ) => {
   const requestId = requestIdOf(request);
+  const env = serverEnv();
+  const rejected = rejection(request, method, env.ALLOWED_HOSTS);
+  if (rejected) {
+    console.warn(JSON.stringify({ event: "request_forbidden", request_id: requestId, reason: rejected, host: request.headers.get("host") }));
+    return errorResponse(403, "forbidden", "This API only answers the app's own pages.", requestId);
+  }
   const tooLarge = () => errorResponse(413, "payload_too_large", `Request body exceeds ${maxBodyBytes} bytes.`, requestId);
   if (method === "POST" && Number(request.headers.get("content-length")) > maxBodyBytes) return tooLarge();
   const body =
@@ -90,7 +109,7 @@ const proxy = async (
   if (body === null) return tooLarge();
   // request.signal aborts when the browser disconnects, which cancels the upstream call and stream.
   // A redirect would leave the fixed upstream path, so it fails like an unreachable upstream.
-  return fetch(`${serverEnv().AI_SERVICE_URL}${path}`, {
+  return fetch(`${env.AI_SERVICE_URL}${path}`, {
     method,
     headers: forwardedHeaders(request, requestId),
     body,
