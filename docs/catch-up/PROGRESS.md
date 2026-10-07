@@ -6,7 +6,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 
 ## pre-session-03
 
-- [ ] Plan audited
+- [x] Plan audited (51 plan defects fixed; rulings in Notes)
 - [ ] Task 1: Bootstrap — gate, spend guard, agent guide
 - [ ] Task 2: Streaming contract, pricing and call metrics
 - [ ] Task 3: Partial snapshots from streamed JSON
@@ -61,3 +61,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - Gate:
 
 ## Notes, plan corrections and findings
+- S3 plan audit (2026-10-07): 51 defects fixed in `plan-session-03.md` (fixtures that did not exist, cross-track ownership of Makefile/stack.md, `LLM_FALLBACKS=none`, cache status for `cache=error` logs, e2e override, CI watch). Spec §4.1/§4.2/§4.7 wording aligned.
+- Ruling: Regenerate bypasses the exact-match cache (`?refresh=true`), so it really produces a new answer.
+- Ruling: the composer's limit comes from `/api/v1/context` (`max_transcription_chars`), not a hard-coded constant.
+- Ruling: baseline `make check` failed because ruff 0.16 formats Python blocks inside `docs/**/*.md`; Task 1 excludes `docs` from ruff.
+

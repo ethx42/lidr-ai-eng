@@ -96,13 +96,13 @@ class LLMProvider(Protocol):
 
 From session 5, `user: str` becomes `messages: Sequence[ChatMessage]` (a one-message list for single-turn calls).
 
-Provider implementations use the SDKs' native streaming (`responses.stream(text_format=…)`, `messages.stream(output_format=…)`; see `.claude/stack.md`). Error mapping and stop-condition handling (incomplete, truncation, refusal → `InvalidModelOutput` with a reason) match the blocking path. Closing the async iterator closes the upstream stream.
+Provider implementations use the SDKs' native streaming with the JSON schema sent raw and the final text validated in code; the SDKs' parsing stream helpers (`text_format=` / `output_format=`) are not used because they raise mid-stream before the stop condition is readable (see `.claude/stack.md`). Error mapping and stop-condition handling (incomplete, truncation, refusal → `InvalidModelOutput` with a reason) match the blocking path. Closing the async iterator closes the upstream stream.
 
 ### 4.2 Fallback router
 
 `FallbackProvider(chain: Sequence[LLMProvider], cooldown: Cooldown)` implements `LLMProvider`.
 
-- Chain from settings: primary = `LLM_PROVIDER`/`LLM_MODEL`; `LLM_FALLBACKS` = comma-separated `provider:model` (default `anthropic:claude-haiku-4-5`; empty disables fallback). Startup fails if any provider in the chain lacks its key (except `replay`).
+- Chain from settings: primary = `LLM_PROVIDER`/`LLM_MODEL`; `LLM_FALLBACKS` = comma-separated `provider:model` (default `anthropic:claude-haiku-4-5`; `none` disables fallback — an empty environment value is ignored by pydantic-settings and keeps the default). Startup fails if any provider in the chain lacks its key (except `replay`).
 - Falls back on `UpstreamUnavailable`, `UpstreamRateLimited` and quota-exhausted `UpstreamError`; never on other 4xx `UpstreamError` or `InvalidModelOutput`.
 - Streaming: falls back only before the first `TextDelta` has been yielded; after that the error propagates.
 - Cooldown: after `LLM_COOLDOWN_FAILURES` (3) consecutive availability failures a provider is skipped for `LLM_COOLDOWN_SECONDS` (30); a success resets the count. In-process state.
@@ -151,7 +151,7 @@ The existing one-record-per-LLM-call rule stays (`llm_call`, no transcript or ke
 
 ### 4.7 Context endpoint
 
-`GET /api/v1/context` returns `{prompt_version, system_prompt, references: [...], chain: ["provider:model", …]}` for the UI inspector. From session 4 it accepts the same enum query parameters as the estimate request (the system prompt depends on them) and `prompt_version`.
+`GET /api/v1/context` returns `{prompt_version, system_prompt, references: [...], chain: ["provider:model", …], max_transcription_chars}` for the UI inspector. From session 4 it accepts the same enum query parameters as the estimate request (the system prompt depends on them) and `prompt_version`.
 
 ## 5. Branch `pre-session-03`: conversational interface with streaming
 
