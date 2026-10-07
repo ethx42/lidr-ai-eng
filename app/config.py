@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = Field(default=86_400, gt=0)
     # Prompt template version (app/prompts/estimation/<version>/); checked against the templates
     # at startup, since importing the loader here would be circular.
-    prompt_version: str = "v1"
+    prompt_version: str = "v2"
 
     @property
     def chain(self) -> list[tuple[Provider, str]]:

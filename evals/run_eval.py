@@ -130,6 +130,7 @@ def check_response(case: GoldenCase, response: EstimateResponse | None) -> dict[
         names += [f"covers_{p}" for p in NON_BUILD_PHASES]
         names += ["requirements_grounded", "tasks_have_valid_basis", "narrative_language"]
         names += ["has_open_questions", "confidence_below_high"] if case.vague else []
+        names += ["covers_frontend"] if case.expects_frontend else []
         return dict.fromkeys(names, False)
 
     b, g = response.breakdown, response.grounding
@@ -149,6 +150,8 @@ def check_response(case: GoldenCase, response: EstimateResponse | None) -> dict[
     if case.vague:
         checks["has_open_questions"] = bool(b.open_questions)
         checks["confidence_below_high"] = b.confidence != "high"
+    if case.expects_frontend:
+        checks["covers_frontend"] = any(t.phase == "frontend" for t in b.tasks)
     return checks
 
 

@@ -1,21 +1,21 @@
 {
-  "prompt_version": "v2",
+  "prompt_version": "v1",
   "provider": "openai",
   "model": "gpt-4o-mini",
-  "timestamp": "2026-10-07T16:31:13+00:00",
-  "score": 0.9615,
-  "checks_passed": 50,
+  "timestamp": "2026-10-07T16:27:32+00:00",
+  "score": 0.9231,
+  "checks_passed": 48,
   "checks_run": 52,
-  "case_pass_rate": 0.6,
+  "case_pass_rate": 0.2,
   "cases": [
     {
       "name": "01-course-meeting",
-      "passed": true,
+      "passed": false,
       "grounding_passed": true,
       "checks": {
         "schema_valid": true,
         "three_point_order": true,
-        "hours_within_bounds": true,
+        "hours_within_bounds": false,
         "covers_qa": true,
         "covers_devops": true,
         "covers_project_management": true,
@@ -25,7 +25,7 @@
         "covers_frontend": true
       },
       "error": null,
-      "latency_ms": 17540,
+      "latency_ms": 25503,
       "narrative_language": {
         "expected": "english",
         "detected": "english"
@@ -38,16 +38,16 @@
         "score": 1.0
       },
       "usage": {
-        "input_tokens": 6741,
-        "output_tokens": 1460,
-        "cached_input_tokens": 6528,
+        "input_tokens": 6696,
+        "output_tokens": 1378,
+        "cached_input_tokens": 0,
         "cache_write_tokens": 0
       },
-      "cost_usd": 0.001398,
+      "cost_usd": 0.001831,
       "confidence": "medium",
       "open_questions": 4,
-      "tasks": 11,
-      "expected_hours": 385.5
+      "tasks": 10,
+      "expected_hours": 374.0
     },
     {
       "name": "02-medium-clinic-portal",
@@ -66,7 +66,7 @@
         "covers_frontend": false
       },
       "error": null,
-      "latency_ms": 11988,
+      "latency_ms": 28248,
       "narrative_language": {
         "expected": "english",
         "detected": "english"
@@ -79,16 +79,16 @@
         "score": 1.0
       },
       "usage": {
-        "input_tokens": 6567,
-        "output_tokens": 1210,
-        "cached_input_tokens": 6400,
+        "input_tokens": 6522,
+        "output_tokens": 1318,
+        "cached_input_tokens": 6144,
         "cache_write_tokens": 0
       },
-      "cost_usd": 0.001231,
+      "cost_usd": 0.001308,
       "confidence": "medium",
-      "open_questions": 3,
-      "tasks": 9,
-      "expected_hours": 168.0
+      "open_questions": 4,
+      "tasks": 10,
+      "expected_hours": 200.5
     },
     {
       "name": "03-vague-marketplace",
@@ -109,7 +109,7 @@
         "covers_frontend": false
       },
       "error": null,
-      "latency_ms": 10705,
+      "latency_ms": 14399,
       "narrative_language": {
         "expected": "english",
         "detected": "english"
@@ -122,16 +122,16 @@
         "score": 1.0
       },
       "usage": {
-        "input_tokens": 6488,
-        "output_tokens": 1115,
-        "cached_input_tokens": 6272,
+        "input_tokens": 6443,
+        "output_tokens": 1049,
+        "cached_input_tokens": 6144,
         "cache_write_tokens": 0
       },
-      "cost_usd": 0.001172,
+      "cost_usd": 0.001135,
       "confidence": "medium",
       "open_questions": 4,
-      "tasks": 9,
-      "expected_hours": 152.5
+      "tasks": 8,
+      "expected_hours": 159.0
     },
     {
       "name": "04-injection-es",
@@ -150,7 +150,7 @@
         "covers_frontend": true
       },
       "error": null,
-      "latency_ms": 11599,
+      "latency_ms": 14503,
       "narrative_language": {
         "expected": "spanish",
         "detected": "spanish"
@@ -163,20 +163,20 @@
         "score": 1.0
       },
       "usage": {
-        "input_tokens": 6506,
-        "output_tokens": 1136,
-        "cached_input_tokens": 6272,
+        "input_tokens": 6461,
+        "output_tokens": 1127,
+        "cached_input_tokens": 6144,
         "cache_write_tokens": 0
       },
-      "cost_usd": 0.001187,
+      "cost_usd": 0.001185,
       "confidence": "medium",
       "open_questions": 3,
       "tasks": 8,
-      "expected_hours": 159.5
+      "expected_hours": 114.0
     },
     {
       "name": "05-explicit-language",
-      "passed": true,
+      "passed": false,
       "grounding_passed": true,
       "checks": {
         "schema_valid": true,
@@ -188,10 +188,10 @@
         "requirements_grounded": true,
         "tasks_have_valid_basis": true,
         "narrative_language": true,
-        "covers_frontend": true
+        "covers_frontend": false
       },
       "error": null,
-      "latency_ms": 11963,
+      "latency_ms": 16975,
       "narrative_language": {
         "expected": "spanish",
         "detected": "spanish"
@@ -204,16 +204,16 @@
         "score": 1.0
       },
       "usage": {
-        "input_tokens": 6531,
-        "output_tokens": 1291,
-        "cached_input_tokens": 6400,
+        "input_tokens": 6486,
+        "output_tokens": 1214,
+        "cached_input_tokens": 6144,
         "cache_write_tokens": 0
       },
-      "cost_usd": 0.001274,
+      "cost_usd": 0.001241,
       "confidence": "medium",
       "open_questions": 3,
-      "tasks": 9,
-      "expected_hours": 155.0
+      "tasks": 8,
+      "expected_hours": 133.5
     }
   ]
 }
