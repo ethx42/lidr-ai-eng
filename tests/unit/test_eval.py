@@ -233,3 +233,15 @@ async def test_explicit_output_language_is_sent_and_checked() -> None:
     report = await run_cases(service, [case], provider="openai", model="fake-model")
     assert "<output_language>Spanish</output_language>" in provider.calls[0]["user"]
     assert report["cases"][0]["checks"]["narrative_language"] is True
+
+
+async def test_ledger_guards_and_records_eval_spend(tmp_path: Path) -> None:
+    ledger = tmp_path / "spend.jsonl"
+    settings = Settings(_env_file=None, openai_api_key="test-key")
+    await main(
+        ["--report", str(tmp_path / "r.json")],
+        settings=settings,
+        provider_factory=lambda _: FakeProvider(result=FULL),
+        ledger=ledger,
+    )
+    assert json.loads(ledger.read_text().splitlines()[-1])["command"] == "eval"

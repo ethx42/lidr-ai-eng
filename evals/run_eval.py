@@ -19,6 +19,7 @@ from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
 from app.services.providers.factory import build_provider
+from scripts import live_budget
 
 ROOT = Path(__file__).resolve().parent
 GOLDEN_DIR = ROOT / "golden"
@@ -206,11 +207,14 @@ async def main(
     *,
     settings: Settings | None = None,
     provider_factory: Callable[[Settings], LLMProvider] = build_provider,
+    ledger: Path | None = None,
 ) -> Path:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, help="write the JSON report to exactly this path")
     args = parser.parse_args(argv)
 
+    if ledger:
+        live_budget.ensure_budget(0.10, ledger=ledger)
     resolved = settings or Settings()
     provider = provider_factory(resolved)
     service = EstimationService(
@@ -225,6 +229,9 @@ async def main(
         )
     finally:
         await provider.aclose()
+    if ledger:
+        cost = sum((r["usage"] or {}).get("cost_usd", 0.0) for r in report["cases"])
+        live_budget.record_spend("eval", cost, ledger=ledger)
     path = write_report(report, args.report)
     print(summary_table(report))
     print(f"report: {path}")
@@ -232,4 +239,4 @@ async def main(
 
 
 if __name__ == "__main__":
-    asyncio.run(main(sys.argv[1:]))
+    asyncio.run(main(sys.argv[1:], ledger=live_budget.LEDGER))

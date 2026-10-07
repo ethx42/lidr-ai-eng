@@ -22,7 +22,7 @@ required-version = ">=0.12.18,<0.13"
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["openspec", ".openspec", ".claude"]
+extend-exclude = ["openspec", ".openspec", ".claude", "docs"]
 
 [tool.ruff.lint]
 extend-select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "S"]
@@ -35,7 +35,7 @@ extend-select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "S"]
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app"]
+files = ["app", "scripts"]
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
 

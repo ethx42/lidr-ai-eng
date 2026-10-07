@@ -2,7 +2,7 @@ OPENSPEC_VERSION := 1.13.1
 OPENSPEC := npx -y @fission-ai/openspec@$(OPENSPEC_VERSION)
 REPORT ?=
 
-.PHONY: install run test lint typecheck specs check eval eval-baseline openspec-sync
+.PHONY: install run test lint typecheck specs check eval eval-baseline openspec-sync gate
 
 install:
 	uv sync
@@ -41,3 +41,7 @@ eval-baseline:
 # Regenerate OpenSpec agent workflows from the repo-scoped profile (.openspec/), leaving the global config untouched
 openspec-sync:
 	OPENSPEC_TELEMETRY=0 XDG_CONFIG_HOME=$(CURDIR)/.openspec $(OPENSPEC) update --force
+
+# Branch close gate (see docs/catch-up/): make gate BRANCH=pre-session-03
+gate:
+	bash scripts/gate.sh $(BRANCH)

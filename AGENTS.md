@@ -26,3 +26,9 @@ Spec-driven FastAPI project for the LIDR AI Engineering course. Each course brie
 
 ## Branches
 One branch per milestone (e.g. `feat/m1-cag-estimator`); merge to `main` and tag (`m1`) after review. Never force-push.
+
+## Catch-up mode (pre-session-0N branches)
+- Plans live in `docs/catch-up/` (`spec.md`, `plan-session-0N.md`, `HANDOFF.md`, `PROGRESS.md`).
+- OpenSpec-lite (spec D11): no change folders; update `openspec/specs/*` in place at branch close.
+- `make gate BRANCH=<name>` defines done: check, compose e2e, OpenAPI drift, PROGRESS section clean, branch pushed.
+- Live LLM calls are guarded by `scripts/live_budget.py` (`LIVE_BUDGET_USD`, default 5; ledger `docs/catch-up/spend.jsonl`).
