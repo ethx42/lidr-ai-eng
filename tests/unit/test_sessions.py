@@ -46,6 +46,13 @@ def test_sources_slide_out_with_their_pairs() -> None:
     assert h.sources == ["big"]
 
 
+def test_size_cap_counts_the_longer_of_the_user_message_and_its_raw_source() -> None:
+    h = ConversationHistory(max_turns=6, max_chars=100)
+    h.append("u1", "a1", source="s" * 60)
+    h.append("u2", "a2", source="t" * 60)
+    assert h.turns == 1 and h.sources == ["t" * 60]
+
+
 def test_as_chat_appends_the_new_user_message() -> None:
     h = ConversationHistory(max_turns=2)
     h.append("u1", "a1")

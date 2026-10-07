@@ -96,6 +96,20 @@ async def test_grounding_source_is_the_turn_then_the_windowed_client_texts(
     assert render_compact(r1.breakdown) not in sources[1]
 
 
+async def test_raw_client_text_kept_for_grounding_stays_within_the_history_cap(
+    make_conversation: MakeConversation,
+) -> None:
+    provider = FakeProvider()
+    conversation = make_conversation(provider, max_history_chars=20_000)
+    s = conversation.start()
+    # Neutralised, the tag and its 10,000 characters of attributes become "[transcript]".
+    transcript = "<transcript " + "x" * 10_000 + ">Client: a booking app."
+    for _ in range(6):
+        await conversation.turn(s.id, typed_request(transcript), [])
+    assert len(provider.calls[-1]["messages"][-1].content) < 2_000  # the model saw little
+    assert sum(len(source) for source in conversation.get(s.id).history.sources) <= 20_000
+
+
 @pytest.mark.parametrize(
     "scaffolding", ["Spanish", "Project type: web_saas", "do not translate quotes"]
 )

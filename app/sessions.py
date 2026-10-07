@@ -34,8 +34,10 @@ class ConversationHistory:
     """The last `max_turns` user + assistant pairs, minus the oldest ones past `max_chars`.
 
     The latest pair always stays, however large: dropping it would lose the turn just answered.
-    Each pair keeps its turn's raw client text (`source`, for grounding), which slides out with it
-    and does not count toward `max_chars`: that bounds what the model is sent.
+    Each pair keeps its turn's raw client text (`source`, for grounding), which slides out with
+    it. A pair counts the longer of its user message and its source, plus the answer, so the cap
+    bounds both what the model is sent and what the session holds (neutralising can shorten a
+    transcript a lot).
     """
 
     def __init__(self, max_turns: int = 6, max_chars: int = 60_000) -> None:
@@ -55,7 +57,9 @@ class ConversationHistory:
 
     @property
     def chars(self) -> int:
-        return sum(len(user) + len(assistant) for user, assistant, _ in self._pairs)
+        return sum(
+            max(len(user), len(source)) + len(assistant) for user, assistant, source in self._pairs
+        )
 
     @property
     def sources(self) -> list[str]:
