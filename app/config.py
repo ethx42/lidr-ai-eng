@@ -5,6 +5,8 @@ from typing import Annotated, Literal, Self, TypeGuard, get_args
 from pydantic import BeforeValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.attachments.extractor import AttachmentLimits
+
 Provider = Literal["openai", "anthropic", "replay"]
 # Every level the installed SDKs define; which ones a model accepts lives in its profile.
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
@@ -61,6 +63,13 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
     llm_reasoning_effort: ReasoningEffort | None = None
     max_transcription_chars: int = Field(default=50_000, gt=0)
+    # Per turn: the page and character budgets are shared across the turn's files; the DOCX cap is
+    # the declared uncompressed ZIP size (zip-bomb guard).
+    attachment_max_files: int = Field(default=5, gt=0)
+    attachment_max_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    attachment_max_pages: int = Field(default=200, gt=0)
+    attachment_max_chars: int = Field(default=50_000, gt=0)
+    attachment_max_docx_uncompressed: int = Field(default=50 * 1024 * 1024, gt=0)
     blended_hourly_rate: float | None = Field(default=None, gt=0)
     weekly_capacity_hours: float = Field(default=30, gt=0)
     replay_cassette_dir: Path = Path("tests/cassettes")
@@ -85,6 +94,16 @@ class Settings(BaseSettings):
         if fallbacks.casefold() in ("", "none"):
             return [primary]
         return [primary, *(parse_link(entry) for entry in fallbacks.split(","))]
+
+    @property
+    def attachment_limits(self) -> AttachmentLimits:
+        return AttachmentLimits(
+            max_files=self.attachment_max_files,
+            max_bytes=self.attachment_max_bytes,
+            max_pages=self.attachment_max_pages,
+            max_chars=self.attachment_max_chars,
+            max_docx_uncompressed=self.attachment_max_docx_uncompressed,
+        )
 
     def key_for(self, provider: Provider) -> str:
         key = {"openai": self.openai_api_key, "anthropic": self.anthropic_api_key}.get(provider)

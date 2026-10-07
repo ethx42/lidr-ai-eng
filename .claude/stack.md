@@ -1,6 +1,6 @@
 # Tech stack brief
 
-stack-fingerprint: eeb6e31c4f82
+stack-fingerprint: 5f8d5d408db4
 updated: 2026-10-07
 
 How the installed versions are meant to be used today. Read before writing code against them; update when you learn something new (`stack-grounding` skill). Installed versions win over memory and over docs for other versions.
@@ -235,7 +235,8 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 
 ### FastAPI 0.141.1 multipart + python-multipart 0.0.32
 - **Use:**
-  - Add `python-multipart>=0.0.32` as a direct dependency. It is the latest (2026-06-04, Apache-2.0) and is **not installed** today. Without it, FastAPI raises `RuntimeError` at route registration for any `Form`/`File` param. Don't use `fastapi[standard]` just for this.
+  - `python-multipart>=0.0.32` is a direct dependency (installed 0.0.32, session 5 Task 4; Apache-2.0). Without it, FastAPI raises `RuntimeError` at route registration for any `Form`/`File` param. Don't use `fastapi[standard]` just for this.
+  - The import name is `python_multipart` (FastAPI checks `from python_multipart import __version__`); the old `multipart` package dir is only a compatibility shim.
   - Verified shape: a single form model that also holds the files.
   ```python
   class EstimateForm(BaseModel):
@@ -348,6 +349,14 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 - **New and useful:** resource limits via `pypdf.Configuration` (6.18), applied with `with pypdf.apply_configuration(zlib_maximum_output_length=..., page_tree_maximum_entries=...)` (ContextVar-based; it propagates into `asyncio.to_thread`, verified). The defaults are a 75 MB decompressed stream and 100k page-tree entries. Exceeding a limit raises `LimitReachedError`. 6.14–6.19 are mostly security fixes, so keep the floor current.
 - **Avoid:** mutating `pypdf.filters.ZLIB_MAX_OUTPUT_LENGTH` and similar constants (deprecated, removed in 7.0); `strict=True` for uploads; `extraction_mode="layout"` (experimental); relying on the text order.
 - **Sources:** Context7 `/websites/pypdf_readthedocs_io_en_stable` (extract_text, encryption, errors) and `/py-pdf/pypdf` (Configuration, changelog), 2026-10-06. PyPI JSON, `inspect.signature` and the `pypdf.errors` MRO on 6.19.0, and reportlab-generated plain and encrypted PDFs.
+- **Installed and used (2026-10-07, session 5 Task 4, `app/attachments/extractor.py`):** pypdf 6.19.0 with `cryptography` 50.0.2 (`pypdf[crypto]`).
+  - **Order matters:** on a user-password PDF, `len(reader.pages)` itself raises `FileNotDecryptedError`. Check `is_encrypted` + `decrypt("") == PasswordType.NOT_DECRYPTED` first, then the page count. `PasswordType` is exported from `pypdf`.
+  - **`apply_configuration(**dict)` fails mypy:** the first positional parameter is `configuration: Configuration | None`, so a `**dict[str, int]` is matched against it. Pass the keywords inline: `apply_configuration(zlib_maximum_output_length=20_000_000, page_tree_maximum_entries=10_000)`.
+  - **Bomb check (verified):** a 25 KB PDF whose page content stream inflates to 25 MB raises `LimitReachedError` under a 20 MB `zlib_maximum_output_length` (10 ms). `extract_text()` only decodes the content stream of a page that has `/Resources /Font`; a page without fonts returns `""` without decoding.
+  - **Malformed input raises more than `PyPdfError`/`DependencyError` (fuzzed: 3,000 random byte mutations of a plain and an AES-256 PDF):** bare `KeyError` (`'/CF'`, `'/DescendantFonts'`, …), `AttributeError`, `TypeError`, `ValueError` and `NotImplementedError` ("only Standard PDF encryption handler is available", "Encryption V=0 NOT supported"). Wrap the whole read in `except Exception` (re-raise your own errors first) when a failure must become a 4xx.
+  - Font-encoding problems are logged at ERROR on `pypdf._cmap` ("Advanced encoding … not implemented yet"); capping the `pypdf` logger at ERROR keeps those and drops the per-object repair warnings.
+  - `PdfWriter(clone_from=PdfReader(...))` + `writer.encrypt(user_password=..., owner_password=..., algorithm="AES-256")` builds an encrypted fixture (`tests/fixtures/attachments/make_fixtures.py`; the plain PDF comes from fpdf2 2.8.9 run ad hoc with `uv run --with fpdf2`, not a dependency, with `set_creation_date` pinned so `spec.pdf` is byte-stable across reruns; `encrypted.pdf` (random IV) and `spec.docx` (zip timestamps) are not).
+  - Import cost: about 73 ms (python-docx about 50 ms); `app.config` imports both through `AttachmentLimits`.
 
 ### python-docx 1.2.0 + licenses
 - **Use:**
@@ -366,7 +375,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
     - A zip without `[Content_Types].xml` raises `KeyError`.
     - Another OOXML type (xlsx) raises `ValueError("... is not a Word file ...")`.
     - `PackageNotFoundError` is raised only for path strings.
-  - XXE is off (`resolve_entities=False`), but there is **no zip-bomb guard**. Check `sum(i.file_size for i in zipfile.ZipFile(buf).infolist()) <= cap`, then `buf.seek(0)`.
+  - XXE is off (`resolve_entities=False`), but there is **no zip-bomb guard**. Check `sum(i.file_size for i in zipfile.ZipFile(buf).infolist()) <= cap`, then repack in bounded reads (the sum alone is not enough; see "Installed and used" below).
   - It is sync, so run it in a thread.
 - **Licenses (PyPI metadata, 2026-10-06):**
   - pypdf: BSD-3-Clause.
@@ -378,6 +387,10 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   - jiter: MIT.
   - **PyMuPDF 1.28.2: "GNU AFFERO GPL 3.0 or Artifex Commercial License". AGPL is confirmed, so do not add it.**
 - **Sources:** Context7 `/python-openxml/python-docx` (`blkcntnr.iter_inner_content`, `table._Row.cells`, tables docs), 2026-10-06. PyPI JSON, a scratch docx with merges, a nested table, header and footer, and the garbage/empty/zip/xlsx inputs.
+- **Installed and used (2026-10-07, session 5 Task 4):** python-docx 1.2.0 with lxml 6.1.3. `Document(docx: str | IO[bytes] | None)`; `Document.iter_inner_content() -> Iterator[Paragraph | Table]` (import `Table` from `docx.table`, `Paragraph` from `docx.text.paragraph`).
+  - **More exceptions on malformed packages (verified by rewriting one member of a real .docx, then fuzzed with 1,500 byte mutations):** a broken `word/document.xml` or `_rels/.rels` raises lxml's `XMLSyntaxError`, which is a builtin `SyntaxError` subclass (catch `SyntaxError`; importing `lxml` in `app/` would make it a direct dependency under `tests/test_structure.py`); a document part whose root is another element raises `AttributeError`; a corrupt deflate member raises `zlib.error`. Wrap the parse in `except Exception` (re-raise your own errors first) when a failure must become a 4xx.
+  - **The declared-size sum alone is not a zip-bomb guard (verified, CPython 3.12 `zipfile`):** `ZipExtFile` cuts each member at the central directory's `file_size`, but only *after* inflating. `read()` (what python-docx's `ZipFile.read(name)` calls) asks the decompressor for up to `MAX_N` (`1 << 31 - 1`, i.e. 1 GiB) at once. A 1.4 MB .docx whose `word/document.xml` declares 1 KB but inflates to 600 MB took peak RSS from 47 MB to 651 MB before failing. `read(n)` is bounded (`decompress(data, max(n, 4096))`). So: check `sum(info.file_size ...)` for the clear "too large" error, then copy every member with `shutil.copyfileobj(source.open(info), copy.open(info.filename, "w"))` into a new uncompressed `ZipFile(BytesIO(), "w")` and hand that to `Document` (`repacked` in `app/attachments/extractor.py`; regression test with `tracemalloc`). A lying member then stops at its declared size and usually fails its CRC (`BadZipFile`).
+  - Internal DTD entities are not expanded (`resolve_entities=False`): `&b;` comes out as an empty run, so "billion laughs" yields nothing.
 
 ### httpx2 2.13.0: async integration tests
 - **Use:** `httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://test")`. The signature is `ASGITransport(app, raise_app_exceptions=True, root_path="", client=("127.0.0.1", 123))`. It does **not** run the lifespan (verified: no startup and no `app.state`). The httpx2 docs call lifespan out of scope.
@@ -441,7 +454,8 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
     - Read and extract the uploads before the stream starts.
 11. **Parsers are sync and CPU-bound:** call pypdf and python-docx via `run_in_threadpool`/`anyio.to_thread`.
     - Use `pypdf[crypto]`, and catch `PyPdfError` *and* `DependencyError`.
-    - Zip-size-guard `.docx` uploads before opening them.
+    - Zip-size-guard `.docx` uploads before opening them, then repack them in bounded reads (a lying header otherwise inflates up to 1 GiB per member).
+    - Both parsers raise bare builtin exceptions on malformed files (see the pypdf and python-docx "Installed and used" notes); `app/attachments/extractor.py` maps any parser failure to `AttachmentError`.
     - An all-empty `extract_text()` is an unsupported (scanned) PDF.
 12. **Redis fail-open:**
     - Use `from_url` (no retries) with timeouts of about 0.25–0.5 s, not the 5 s defaults.
