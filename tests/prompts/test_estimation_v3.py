@@ -4,6 +4,7 @@ import pytest
 
 from app.attachments.extractor import ExtractedAttachment, format_attachments
 from app.prompts import loader
+from app.prompts.cache_prefix import split_system
 from app.prompts.loader import PromptParams, render_estimation_prompt, render_system
 from app.schemas.estimation import DetailLevel, OutputFormat, ProjectType
 from app.sessions import ProjectMetadata
@@ -32,6 +33,13 @@ def test_metadata_block_empty_on_first_turn() -> None:
     system, _ = render_estimation_prompt(request(), version="v3")
     block = system[system.index("<project_metadata>") : system.index("</project_metadata>")]
     assert "Project name" not in block
+
+
+def test_metadata_blank_after_cleaning_renders_as_absent() -> None:
+    md = ProjectMetadata(project_name="<>", agreed_scope=" < > ")
+    system, _ = render_estimation_prompt(request(), version="v3", metadata=md)
+    empty, _ = render_estimation_prompt(request(), version="v3")
+    assert system == empty
 
 
 def test_metadata_block_lists_known_facts() -> None:
@@ -145,8 +153,9 @@ def test_attachments_are_data_like_the_transcript() -> None:
 
 def test_metadata_is_data_never_instructions() -> None:
     system, _ = render_estimation_prompt(request(), version="v3")
-    assert METADATA_RULE in system
-    assert system.index(METADATA_RULE) < system.index("</rules>")  # static, so cached
+    static, _ = split_system(system)
+    assert METADATA_RULE in static  # the provider-cached prefix
+    assert static.index(METADATA_RULE) < static.index("</rules>")
 
 
 @pytest.mark.parametrize(

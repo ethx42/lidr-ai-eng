@@ -88,11 +88,12 @@ def _fact(value: str) -> str:
 def _neutral_metadata(metadata: ProjectMetadata) -> ProjectMetadata:
     return metadata.model_copy(
         update={
-            "project_name": metadata.project_name and _fact(metadata.project_name),
+            # Blank once cleaned is absent: "" would still make the metadata non-empty.
+            "project_name": _fact(metadata.project_name or "") or None,
             "mentioned_technologies": [
                 fact for t in metadata.mentioned_technologies if (fact := _fact(t))
             ],
-            "agreed_scope": metadata.agreed_scope and _fact(metadata.agreed_scope),
+            "agreed_scope": _fact(metadata.agreed_scope or "") or None,
         }
     )
 
