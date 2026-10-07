@@ -207,19 +207,19 @@ Stream events, in order:
 
 | Event | Data | Rules |
 |---|---|---|
-| `status` | `{phase: calling_llm \| fallback \| validating \| cache_hit, provider, model}` | Informational, any number |
+| `status` | `{phase: calling_llm \| fallback \| validating \| cache_hit, provider, model}`; `provider` and `model` are `null` on `validating` | Informational, any number |
 | `partial` | `{seq, breakdown}` (partial `EstimationBreakdown`, possibly incomplete; `seq` is also the SSE `id`) | Only after the first token; when the snapshot changed, at most every 100 ms, plus one final flush |
 | `result` | `EstimateResponse` | Terminal |
 | `error` | `{code, message, retryable, request_id}` | Terminal |
 
 Exactly one terminal event per stream; keep-alive comments every 15 s. A cache hit streams `status{cache_hit}` then `result`. A client disconnect closes the upstream provider stream, logs `outcome=cancelled` and caches nothing.
 
-Errors use `{"error": {"code", "message"}, "request_id"}`: `400 invalid_host` (a `Host` outside `ALLOWED_HOSTS`), `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `403 forbidden` (a `Host` outside `ALLOWED_HOSTS`, or a cross-site POST), `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
+Errors use `{"error": {"code", "message"}, "request_id"}`: `400 invalid_host` (a `Host` outside `ALLOWED_HOSTS`), `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `403 forbidden` (a `Host` outside `ALLOWED_HOSTS`, or a cross-site POST), `413 payload_too_large` (body over 2,000,000 bytes) and `503 upstream_unavailable` when the AI service is unreachable, and a bare `499` when the client leaves first (see the [`web-client` spec](openspec/specs/web-client/spec.md)).
 
 ## Quality gates
 
 ```bash
-make check              # lint → typecheck → tests → specs → web-check (same as CI)
+make check              # lint → typecheck → tests → specs → web-check (CI runs it, plus Compose validation and the image builds)
 make e2e                # Playwright against the offline Compose stack (replay, no keys, zero spend), with axe checks
 MEDIA=1 make e2e        # same, and writes screenshots and the GIF to docs/media/session-03/
 make gate BRANCH=pre-session-03   # branch close gate: check, compose e2e, contract current, PROGRESS ticked, branch pushed
@@ -229,7 +229,7 @@ make gate BRANCH=pre-session-03   # branch close gate: check, compose e2e, contr
 - Tests are offline: a fake provider, SDK clients on a mock transport serving recorded SSE bodies (`tests/fixtures/sse/`), fakeredis, and uvicorn in-process for disconnect tests. They never call a real LLM.
 - `make e2e` runs the 7 Playwright tests in `web/e2e/chat.spec.ts`: the chat flow, Stop, Regenerate, reload, keyboard use, and a 375 px viewport, with axe checks (WCAG 2.2 AA tags) that fail on any serious or critical violation in light and dark themes, empty, streaming and done. Plain `make e2e` never writes tracked files.
 - `make gate` prints `GATE PASS <branch> <sha>` only when every stage passes.
-- CI (`.github/workflows/ci.yml`) has two jobs on every push and pull request: `check` installs from both lockfiles, runs `make check` and validates the Compose files (`docker compose config -q`); `images` builds both images with `docker buildx bake` and the GitHub Actions cache. End-to-end tests run in `make gate`, not in CI. Last green run on this branch: [37620980069](https://github.com/ethx42/lidr-ai-eng/actions/runs/37620980069).
+- CI (`.github/workflows/ci.yml`) has two jobs on every push and pull request: `check` installs from both lockfiles, runs `make check` and validates the Compose files (`docker compose config -q`); `images` builds both images with `docker buildx bake` and the GitHub Actions cache. End-to-end tests run in `make gate`, not in CI. Last green CI run on this branch: [37620980069](https://github.com/ethx42/lidr-ai-eng/actions/runs/37620980069), on commit `e66aade`.
 
 ## Live commands (spend-guarded)
 

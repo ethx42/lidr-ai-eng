@@ -126,7 +126,7 @@ The system SHALL expose `POST /api/v1/estimate/stream`, which accepts the same b
 
 | Event | Data | Rules |
 |---|---|---|
-| `status` | `{phase, provider, model}`, with `phase` one of `calling_llm`, `fallback`, `validating`, `cache_hit` | Informational |
+| `status` | `{phase, provider, model}`, with `phase` one of `calling_llm`, `fallback`, `validating`, `cache_hit`; `provider` and `model` name the provider of that phase, and are null on `validating` | Informational |
 | `partial` | `{seq, breakdown}`: the estimation parsed from the model output received so far, possibly incomplete | Only after the first model output, only when the parsed snapshot changed, at most one per 100 ms plus one final flush before the terminal event; `seq` strictly increasing and also sent as the event `id` |
 | `result` | the same body as `POST /api/v1/estimate` | Terminal |
 | `error` | `{code, message, retryable, request_id}` | Terminal |
