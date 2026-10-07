@@ -221,13 +221,13 @@ Errors use `{"error": {"code", "message"}, "request_id"}`: `400 invalid_host` (a
 ```bash
 make check              # lint → typecheck → tests → specs → web-check (CI runs it, plus Compose validation and the image builds)
 make e2e                # Playwright against the offline Compose stack (replay, no keys, zero spend), with axe checks
-MEDIA=1 make e2e        # same, and writes screenshots and the GIF to docs/media/session-03/
+MEDIA=1 make e2e        # same, and writes screenshots and the GIF to docs/media/session-04/
 make gate BRANCH=pre-session-03   # branch close gate: check, compose e2e, contract current, PROGRESS ticked, branch pushed
 ```
 
 - `make check` runs ruff, mypy (strict), pytest, OpenSpec validation and `web-check` (eslint, `next typegen` + `tsc`, Vitest, and a check that `schema.d.ts` matches `contracts/openapi.json`). `tests/test_openapi_snapshot.py` fails when the committed contract is stale; regenerate with `make openapi`, then `make web-types`.
 - Tests are offline: a fake provider, SDK clients on a mock transport serving recorded SSE bodies (`tests/fixtures/sse/`), fakeredis, and uvicorn in-process for disconnect tests. They never call a real LLM.
-- `make e2e` runs the 7 Playwright tests in `web/e2e/chat.spec.ts`: the chat flow, Stop, Regenerate, reload, keyboard use, and a 375 px viewport, with axe checks (WCAG 2.2 AA tags) that fail on any serious or critical violation in light and dark themes, empty, streaming and done. Plain `make e2e` never writes tracked files.
+- `make e2e` runs the 10 Playwright tests in `web/e2e/estimate.spec.ts`: the typed form flow (sample, choices, streaming, tasks by phase, evidence highlights by hover and keyboard, Copy as markdown, the inspector's Last call), the Document view per output format, Stop and Regenerate, keyboard use, the Transcript | Estimate tabs and the inspector sheet at 375 px, and the 1280×600, 640×360 and 320×256 viewports, with axe checks (WCAG 2.2 AA tags) that fail on any serious or critical violation in light and dark themes, empty, sample picked, streaming and done. Plain `make e2e` never writes tracked files.
 - `make gate` prints `GATE PASS <branch> <sha>` only when every stage passes.
 - CI (`.github/workflows/ci.yml`) has two jobs on every push and pull request: `check` installs from both lockfiles, runs `make check` and validates the Compose files (`docker compose config -q`); `images` builds both images with `docker buildx bake` and the GitHub Actions cache. End-to-end tests run in `make gate`, not in CI. Last green CI run on this branch: [37620980069](https://github.com/ethx42/lidr-ai-eng/actions/runs/37620980069), on commit `e66aade`.
 
@@ -271,6 +271,22 @@ OpenAI requests carry `prompt_cache_key=estimator-<prompt version>` (blocking an
 Session 4 prompt versions live in `app/prompts/estimation/<version>/` (`v1` ports M1's `v4`; `v2` adds the frontend rule). The M1 rows (`v1`–`v4`) lived in `app/prompts/<version>/`; their rationale and expected eval impact are in the archived [design](openspec/changes/archive/2026-09-23-add-cag-estimator/design.md) (D4).
 
 The eval is never part of `make check` or CI.
+
+## Session 4: from chat to product interface
+
+### Screenshots
+
+Captured by `MEDIA=1 make e2e` against the replay provider (zero spend).
+
+| Typed form | Streaming beside the transcript | Result: hovering a requirement highlights its quote |
+|---|---|---|
+| ![The typed form with the Clinic portal sample and the three choices](docs/media/session-04/form.png) | ![The estimate streaming in beside the submitted transcript](docs/media/session-04/streaming.png) | ![The split view: the hovered requirement's quote highlighted in the transcript](docs/media/session-04/result.png) |
+
+| Dark theme | 375 px |
+|---|---|
+| ![Completed estimate and the Last call tab in the dark theme](docs/media/session-04/dark-theme.png) | ![At 375 px: the Transcript and Estimate tabs over the completed estimate](docs/media/session-04/mobile.png) |
+
+![Load a sample, pick the choices, stream the estimate, link a requirement to its quote, copy the phases table](docs/media/session-04/estimate.gif)
 
 ## Session 3: conversational interface with streaming
 
