@@ -235,7 +235,7 @@ describe("EstimateView announcements and focus", () => {
     expect(live).toHaveAttribute("aria-live", "polite");
     expect(live).toBeEmptyDOMElement();
 
-    rerender(<EstimateView data={fullEstimate} grounding={groundingWithIssues} streaming={false} />);
+    rerender(<EstimateView data={fullEstimate} grounding={groundingWithIssues} streaming={false} completed />);
     expect(liveRegions(container)).toHaveLength(1);
     expect(live).toHaveTextContent("Estimate ready");
     expect(article).toHaveAttribute("aria-busy", "false");
@@ -244,6 +244,12 @@ describe("EstimateView announcements and focus", () => {
   it("does not claim the estimate is ready when the stream stops before the result", () => {
     const { container, rerender } = render(<EstimateView data={breakdown} streaming />);
     rerender(<EstimateView data={breakdown} streaming={false} />);
+    expect(liveRegions(container)[0]).toBeEmptyDOMElement();
+  });
+
+  it("does not claim the estimate is ready when it shows an earlier, complete estimate after a stream that did not finish", () => {
+    const { container, rerender } = render(<EstimateView data={{}} streaming />);
+    rerender(<EstimateView data={fullEstimate} streaming={false} completed={false} />);
     expect(liveRegions(container)[0]).toBeEmptyDOMElement();
   });
 

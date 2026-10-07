@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { AppHeader } from "@/components/app-header";
 import { InspectorPanel, InspectorSheet } from "@/components/inspector/inspector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Replacement, useDraft } from "@/hooks/use-draft";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useThread } from "@/hooks/use-thread";
+import { focusForTyping } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { Composer } from "./composer";
 import { sampleDraft } from "./sample-picker";
@@ -32,32 +33,35 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
   const draft = useDraft();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
+  const noteId = useId();
   // The thread comes from sessionStorage, which the server render cannot see: show it once hydrated.
   const hydrated = useHydrated();
   const call = hydrated ? lastCall : undefined;
 
   // When the draft must be confirmed first, the composer moves focus to that question instead.
   const fillComposer = (next: Replacement) => {
-    if (draft.replace(next)) inputRef.current?.focus();
+    if (draft.replace(next)) focusForTyping(inputRef.current);
   };
   const submit = () => {
     send(draft.value);
     draft.clear();
-    inputRef.current?.focus(); // keeps Esc (stop) and the next transcript one keystroke away
+    focusForTyping(inputRef.current); // keeps Esc (stop) and the next transcript one keystroke away
   };
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col">
+    // Below 480 px tall (`short`) nothing is fixed: the whole page scrolls, so the thread never shrinks to nothing.
+    <div className="flex h-dvh min-h-0 flex-col short:h-auto short:min-h-dvh">
       <AppHeader actions={<InspectorSheet call={call} panelRef={inspectorRef} />} />
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* `relative` contains the sr-only (absolute) descendants, so only this region scrolls, never the page. */}
-          <main aria-busy={!hydrated} className="relative min-h-0 flex-1 overflow-y-auto">
+          {/* `relative` contains the sr-only (absolute) descendants, so only this region scrolls, never the page (except when short). */}
+          <main aria-busy={!hydrated} className="relative min-h-0 flex-1 overflow-y-auto short:overflow-visible">
             <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
               {hydrated ? (
                 <Thread
                   turns={turns}
                   samples={samples}
+                  noteId={noteId}
                   onPickSample={(sample) => fillComposer(sampleDraft(sample))}
                   onStop={stop}
                   onRegenerate={regenerate}
@@ -68,7 +72,7 @@ export const Chat = ({ samples }: { samples: Sample[] }) => {
               )}
             </div>
           </main>
-          <Composer inputRef={inputRef} draft={draft} onSend={submit} samples={samples} />
+          <Composer inputRef={inputRef} draft={draft} onSend={submit} samples={samples} noteId={noteId} />
         </div>
         <InspectorPanel ref={inspectorRef} call={call} />
       </div>

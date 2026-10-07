@@ -4,9 +4,10 @@ import { proxyJson, proxySse } from "./proxy";
 
 const STREAM = "/api/v1/estimate/stream";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const HOST = { host: "localhost:3000" }; // what a browser on the published port sends
 
-const post = (body: string, headers: HeadersInit = {}, url = "http://web/api/estimate/stream") =>
-  new Request(url, { method: "POST", body, headers: { "content-type": "application/json", ...headers } });
+const post = (body: string, headers: Record<string, string> = {}, url = "http://web/api/estimate/stream") =>
+  new Request(url, { method: "POST", body, headers: { ...HOST, "content-type": "application/json", ...headers } });
 
 const sse = (headers: HeadersInit = {}) =>
   new Response("event: status\ndata: {}\n\n", { headers: { "content-type": "text/event-stream", ...headers } });
@@ -14,6 +15,28 @@ const sse = (headers: HeadersInit = {}) =>
 const mockFetch = (response: Response = sse()) => vi.spyOn(globalThis, "fetch").mockResolvedValue(response);
 
 const upstreamInit = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls[0][1] ?? {};
+
+// A request body the test feeds chunk by chunk, counting what the proxy pulls from it.
+const chunkedBody = (chunk: string, { endless = false } = {}) => {
+  const bytes = new TextEncoder().encode(chunk);
+  const seen = { pulls: 0, cancelled: false };
+  const stream = new ReadableStream<Uint8Array>({
+    start: (controller) => controller.enqueue(bytes),
+    pull: (controller) => {
+      seen.pulls += 1;
+      if (endless) controller.enqueue(bytes);
+    },
+    cancel: () => {
+      seen.cancelled = true;
+    },
+  });
+  return { stream, seen };
+};
+// lib.dom's RequestInit has no `duplex`, which undici needs for a stream body
+const streamed = (body: ReadableStream<Uint8Array>, signal?: AbortSignal) => {
+  const init: RequestInit & { duplex: "half" } = { method: "POST", body, duplex: "half", signal, headers: { ...HOST, "content-type": "application/json" } };
+  return new Request("http://web/api/estimate/stream", init);
+};
 
 describe("proxySse", () => {
   beforeEach(() => vi.stubEnv("AI_SERVICE_URL", "http://ai-service:8000"));
@@ -29,13 +52,13 @@ describe("proxySse", () => {
     const fetchMock = mockFetch();
     const body = JSON.stringify({ transcription: "Client: we need a booking app" });
     await proxySse(
-      post(body, { accept: "text/event-stream", "x-request-id": "req-1", cookie: "session=s", authorization: "Bearer t", "x-forwarded-for": "10.0.0.1", origin: "http://evil.example" }),
+      post(body, { accept: "text/event-stream", "x-request-id": "req-1", cookie: "session=s", authorization: "Bearer t", "x-forwarded-for": "10.0.0.1", origin: "http://localhost:3000" }),
       STREAM,
     );
     const init = upstreamInit(fetchMock);
     const headers = new Headers(init.headers);
     expect(init.method).toBe("POST");
-    expect([...headers.keys()].sort()).toEqual(["accept", "content-type", "x-request-id"]);
+    expect([...headers.keys()].sort()).toEqual(["accept", "content-type", "x-request-id"]); // never host or origin
     expect(headers.get("x-request-id")).toBe("req-1");
     expect(await new Response(init.body).text()).toBe(body);
   });
@@ -77,10 +100,42 @@ describe("proxySse", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("stops reading a multi-chunk body as soon as it goes over the limit, and cancels it", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { stream, seen } = chunkedBody("abcd", { endless: true });
+    const res = await proxySse(streamed(stream), STREAM, { maxBodyBytes: 10 });
+    expect(res.status).toBe(413);
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulls).toBeLessThanOrEqual(3); // 3 chunks of 4 bytes cross 10; at most one more is queued
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a bare 499 when the client leaves mid-upload, without calling upstream", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const controller = new AbortController();
+    const { stream, seen } = chunkedBody("{\"transcription\": "); // the rest never arrives
+    const pending = proxySse(streamed(stream, controller.signal), STREAM);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort(new Error("ResponseAborted"));
+    const res = await pending;
+    expect(res.status).toBe(499);
+    expect(await res.text()).toBe("");
+    expect(seen.cancelled).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("always POSTs upstream and never follows an upstream redirect", async () => {
+    const fetchMock = mockFetch();
+    await proxySse(new Request("http://web/api/estimate/stream", { method: "PUT", body: "{}", headers: HOST }), STREAM);
+    const init = upstreamInit(fetchMock);
+    expect(init.method).toBe("POST");
+    expect(init.redirect).toBe("error");
+  });
+
   it("returns a bare 499 when the client left before upstream answered", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const controller = new AbortController();
-    const req = new Request("http://web/api/estimate/stream", { method: "POST", body: "{}", signal: controller.signal });
+    const req = new Request("http://web/api/estimate/stream", { method: "POST", body: "{}", signal: controller.signal, headers: HOST });
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       controller.abort(new Error("ResponseAborted"));
       throw new Error("ResponseAborted");
@@ -116,7 +171,7 @@ describe("proxyJson", () => {
 
   it("GETs the fixed upstream path and passes the JSON through with fresh headers", async () => {
     const fetchMock = mockFetch(Response.json({ prompt_version: "v4" }, { headers: { "x-request-id": "req-up", "set-cookie": "a=b" } }));
-    const req = new Request("http://web/api/context?path=/admin", { headers: { cookie: "session=s" } });
+    const req = new Request("http://web/api/context?path=/admin", { headers: { ...HOST, cookie: "session=s" } });
     const res = await proxyJson(req, "/api/v1/context");
     const [url, init = {}] = fetchMock.mock.calls[0];
     expect(url).toBe("http://ai-service:8000/api/v1/context");
@@ -131,11 +186,102 @@ describe("proxyJson", () => {
     expect(await res.json()).toEqual({ prompt_version: "v4" });
   });
 
+  it("always GETs upstream without a body and never follows an upstream redirect", async () => {
+    const fetchMock = mockFetch(Response.json({}));
+    await proxyJson(new Request("http://web/api/context", { method: "POST", body: "{}", headers: HOST }), "/api/v1/context");
+    const init = upstreamInit(fetchMock);
+    expect(init.method).toBe("GET");
+    expect(init.body).toBeUndefined();
+    expect(init.redirect).toBe("error");
+  });
+
   it("maps an unreachable AI service to 503", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
-    const res = await proxyJson(new Request("http://web/api/context"), "/api/v1/context");
+    const res = await proxyJson(new Request("http://web/api/context", { headers: HOST }), "/api/v1/context");
     expect(res.status).toBe(503);
     expect((await res.json()).error.code).toBe("upstream_unavailable");
+  });
+});
+
+// DNS rebinding: a page on attacker.example whose name now resolves to 127.0.0.1 is same-origin with the BFF, but its
+// requests still carry the attacker's Host. Cross-site pages send Sec-Fetch-Site and Origin.
+describe("request guard", () => {
+  const forbidden = async (res: Response, requestId = "req-g") => {
+    expect(res.status).toBe(403);
+    expect(res.headers.get("x-request-id")).toBe(requestId);
+    expect(await res.json()).toEqual({ error: { code: "forbidden", message: expect.any(String) }, request_id: requestId });
+  };
+  beforeEach(() => {
+    vi.stubEnv("AI_SERVICE_URL", "http://ai-service:8000");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+  it.each(["localhost:3000", "127.0.0.1:3000", "LOCALHOST:3000"])("answers the default allowed host %s", async (host) => {
+    const fetchMock = mockFetch();
+    expect((await proxySse(post("{}", { host }), STREAM)).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a rebound name", { host: "rebind.attacker.example:3000" }],
+    ["another port", { host: "localhost:8080" }],
+    ["no port", { host: "localhost" }],
+  ])("rejects %s with 403 before reading the body or calling upstream", async (_, headers) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const req = post(JSON.stringify({ transcription: "x".repeat(50) }), { ...headers, "x-request-id": "req-g" }, "http://web/api/estimate/stream?refresh=true");
+    await forbidden(await proxySse(req, STREAM));
+    expect(req.bodyUsed).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a request without a Host header", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const req = new Request("http://web/api/estimate/stream", { method: "POST", body: "{}", headers: { "x-request-id": "req-g" } });
+    await forbidden(await proxySse(req, STREAM));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not trust X-Forwarded-Host, which any page can set", async () => {
+    vi.spyOn(globalThis, "fetch");
+    await forbidden(await proxySse(post("{}", { host: "rebind.attacker.example:3000", "x-forwarded-host": "localhost:3000", "x-request-id": "req-g" }), STREAM));
+  });
+
+  it("answers only the hosts in ALLOWED_HOSTS when it is set", async () => {
+    vi.stubEnv("ALLOWED_HOSTS", " estimator.internal:8443 , LOCALHOST:4000 ");
+    const fetchMock = mockFetch();
+    expect((await proxySse(post("{}", { host: "estimator.internal:8443" }), STREAM)).status).toBe(200);
+    expect((await proxySse(post("{}", { host: "localhost:4000" }), STREAM)).status).toBe(200);
+    await forbidden(await proxySse(post("{}", { host: "localhost:3000", "x-request-id": "req-g" }), STREAM));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("guards the JSON helper too", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await forbidden(await proxyJson(new Request("http://web/api/context", { headers: { host: "rebind.attacker.example:3000", "x-request-id": "req-g" } }), "/api/v1/context"));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Sec-Fetch-Site cross-site", { "sec-fetch-site": "cross-site" }],
+    ["Sec-Fetch-Site same-site", { "sec-fetch-site": "same-site" }],
+    ["a foreign Origin", { origin: "http://evil.example" }],
+    ["an Origin on another port", { origin: "http://localhost:5173" }],
+    ["an opaque Origin", { origin: "null" }],
+  ])("rejects a POST with %s", async (_, headers) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const req = post("{}", { ...headers, "x-request-id": "req-g" });
+    await forbidden(await proxySse(req, STREAM));
+    expect(req.bodyUsed).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["from the app's own page", { "sec-fetch-site": "same-origin", origin: "http://localhost:3000" }],
+    ["without fetch metadata (curl, older browsers)", {}],
+  ])("accepts a POST %s", async (_, headers) => {
+    mockFetch();
+    expect((await proxySse(post("{}", headers), STREAM)).status).toBe(200);
   });
 });

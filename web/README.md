@@ -4,6 +4,7 @@ Next.js 16 (App Router, TypeScript strict, Tailwind v4, shadcn/ui Radix base) UI
 
 ## Architecture notes
 - **BFF:** `AI_SERVICE_URL` is server-only (`src/lib/ai-service/env.ts`, parsed lazily per call, never at module scope).
+- **BFF guard:** the proxied routes answer only a `Host` in `ALLOWED_HOSTS` (default `localhost:3000,127.0.0.1:3000`) and refuse cross-site POSTs, before reading the body (`src/lib/ai-service/proxy.ts`). `/api/health` stays open for the container healthcheck.
 - **Typed client:** `src/lib/ai-service/schema.d.ts` is generated from `contracts/openapi.json` (`make web-types`); `make web-check` fails when it is stale.
 - **Cache Components: off.** Everything flows through route handlers and client components, so there is nothing to cache, and the feature adds build-time failure modes (sync IO, uncached data outside `<Suspense>`).
 - **Fonts:** the `geist` package, not `next/font/google`, so Docker and CI builds are hermetic.

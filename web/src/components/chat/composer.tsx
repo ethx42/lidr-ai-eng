@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { Draft } from "@/hooks/use-draft";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { focusForTyping } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { countChars, formatChars, formatCount } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
@@ -16,11 +17,12 @@ type Props = {
   draft: Draft;
   onSend: () => void;
   samples: Sample[];
+  noteId?: string; // a note outside the composer that also describes the transcript field
 };
 
 const isApple = () => /Mac|iPhone|iPad/.test(navigator.userAgent);
 
-export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
+export const Composer = ({ inputRef, draft, onSend, samples, noteId }: Props) => {
   const id = useId();
   const keepRef = useRef<HTMLButtonElement>(null);
   const { value, pending } = draft;
@@ -29,7 +31,7 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
   const empty = length === 0;
   const over = length > limit;
   const apple = useHydrated() && isApple(); // the server cannot know the platform
-  const [inputId, counterId, emptyId, overId, overById, noteId, confirmId] = ["input", "counter", "empty", "over", "over-by", "note", "confirm"].map(
+  const [inputId, counterId, emptyId, overId, overById, confirmId] = ["input", "counter", "empty", "over", "over-by", "confirm"].map(
     (part) => `${id}-${part}`,
   );
 
@@ -40,7 +42,12 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
   const answer = (replace: boolean) => {
     if (replace) draft.confirm();
     else draft.cancel();
-    inputRef.current?.focus();
+    focusForTyping(inputRef.current);
+  };
+  const focusAfterPick = () => {
+    if (!pending) return focusForTyping(inputRef.current);
+    keepRef.current?.focus();
+    return true;
   };
 
   const submit = (event?: FormEvent) => {
@@ -90,13 +97,14 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
           placeholder="Paste a meeting transcript"
           aria-invalid={over || undefined}
           aria-describedby={[counterId, over && overId, over && overById, noteId].filter(Boolean).join(" ")}
-          className="max-h-40 min-h-20 resize-none bg-card sm:max-h-64"
+          // about one line to start, growing with the text; capped so a long draft still leaves the thread room
+          className="max-h-40 min-h-12 resize-none bg-card sm:max-h-[min(16rem,35dvh)]"
         />
         <div className="flex items-center gap-3">
           <SampleMenu
             samples={samples}
             onPick={(sample) => draft.replace(sampleDraft(sample))}
-            onPicked={() => (pending ? keepRef : inputRef).current?.focus()}
+            onPicked={focusAfterPick}
           />
           <span id={counterId} className={cn("num ml-auto text-xs", over ? "text-destructive" : length > limit * 0.9 ? "text-warning" : "text-muted-foreground")}>
             {`${formatCount(length)} / ${formatCount(limit)} `}
@@ -109,14 +117,15 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
             aria-keyshortcuts={apple ? "Meta+Enter" : "Control+Enter"}
           >
             Estimate
-            {/* opacity-80 keeps 4.5:1 on the light primary (70 gave 4.1:1, flagged by axe in the e2e run) */}
+            {/* opacity-80 keeps 4.5:1 on the light primary, at rest and hovered (70 gave 4.1:1, flagged by axe in the e2e run) */}
             <kbd aria-hidden className="hidden font-sans text-xs opacity-80 sm:inline">
               {apple ? "⌘↵" : "Ctrl ↵"}
             </kbd>
           </Button>
         </div>
+        {/* The placeholder says it on screen; this tells screen readers why Estimate is disabled. */}
         {empty && (
-          <p id={emptyId} className="text-xs text-muted-foreground">
+          <p id={emptyId} className="sr-only">
             Paste or type a transcript to estimate.
           </p>
         )}
@@ -127,9 +136,6 @@ export const Composer = ({ inputRef, draft, onSend, samples }: Props) => {
             {over ? "Shorten the transcript to send it." : ""}
           </span>{" "}
           {over && <span id={overById}>{`It is ${formatChars(length - limit)} over the limit.`}</span>}
-        </p>
-        <p id={noteId} className="text-xs text-muted-foreground">
-          Each message is estimated on its own. Conversation memory arrives in a later version.
         </p>
       </div>
     </form>

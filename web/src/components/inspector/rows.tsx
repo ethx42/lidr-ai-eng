@@ -3,11 +3,12 @@ import { cn } from "@/lib/utils";
 
 export const NotAvailable = () => <span className="text-muted-foreground">n/a</span>;
 
-// One label and its value per line, the value right-aligned (numbers in tabular figures).
-export const Row = ({ label, mono, children }: { label: string; mono?: boolean; children: ReactNode }) => (
-  <div className="flex items-baseline justify-between gap-4 py-1.5">
+// One label and its value per line, the value right-aligned (numbers in tabular figures); `stacked` puts a long value
+// under its label, full width.
+export const Row = ({ label, mono, stacked, children }: { label: string; mono?: boolean; stacked?: boolean; children: ReactNode }) => (
+  <div className={cn("flex py-1.5", stacked ? "flex-col gap-1" : "items-baseline justify-between gap-4")}>
     <dt className="shrink-0 text-muted-foreground">{label}</dt>
-    <dd className={cn("num min-w-0 text-right", mono && "font-mono text-xs")}>{children}</dd>
+    <dd className={cn("num min-w-0", !stacked && "text-right", mono && "font-mono text-xs")}>{children}</dd>
   </div>
 );
 

@@ -76,7 +76,8 @@ describe("Inspector, Context tab", () => {
     expect(items).toHaveLength(3);
     expect(items.map((item) => within(item).getByRole("heading", { level: 4 }).textContent)).toEqual(["Dental clinic website", "Gym class booking", "Freight marketplace"]);
     expect(items.map((item) => item.querySelector('[data-slot="badge"]')?.textContent)).toEqual(["small", "medium", "large"]);
-    expect(within(items[1]).getByText("Manager: Members book classes from their phones.")).toBeInTheDocument();
+    // secondary to the estimate in the main column: smaller and muted, never the Summary's size and colour
+    expect(within(items[1]).getByText("Manager: Members book classes from their phones.")).toHaveClass("text-xs", "text-muted-foreground");
 
     const details = closest(within(items[0]).getByText("Estimation"), "details");
     expect(details).not.toHaveAttribute("open");
@@ -161,6 +162,18 @@ describe("Inspector, Last call tab", () => {
 
     await user.click(within(panel).getByRole("button", { name: "Copy request ID" }));
     expect(await navigator.clipboard.readText()).toBe("req-42");
+  });
+
+  // A UUID next to its label and Copy did not fit the 352 px panel, and break-all split it mid-value.
+  it("stacks the request ID under its label, full width and never broken mid-value when it fits", async () => {
+    serve(async () => Response.json(context));
+    const user = renderPanel(done);
+    await showLastCall(user);
+    const label = screen.getByText("Request ID", { selector: "dt" });
+    expect(closest(label, "div")).toHaveClass("flex-col");
+    const code = within(valueOf("Request ID")).getByText("req-42");
+    expect(code).not.toHaveClass("break-all");
+    expect(code).toHaveClass("wrap-anywhere"); // only a value wider than the panel wraps
   });
 
   it("flags a fallback and a cache hit, and shows n/a for an unknown cost and TTFT", async () => {

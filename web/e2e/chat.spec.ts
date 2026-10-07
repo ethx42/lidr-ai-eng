@@ -9,9 +9,10 @@ const MEDIA = process.env.MEDIA === "1";
 const MEDIA_DIR = path.join(__dirname, "..", "..", "docs", "media", "session-03");
 if (MEDIA) mkdirSync(MEDIA_DIR, { recursive: true });
 
-// Its replay cassette streams for about 12 s, long enough to act mid-stream.
+// Its replay cassette streams for about 13 s end to end, long enough to act mid-stream.
 const SAMPLE = "Clinic portal";
-const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+// WCAG 2.2 AA plus axe's best practices; only serious and critical findings fail the run.
+const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 
 const shot = async (page: Page, name: string) => {
   // "disabled" finishes transitions (a tab mid-switch) and stops the skeleton pulse
@@ -30,7 +31,7 @@ const saveGif = (webm: string) => {
 };
 
 const expectAccessible = async (page: Page, state: string) => {
-  const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+  const { violations } = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
   const blocking = violations
     .filter(({ impact }) => impact === "serious" || impact === "critical")
     .map(({ id, impact, nodes }) => ({ id, impact, targets: nodes.map(({ target }) => target.join(" ")) }));
@@ -55,6 +56,8 @@ const projectName = (page: Page) => estimate(page).getByRole("heading", { level:
 const totals = (page: Page) => estimate(page).locator("header dl");
 const stopped = (page: Page) => page.getByRole("status").filter({ hasText: "Stopped" });
 const valueOf = (scope: Locator, label: string) => scope.locator(`dt:text-is("${label}") + dd`);
+// An inline element has one client rect per line it spans.
+const expectOneLine = async (locator: Locator, what: string) => expect(await locator.evaluate((element) => element.getClientRects().length), `${what} on one line`).toBe(1);
 
 // The sample cards render once the thread has hydrated from sessionStorage.
 const pickSample = async (page: Page) => {
@@ -81,8 +84,8 @@ const expectPartial = (page: Page) =>
     )
     .toBe(true);
 
-const expectResult = async (page: Page) => {
-  await expect(estimate(page).getByRole("status")).toHaveText("Estimate ready");
+const expectResult = async (page: Page, { timeout }: { timeout?: number } = {}) => {
+  await expect(estimate(page).getByRole("status")).toHaveText("Estimate ready", { timeout });
   await expect(estimate(page)).toHaveAttribute("aria-busy", "false");
   await expect(totals(page).locator("[data-slot=skeleton]")).toHaveCount(0);
   await expect(totals(page)).toContainText(/Expected\s*[\d,.]+ h/);
@@ -128,7 +131,10 @@ test.describe("chat", () => {
     await expect(valueOf(call, "Provider")).toHaveText("Replay");
     await expect(valueOf(call, "Model")).toHaveText("replay");
     await expect(valueOf(call, "Request ID").locator("code")).toHaveText(requestId);
+    await expectOneLine(valueOf(call, "Request ID").locator("code"), "the request ID");
     await shot(page, "result-inspector");
+    await tasks.scrollIntoViewIfNeeded();
+    if (MEDIA) await page.waitForTimeout(1500); // the GIF holds on the tasks table
 
     await estimate(page).getByRole("button", { name: /^Evidence for / }).first().hover();
     const evidence = page.locator("[data-slot=hover-card-content]");
@@ -143,7 +149,16 @@ test.describe("chat", () => {
     const markdown = await page.evaluate(() => navigator.clipboard.readText());
     expect(markdown.split("\n")[0]).toBe(`## Estimation: ${await projectName(page).textContent()}`);
     expect(markdown).toContain("| ID | Phase | Task |");
+    // Sonner's own CSS animates toasts for 400 ms in 13 px system-ui; they follow the motion and type tokens instead.
+    const toast = await page.locator("[data-sonner-toast]").filter({ hasText: "Estimate copied as markdown" }).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { durations: style.transitionDuration.split(",").map(parseFloat), fontSize: style.fontSize, fontFamily: style.fontFamily, body: getComputedStyle(document.body).fontFamily };
+    });
+    expect(Math.max(...toast.durations), "toast transition duration, in s").toBeLessThanOrEqual(0.15);
+    expect(toast.fontSize).toBe("14px");
+    expect(toast.fontFamily).toBe(toast.body);
     if (MEDIA) {
+      await page.waitForTimeout(1500); // the GIF holds on the toast
       await page.screencast.stop();
       saveGif(video);
     }
@@ -165,7 +180,7 @@ test.describe("chat", () => {
     await regenerate.click();
     await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
     await expect(stopped(page)).toHaveCount(0);
-    await expectResult(page);
+    await expectResult(page, { timeout: 45_000 }); // a whole replay (about 13 s), under parallel load
     await expect(page.getByRole("button", { name: "Copy as markdown" })).toBeVisible();
   });
 
@@ -228,8 +243,13 @@ for (const colorScheme of ["light", "dark"] as const) {
       await pickSample(page);
       await settled(page.getByRole("form", { name: "New estimate" }));
       await expectAccessible(page, "sample picked");
+      // axe checks contrast in the state it finds: hovered, the primary button must keep 4.5:1 too
+      const estimateButton = page.getByRole("button", { name: "Estimate", exact: true });
+      await estimateButton.hover();
+      await settled(estimateButton);
+      await expectAccessible(page, "Estimate hovered");
 
-      await page.getByRole("button", { name: "Estimate", exact: true }).click();
+      await estimateButton.click();
       await expectPartial(page);
       await expectAccessible(page, "streaming");
 
@@ -254,7 +274,6 @@ test.describe("375 px wide", () => {
     await sendSample(page);
     await expectResult(page);
     await expectNoHorizontalScroll(page);
-    await shot(page, "mobile");
 
     const trigger = page.getByRole("button", { name: "Inspector" });
     await trigger.click();
@@ -263,11 +282,39 @@ test.describe("375 px wide", () => {
     await settled(sheet);
     const call = await openLastCall(sheet);
     await expect(valueOf(call, "Provider")).toHaveText("Replay");
+    await expectOneLine(valueOf(call, "Request ID").locator("code"), "the request ID");
     await expectNoHorizontalScroll(page);
     await expectAccessible(page, "inspector sheet");
+    await shot(page, "mobile");
 
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
     await expect(trigger).toBeFocused();
   });
 });
+
+// A landscape phone, and 1280x1024 at 400% zoom (the WCAG 1.4.10 reference): the header and composer once took the
+// whole height there. Below 480 px tall the page scrolls as a whole, so the estimate keeps a usable height.
+for (const viewport of [{ width: 640, height: 360 }, { width: 320, height: 256 }]) {
+  test.describe(`${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("the estimate keeps a usable height and the composer stays reachable", async ({ page }) => {
+      await page.goto("/");
+      await sendSample(page);
+      await expectResult(page);
+      const inView = await page.evaluate(() => {
+        const article = document.querySelector("article");
+        const main = document.querySelector("main");
+        if (!article || !main) return 0;
+        article.scrollIntoView({ block: "start" });
+        const [box, region] = [article.getBoundingClientRect(), main.getBoundingClientRect()];
+        return Math.min(box.bottom, region.bottom, window.innerHeight) - Math.max(box.top, region.top, 0);
+      });
+      expect(inView, "px of the estimate in view").toBeGreaterThanOrEqual(120);
+      await composer(page).scrollIntoViewIfNeeded();
+      await expect(composer(page)).toBeInViewport();
+      await expectNoHorizontalScroll(page);
+    });
+  });
+}

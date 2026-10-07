@@ -130,6 +130,45 @@ describe("useEstimateStream", () => {
     expect(result.current.state).toEqual({ status: "cancelled", partial: breakdown1 });
   });
 
+  it("ignores terminal frames whose payload is not an error or result object", async () => {
+    const { result } = renderStream();
+    act(() => result.current.start(request));
+    stream.push(
+      frame("result", 5),
+      frame("result", []),
+      frame("result", null),
+      frame("error", "Provider down."),
+      frame("error", { message: "no code" }),
+      frame("status", { phase: "validating", provider: null, model: null }), // sentinel: frames are applied in order
+    );
+    await waitFor(() => expect(result.current.state).toMatchObject({ phase: "validating" }));
+    expect(result.current.state.status).toBe("streaming");
+    stream.push(frame("result", response));
+    stream.close();
+    await waitFor(() => expect(result.current.state).toEqual({ status: "done", result: response, requestId: "req-1" }));
+  });
+
+  it("skips SSE comments (keep-alive pings) and joins multi-line data", async () => {
+    const { result } = renderStream();
+    act(() => result.current.start(request));
+    stream.push(": keep-alive\n\n", `event: partial\ndata: {"seq": 1,\ndata: "breakdown": ${JSON.stringify(breakdown1)}}\n\n`, ": ping\n\n");
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: "streaming", partial: breakdown1 }));
+    stream.push(frame("result", response));
+    stream.close();
+    await waitFor(() => expect(result.current.state.status).toBe("done"));
+  });
+
+  it("keeps the response's request id when the stream breaks or an error frame has none", async () => {
+    const { result } = renderStream();
+    act(() => result.current.start(request));
+    stream.close();
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: "error", error: { code: "stream_interrupted", requestId: "req-1" } }));
+
+    act(() => result.current.start(request));
+    stream.push(frame("error", { code: "internal_error", message: "Unexpected.", retryable: false }));
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: "error", error: { code: "internal_error", requestId: "req-1" } }));
+  });
+
   it("maps HTTP 422 JSON to invalid_request with the body's details, without parsing SSE", async () => {
     const details = [{ loc: ["body", "transcription"], msg: "String should have at most 50000 characters", type: "string_too_long" }];
     fetchMock.mockResolvedValueOnce(Response.json({ error: { code: "invalid_request", message: "Invalid request.", details }, request_id: "req-422" }, { status: 422 }));
@@ -177,6 +216,13 @@ describe("useEstimateStream", () => {
     await waitFor(() => expect(result.current.state).toMatchObject({ status: "error", error: { code: "stream_interrupted", retryable: true } }));
   });
 
+  it("ends in stream_interrupted, with the request id, when a 200 response has no body at all", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { headers: { "content-type": "text/event-stream", "x-request-id": "req-nb" } }));
+    const { result } = renderStream();
+    act(() => result.current.start(request));
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: "error", error: { code: "stream_interrupted", retryable: true, requestId: "req-nb" } }));
+  });
+
   it("ends in stream_interrupted when the request fails", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     const { result } = renderStream();
@@ -208,10 +254,13 @@ describe("useEstimateStream", () => {
     expect(result.current.current()).toEqual(result.current.state); // stop() after done changes nothing
   });
 
-  it("aborts an in-flight request on unmount", () => {
+  it("aborts an in-flight request on unmount and settles it as cancelled", () => {
     const { result, unmount } = renderStream();
     act(() => result.current.start(request));
+    const { current } = result.current;
     unmount();
     expect(signalOf()?.aborted).toBe(true);
+    // Fast Refresh runs this cleanup but keeps the state: it must not stay "streaming" with nothing left to end it
+    expect(current()).toEqual({ status: "cancelled", partial: null });
   });
 });

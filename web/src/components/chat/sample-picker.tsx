@@ -12,7 +12,8 @@ type Props = { samples: Sample[]; onPick: (sample: Sample) => void };
 export const sampleDraft = (sample: Sample): Replacement => ({ text: sample.text, what: `the “${sample.title}” sample` });
 
 // Picking a sample only fills the composer; the user still reviews and sends it.
-export const SampleMenu = ({ samples, onPick, onPicked }: Props & { onPicked: () => void }) => {
+// `onPicked` returns whether it moved focus; when it did not, focus returns to the trigger.
+export const SampleMenu = ({ samples, onPick, onPicked }: Props & { onPicked: () => boolean }) => {
   const picked = useRef(false);
   return (
     <DropdownMenu>
@@ -29,8 +30,7 @@ export const SampleMenu = ({ samples, onPick, onPicked }: Props & { onPicked: ()
         onCloseAutoFocus={(event) => {
           if (!picked.current) return; // dismissed: focus returns to the trigger
           picked.current = false;
-          event.preventDefault();
-          onPicked();
+          if (onPicked()) event.preventDefault();
         }}
       >
         {samples.map((sample) => (

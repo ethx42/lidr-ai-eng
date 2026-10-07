@@ -14,7 +14,7 @@ Browser
   ▼
 web/  Next.js 16 App Router, port 3000 (published on 127.0.0.1 only)
   ├─ React UI        chat thread, composer, progressive estimate view, inspector panel
-  └─ BFF handlers    fixed upstream paths, header allowlist, 2 MB body cap, abort propagation
+  └─ BFF handlers    Host allowlist, same-origin POSTs, fixed upstream paths, header allowlist, 2 MB body cap, abort propagation
   │  http://ai-service:8000, Compose network only (AI_SERVICE_URL, server-side)
   ▼
 ai-service  FastAPI (repository root, app/)
@@ -104,7 +104,7 @@ The AI service reads environment variables and `.env` (pydantic-settings; enviro
 | `REDIS_URL` | unset | exact-match response cache; unset disables it. Compose sets it to its own Redis |
 | `CACHE_TTL_SECONDS` | `86400` | cache entry lifetime |
 | `REPLAY_CASSETTE_DIR` | `tests/cassettes` | where `replay` looks for recorded streams |
-| `REPLAY_DELAY_SCALE` | `1` | `replay` pacing: `0` instant, `1` as recorded (a recorded estimate takes 8–12 s) |
+| `REPLAY_DELAY_SCALE` | `1` | `replay` pacing: `0` instant, `1` as recorded (a recorded estimate takes about 8–13 s end to end) |
 | `LLM_TEMPERATURE` | `0.2` | sent only to models that support it |
 | `LLM_REASONING_EFFORT` | unset | `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`; sent only to reasoning models that accept that level (others get no effort and a startup warning listing the supported levels) |
 | `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS` | `60`, `2`, `4096` | the timeout applies per read; SDK retries apply only to the last provider in the chain (the router is the retry for the others) |
@@ -119,6 +119,7 @@ Web (`web/`):
 | Variable | Default | Notes |
 |---|---|---|
 | `AI_SERVICE_URL` | — | absolute http(s) URL of the AI service, read per request on the server only; Compose sets `http://ai-service:8000` |
+| `ALLOWED_HOSTS` | `localhost:3000,127.0.0.1:3000` | comma-separated `host:port` values the BFF answers (the browser's `Host` header); anything else gets `403`. Add the name and port you browse to if it is not one of these. Server-only; an empty value keeps the default |
 
 Live tooling (read from the process environment, not by the app):
 
@@ -146,7 +147,7 @@ make down               # stop and remove the containers
 make dev                # dev images: reload, compose watch syncs ./app and ./web, rebuilds on lockfile changes
 ```
 
-- Open http://localhost:3000. Only `web` publishes a port, and only on loopback: there is no auth and the BFF spends the AI service's keys, so nothing is reachable from the LAN. `make dev` also publishes the AI service on http://localhost:8000, again loopback only. `tests/test_compose.py` enforces both rules.
+- Open http://localhost:3000. Only `web` publishes a port, and only on loopback: there is no auth and the BFF spends the AI service's keys, so nothing is reachable from the LAN. The BFF also answers only requests whose `Host` is in `ALLOWED_HOSTS` and refuses cross-site POSTs (`Sec-Fetch-Site`, `Origin`), so a web page that rebinds its own name to 127.0.0.1 (DNS rebinding) cannot spend the keys either. `make dev` also publishes the AI service on http://localhost:8000, again loopback only. `tests/test_compose.py` enforces both rules.
 - `make up` uses your `.env`, so it makes live calls with your keys. For a zero-spend demo, run the offline stack the e2e tests use: `docker compose -f compose.yaml -f compose.e2e.yaml up --build --wait`. It sets `LLM_PROVIDER=replay` and `LLM_FALLBACKS=none`, disables the cache, mounts `tests/cassettes` read-only and drops `env_file` entirely (`!reset`), so the stack never holds a key. The three sample transcripts in the UI replay real recorded streams; anything else gets a synthesised stream.
 - The AI service runs one uvicorn worker (cooldown state is per process) with a 30 s graceful shutdown, so open streams can drain on `make down`.
 
@@ -212,7 +213,7 @@ Stream events, in order:
 
 Exactly one terminal event per stream; keep-alive comments every 15 s. A cache hit streams `status{cache_hit}` then `result`. A client disconnect closes the upstream provider stream, logs `outcome=cancelled` and caches nothing.
 
-Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
+Errors use `{"error": {"code", "message"}, "request_id"}`: `422 invalid_request`, `429 upstream_rate_limited`, `502 invalid_model_output` / `upstream_error` (also for exhausted provider quota, which is not retried), `503 upstream_unavailable`. After a stream has started the same codes arrive as an `error` event (`retryable` is true for 429 and 503), and an unexpected failure arrives as `internal_error`. The BFF adds `403 forbidden` (a `Host` outside `ALLOWED_HOSTS`, or a cross-site POST), `413 payload_too_large` (body over 2 MB) and `503 upstream_unavailable` when the AI service is unreachable.
 
 ## Quality gates
 
@@ -275,7 +276,7 @@ The brief asks for a Streamlit file, `streamlit_app.py`. It is replaced by the R
 |---|---|---|
 | `streamlit run streamlit_app.py` opens a chat interface in the browser | `make up`, then open http://localhost:3000: a chat with three sample transcripts on the empty state | Compose healthchecks (`make up` returns only when `web`, `ai-service` and `redis` are healthy); `web/e2e/chat.spec.ts` (empty state); `docs/media/session-03/empty-state.png` |
 | You can paste a meeting transcript and get a software estimate | Composer: paste or pick a sample, live character counter against the service's limit, ⌘/Ctrl+Enter or **Estimate** sends. Browser → `POST /api/estimate/stream` (BFF) → `POST /api/v1/estimate/stream` | `tests/api/test_estimate_stream.py::test_stream_contract`; `web/src/components/chat/chat.test.tsx`; `web/e2e/chat.spec.ts` (sample → result with totals and tasks table); live smoke table below; `docs/media/session-03/result-inspector.png` |
-| The conversation stays on screen (several questions in a row) | The thread lives in React state plus `sessionStorage` (the 20 latest completed turns, restored on reload). Each turn is estimated on its own, and the composer says so; conversation memory is session 5 | `web/src/hooks/use-thread.test.ts` ("streams each sent transcript as its own turn", "restores completed turns after a reload"); `web/e2e/chat.spec.ts` (reload restores the completed turn) |
+| The conversation stays on screen (several questions in a row) | The thread lives in React state plus `sessionStorage` (the 20 latest completed turns, restored on reload). Each turn is estimated on its own, and a note above the thread says so; conversation memory is session 5 | `web/src/hooks/use-thread.test.ts` ("streams each sent transcript as its own turn", "restores completed turns after a reload"); `web/e2e/chat.spec.ts` (reload restores the completed turn) |
 | The answer streams, it does not appear all at once | SSE `partial` events render the estimate progressively into skeletons shaped like the final layout, with status steps; Stop cancels server-side and keeps the partial. The provider streams token by token; the UI receives parsed partial snapshots of the structured estimate at most every 100 ms, and the final result is validated (spec D2) | `tests/unit/test_llm_service_stream.py::test_stream_yields_status_partials_then_result`; `web/src/hooks/use-estimate-stream.test.ts`; `web/e2e/chat.spec.ts` (a partial renders before the totals; Stop mid-stream); live TTFT ~2.2 s against 14–28 s total; `docs/media/session-03/streaming.png`, `docs/media/session-03/chat.gif` |
 | The API key is read from `.env` or `st.secrets`, not from the code | Keys are read from `.env` (pydantic-settings) by the AI service only; Compose passes `.env` to `ai-service` alone through `env_file`, with no `${…}` interpolation; the browser and the web container never hold a key | `tests/test_structure.py::test_env_is_git_ignored`, `::test_no_api_keys_in_repo_files`; `tests/unit/test_config.py::test_keys_masked_in_repr_and_str`, `::test_startup_errors_never_echo_a_key`; `tests/test_compose.py::test_only_the_ai_service_reads_env_files`, `::test_no_host_shell_interpolation`, `::test_e2e_stack_is_offline_and_keyless` |
 
@@ -319,9 +320,9 @@ Produced by `MEDIA=1 make e2e` against the offline stack. The inspector therefor
 
 | Dark theme | Mobile (375 px) |
 |---|---|
-| ![Completed estimate and the Last call tab in the dark theme](docs/media/session-03/dark-theme.png) | ![Completed estimate at 375 px, inspector behind a header button](docs/media/session-03/mobile.png) |
+| ![Completed estimate and the Last call tab in the dark theme](docs/media/session-03/dark-theme.png) | ![The inspector at 375 px: a sheet opened from a header button, on the Last call tab](docs/media/session-03/mobile.png) |
 
-![Pick a sample, stream the estimate, inspect the call, copy as markdown](docs/media/session-03/chat.gif)
+![Pick a sample, stream the estimate, inspect the call, read the tasks table, copy as markdown](docs/media/session-03/chat.gif)
 
 ### Known limitations
 
@@ -330,7 +331,7 @@ Produced by `MEDIA=1 make e2e` against the offline stack. The inspector therefor
 - A cancelled call logs zero tokens and no cost (usage arrives with the final event), so the logs under-report what Stop still cost.
 - Cooldown state is per process and has no half-open probe.
 - A cache hit is observable (flag, zero cost, lookup-sized latency), so a caller can tell whether a transcript was estimated before; the cache key gains a tenant once auth exists.
-- Deferred BFF and container hardening: upstream method fixed per helper, `redirect: "error"` on the upstream fetch, `no-new-privileges`/`cap_drop`, a separate backend network.
+- Deferred container hardening: `no-new-privileges`/`cap_drop`, a separate backend network.
 
 ## M1 (session 2) verification checklist
 

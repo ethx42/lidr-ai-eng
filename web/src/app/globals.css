@@ -19,6 +19,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Short viewports (landscape phones, 400% zoom): the fixed header and composer would leave the thread no height. */
+@custom-variant short (@media (max-height: 30rem));
 
 @theme inline {
   --color-background: var(--background);
@@ -227,4 +229,22 @@
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Sonner injects its own unlayered CSS after this file: 400-500 ms transitions, 13 px system-ui text. Toasts follow the
+   tokens instead (motion <= 150 ms, the app's font, the 14 px step). The durations need !important to beat its
+   five-attribute selectors; reduced motion still turns them off (--motion-base is 0, and sonner sets transition: none). */
+[data-sonner-toaster],
+[data-sonner-toaster] * {
+  transition-duration: var(--motion-base) !important;
+}
+[data-sonner-toaster] [data-sonner-toast] {
+  animation-duration: var(--motion-base) !important;
+}
+:root [data-sonner-toaster] {
+  font-family: inherit;
+}
+:root [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  font-size: 0.875rem; /* --text-sm */
+  line-height: 1.25rem;
 }
