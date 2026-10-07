@@ -33,10 +33,10 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 ## pre-session-04
 
 - [x] Plan audited (early, ~40 plan defects fixed; rulings in Notes)
-- [ ] Task 1: Typed request contract
-- [ ] Task 2: Jinja2 prompt loader and estimation/v1
-- [ ] Task 3: Context endpoint and cache isolation for typed params
-- [ ] Task 4: prompt_version query parameter
+- [x] Task 1: Typed request contract (cef6ad0)
+- [x] Task 2: Jinja2 prompt loader and estimation/v1 (9552574)
+- [x] Task 3: Context endpoint and cache isolation for typed params (5a4e043)
+- [x] Task 4: prompt_version query parameter (f5c4ba2)
 - [ ] Task 5: Output-format layouts in the markdown renderer
 - [ ] Task 6: Prompt v2 and the comparison eval
 - [ ] Task 7: Web — typed form workspace with evidence-linked split view
