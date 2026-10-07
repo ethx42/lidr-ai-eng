@@ -70,4 +70,34 @@ describe("POST /api/estimate/stream", () => {
     await POST(post(`http://web/api/estimate/stream${query}`, "{}"));
     expect(fetchMock.mock.calls[0][0]).toBe(expected);
   });
+
+  it.each([
+    ["?prompt_version=v2&refresh=true", { prompt_version: "v2", refresh: "true" }],
+    ["?refresh=true&prompt_version=v2&model=gpt-5", { prompt_version: "v2", refresh: "true" }],
+    ["?prompt_version=v1%26refresh%3Dtrue%26model%3Dx", {}], // not a version: dropped, so nothing is smuggled
+    ["?prompt_version=../v1&refresh=true", { refresh: "true" }],
+    ["?prompt_version=v0", {}],
+    ["?prompt_version=v12", { prompt_version: "v12" }],
+    ["?prompt_version=", {}],
+    ["?foo=1", {}],
+    // the choices travel in the JSON body; as query parameters they are not forwarded at all
+    ["?project_type=mobile_app&detail_level=detailed&output_format=narrative", {}],
+  ])("forwards a valid prompt_version next to refresh from %s, rebuilt from allowlisted keys", async (query, expected) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { headers: { "content-type": "text/event-stream" } }));
+    const { POST } = await import("./route");
+    await POST(post(`http://web/api/estimate/stream${query}`, "{}"));
+    const upstream = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(upstream.pathname).toBe("/api/v1/estimate/stream");
+    expect(Object.fromEntries(upstream.searchParams)).toEqual(expected);
+  });
+
+  it("checks the Host and the origin before forwarding a prompt version", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { POST } = await import("./route");
+    const crossSite = await POST(post("http://web/api/estimate/stream?prompt_version=v2", "{}", { "sec-fetch-site": "cross-site", origin: "https://evil.example" }));
+    const foreignHost = await POST(post("http://web/api/estimate/stream?prompt_version=v2", "{}", { host: "rebind.attacker.example:3000" }));
+    expect([crossSite.status, foreignHost.status]).toEqual([403, 403]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

@@ -3,13 +3,14 @@
 import { ChevronRight, Copy } from "lucide-react";
 import { useId } from "react";
 import { Empty } from "@/components/estimate/section";
-import { useServiceContext } from "@/components/service-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { copyText } from "@/lib/copy";
 import { type ReferenceModel, readContext } from "@/lib/estimate/read";
+import { cn } from "@/lib/utils";
 import { NotAvailable, Row, Rows } from "./rows";
+import type { PromptContext } from "./use-prompt-context";
 
 // Long prompt text scrolls inside its own box; focusable so keyboard users can scroll it too.
 const CODE = "overflow-auto rounded-md border bg-background p-3 font-mono text-xs whitespace-pre-wrap wrap-anywhere";
@@ -51,16 +52,16 @@ const Reference = ({ reference: { size, meetingSummary, projectName, estimation 
   </li>
 );
 
-// What the model sees on every call: the system prompt and the reference estimations injected into it (CAG).
-export const ContextTab = () => {
-  const context = useServiceContext();
+// What the model sees for the form's current choices: the system prompt and the reference estimations injected into it
+// (CAG). While the prompt for new choices loads, the previous one stays, dimmed and marked busy.
+export const ContextTab = ({ context: { context, loading } }: { context: PromptContext }) => {
   const promptId = useId();
   const referencesId = useId();
   if (context === undefined) return <ContextSkeleton />;
   const { promptVersion, systemPrompt, references } = readContext(context);
   if (!systemPrompt) return <Empty>The prompt and references could not be loaded from the AI service. Reload the page to try again.</Empty>;
   return (
-    <div className="flex flex-col gap-8">
+    <div aria-busy={loading} className={cn("flex flex-col gap-8 transition-opacity", loading && "opacity-60")}>
       <div className="flex flex-col gap-3">
         <Rows>
           <Row label="Prompt version" mono>

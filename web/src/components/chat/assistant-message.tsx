@@ -5,6 +5,7 @@ import { type Ref, useEffect, useEffectEvent, useRef } from "react";
 import { EstimateView } from "@/components/estimate/estimate-view";
 import { StatusSteps } from "@/components/estimate/status-steps";
 import { Button } from "@/components/ui/button";
+import { EstimateDocument, type ResultView } from "@/components/workspace/result-view-toggle";
 import { copyText } from "@/lib/copy";
 import { readEstimate, readText } from "@/lib/estimate/read";
 import type { StreamState } from "@/lib/estimate/types";
@@ -12,7 +13,20 @@ import { AiDisclosure } from "./ai-disclosure";
 import { ErrorCard } from "./error-card";
 
 type Done = Extract<StreamState, { status: "done" }>;
-type Props = { state: StreamState; kept?: Done; onStop: () => void; onRegenerate: () => void; onEditTranscript: () => void; stopRef?: Ref<HTMLButtonElement> };
+type Props = {
+  state: StreamState;
+  kept?: Done;
+  onStop: () => void;
+  onRegenerate: () => void;
+  onEditTranscript: () => void;
+  stopRef?: Ref<HTMLButtonElement>;
+  view?: ResultView; // "document" shows a completed estimate as the server's markdown
+  activeRequirement?: string;
+  onRequirementFocus?: (id: string | null) => void;
+};
+
+// A regenerate that was stopped or failed shows the estimate it would have replaced.
+export const keptFor = (state: StreamState, kept?: Done) => (state.status === "cancelled" || state.status === "error" ? kept : undefined);
 
 // Plain text, so the questions paste cleanly into an email to the client.
 const numbered = (items: string[]) => items.map((item, i) => `${i + 1}. ${item}`).join("\n");
@@ -49,14 +63,13 @@ const DoneActions = ({ state, onRegenerate }: { state: Done; onRegenerate?: () =
 
 const isComposing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229; // Safari reports it only via 229
 
-export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript, stopRef }: Props) => {
+export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript, stopRef, view = "structured", activeRequirement, onRequirementFocus }: Props) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const previous = useRef(state.status);
   const focusWithin = useRef(false); // focus was last inside this message, or one of its actions was used
   const streaming = state.status === "streaming";
   const stop = useEffectEvent(onStop);
-  // A regenerate that was stopped or failed shows the estimate it would have replaced.
-  const kept = state.status === "cancelled" || state.status === "error" ? keptResult : undefined;
+  const kept = keptFor(state, keptResult);
   const shown: StreamState = kept ?? state;
   const own = (action: () => void) => () => {
     focusWithin.current = true; // Safari does not focus a clicked button
@@ -128,12 +141,18 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
       )}
       {content && (
         <>
-          <EstimateView
-            data={content}
-            grounding={shown.status === "done" ? shown.result.grounding : undefined}
-            streaming={streaming}
-            completed={state.status === "done"}
-          />
+          {view === "document" && shown.status === "done" ? (
+            <EstimateDocument markdown={readText(shown.result.estimation) ?? ""} />
+          ) : (
+            <EstimateView
+              data={content}
+              grounding={shown.status === "done" ? shown.result.grounding : undefined}
+              streaming={streaming}
+              completed={state.status === "done"}
+              activeRequirement={activeRequirement}
+              onRequirementFocus={onRequirementFocus}
+            />
+          )}
           <AiDisclosure />
         </>
       )}

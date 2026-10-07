@@ -7,8 +7,10 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContextTab } from "./context-tab";
 import { type Call, MetricsTab } from "./metrics-tab";
+import type { PromptContext } from "./use-prompt-context";
 
-type Props = { call?: Call };
+// `context` comes from one `usePromptContext` in the workspace, shared by the panel and the sheet.
+type Props = { call?: Call; context: PromptContext };
 
 const TITLE = "text-sm font-semibold";
 // Matches Tailwind's `lg`, where the panel replaces the sheet.
@@ -18,7 +20,7 @@ const WIDE = "(min-width: 1024px)";
 // `!` beats that unlayered rule's 2 px outer offset.
 const PANEL = "relative min-h-0 overflow-y-auto p-4 focus-visible:-outline-offset-2!";
 
-const InspectorBody = ({ call, title }: Props & { title: ReactNode }) => (
+const InspectorBody = ({ call, context, title }: Props & { title: ReactNode }) => (
   <Tabs defaultValue="context" className="min-h-0 flex-1 gap-0">
     <div className="flex shrink-0 flex-col gap-3 border-b px-4 pt-4 pb-3">
       {title}
@@ -28,7 +30,7 @@ const InspectorBody = ({ call, title }: Props & { title: ReactNode }) => (
       </TabsList>
     </div>
     <TabsContent value="context" className={PANEL}>
-      <ContextTab />
+      <ContextTab context={context} />
     </TabsContent>
     <TabsContent value="call" className={PANEL}>
       <MetricsTab call={call} />
@@ -36,13 +38,14 @@ const InspectorBody = ({ call, title }: Props & { title: ReactNode }) => (
   </Tabs>
 );
 
-// From 1024 px: a panel beside the thread. Below that it is hidden and `InspectorSheet` opens the same content.
-export const InspectorPanel = ({ call, ref }: Props & { ref?: Ref<HTMLElement> }) => {
+// From 1024 px: a panel beside the workspace. Below that it is hidden and `InspectorSheet` opens the same content.
+export const InspectorPanel = ({ call, context, ref }: Props & { ref?: Ref<HTMLElement> }) => {
   const titleId = useId();
   return (
     <aside ref={ref} tabIndex={-1} aria-labelledby={titleId} className="hidden w-88 shrink-0 flex-col border-l bg-surface lg:flex xl:w-96">
       <InspectorBody
         call={call}
+        context={context}
         title={
           <h2 id={titleId} className={TITLE}>
             Inspector
@@ -55,7 +58,7 @@ export const InspectorPanel = ({ call, ref }: Props & { ref?: Ref<HTMLElement> }
 
 // The header button below 1024 px; the sheet is a modal dialog (focus trapped, Esc closes, focus returns to the button).
 // Widening past 1024 px closes it and hands focus to the panel, because the button is hidden from then on.
-export const InspectorSheet = ({ call, panelRef }: Props & { panelRef: RefObject<HTMLElement | null> }) => {
+export const InspectorSheet = ({ call, context, panelRef }: Props & { panelRef: RefObject<HTMLElement | null> }) => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -86,7 +89,7 @@ export const InspectorSheet = ({ call, panelRef }: Props & { panelRef: RefObject
         }}
         className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md"
       >
-        <InspectorBody call={call} title={<SheetTitle className={TITLE}>Inspector</SheetTitle>} />
+        <InspectorBody call={call} context={context} title={<SheetTitle className={TITLE}>Inspector</SheetTitle>} />
       </SheetContent>
     </Sheet>
   );

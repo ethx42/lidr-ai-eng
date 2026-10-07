@@ -99,8 +99,9 @@ export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
   }, []);
   const current = useCallback(() => latest.current, []);
 
+  // `promptVersion` "" means the AI service's default; `refresh` skips its exact-match cache.
   const start = useCallback(
-    (body: Schemas["EstimateRequest"], { refresh = false }: { refresh?: boolean } = {}) => {
+    (body: Schemas["EstimateRequest"], { refresh = false, promptVersion = "" }: { refresh?: boolean; promptVersion?: string } = {}) => {
       controllerRef.current?.abort();
       const controller = new AbortController();
       controllerRef.current = controller;
@@ -110,7 +111,11 @@ export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
       const update: Update = (next) => {
         if (!controller.signal.aborted) commit(next);
       };
-      void run(refresh ? `${endpoint}?refresh=true` : endpoint, body, controller.signal, update);
+      const query = new URLSearchParams();
+      if (promptVersion) query.set("prompt_version", promptVersion);
+      if (refresh) query.set("refresh", "true");
+      const search = query.toString();
+      void run(search ? `${endpoint}?${search}` : endpoint, body, controller.signal, update);
     },
     [endpoint, commit],
   );
