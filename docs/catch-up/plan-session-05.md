@@ -569,6 +569,7 @@ async def test_conversation_never_uses_the_cache(conversation, spy_cache) -> Non
 - Do not assign `session.last_used = clock()` after a turn without moving the session to the LRU end: either drop that assignment (the TTL is far longer than a turn; `get` already refreshes it) or add a store-owned `touch(session_id)` that updates both, with a test.
 - Every history passed to a provider must be non-empty and end with a user turn (`as_chat` guarantees it); the provider's `UpstreamError("no_user_message")` is only a backstop.
 - Attachment extraction: call the process-isolated entry point Task 4 adds (killable child with time and memory limits; see task-4-report.md "Fix round 2") via `asyncio.to_thread` so the event loop never blocks; never log `AttachmentError` with `exc_info` (chained parser messages can quote content).
+- From Task 5's re-review (do first, own commit `fix(prompts): blank-after-cleaning metadata renders as absent`): in `app/prompts/loader.py` `_neutral_metadata`, use `_fact(v) or None` for the name and scope so a value made only of brackets does not render the metadata header with no items (test); `test_metadata_is_data_never_instructions` asserts `METADATA_RULE in split_system(system)[0]` (import from `app/prompts/cache_prefix.py`).
 
 ---
 

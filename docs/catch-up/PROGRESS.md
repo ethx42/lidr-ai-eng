@@ -52,7 +52,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - [x] Task 2: Session state — app/sessions.py (55809a8, ec26057)
 - [x] Task 3: Output schema technologies and the metadata merge (e4d2443, 19c4bc0)
 - [x] Task 4: Attachment extraction (path B) (413205a, 7a1d209, 8c78af9, 64c5ff6, 551aa15, e6878e1; merged 637b99c)
-- [ ] Task 5: Prompt estimation/v3 with project metadata and attachments
+- [x] Task 5: Prompt estimation/v3 with project metadata and attachments (bae6464, d9047db, 45cbb2f, 112506d, 1252428)
 - [ ] Task 6: Conversation service
 - [ ] Task 7: Session endpoints and the brief's integration tests
 - [ ] Task 8: Web — session workspace
@@ -85,3 +85,4 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - S5 plan re-checked against the real S4 code before Task 1 (40 edits; rulings S5-R1..R8 in the plan). S4 panel items ai-1 (summary vs 80 h cap) and ai-2 (Anthropic system cache blocks) carried into S5 Task 5.
 - S5 Task 3 eval (measurement, ruling S5-R2): v2 after the `technologies` schema change scored 0.9231 and 0.9423 (mean 0.9327) against the 0.9415 floor; S4's v2 two-run mean was 0.9519. Baseline and floor untouched; reported in the README.
 - S5 Task 4 ruling: attachments are parsed in a killable forkserver child (hard timeout, best-effort RLIMIT_AS/RLIMIT_CPU, at most ATTACHMENT_MAX_CONCURRENT children) instead of an in-thread tracer; in-process bounds (stored/deflated members only, bounded inflate, XML-tag cap, char budget, lowered pypdf caps) stay as defence in depth. Review findings fixed: bzip2/LZMA zip bomb (374 B → 631 MB), invalid ZIP names → 500, a 5.5 KB PDF burning 37 s of CPU, silent MemoryError.
+- S5 Task 5: v3 also closes the S4 panel's ai-1 (the summary level keeps a medium breakdown's total and allows coarse tasks over 80 h) and ai-2 (Anthropic gets the static prefix and the variable tail as two system blocks, cache_control on the static one). Review finding fixed: model-echoed metadata in the system prompt is data (explicit rule), one line per value with < and > stripped, name and scope bounded.
