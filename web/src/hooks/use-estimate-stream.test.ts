@@ -193,6 +193,21 @@ describe("useEstimateStream", () => {
     await waitFor(() => expect(result.current.state).toMatchObject({ status: "streaming", phase: "validating", switchedTo: "anthropic" }));
   });
 
+  it("current() returns the latest state, including an update React has not rendered yet", async () => {
+    const { result } = renderStream();
+    expect(result.current.current()).toEqual({ status: "idle" });
+    act(() => result.current.start(request));
+    expect(result.current.current()).toMatchObject({ status: "streaming" });
+    await act(async () => {
+      stream.push(frame("result", response));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(result.current.state.status).toBe("streaming"); // not rendered yet
+      expect(result.current.current()).toEqual({ status: "done", result: response, requestId: "req-1" });
+    });
+    act(() => result.current.stop());
+    expect(result.current.current()).toEqual(result.current.state); // stop() after done changes nothing
+  });
+
   it("aborts an in-flight request on unmount", () => {
     const { result, unmount } = renderStream();
     act(() => result.current.start(request));

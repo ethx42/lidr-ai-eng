@@ -72,31 +72,42 @@ const run = async (url: string, body: Schemas["EstimateRequest"], signal: AbortS
   }
 };
 
+const IDLE: StreamState = { status: "idle" };
+
 export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
-  const [state, setState] = useState<StreamState>({ status: "idle" });
+  const [state, setState] = useState<StreamState>(IDLE);
+  const latest = useRef<StreamState>(IDLE);
   const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
+
+  // Every transition goes through here, so `current()` sees it before React renders it.
+  const commit = useCallback((next: (state: StreamState) => StreamState) => {
+    latest.current = next(latest.current);
+    setState(latest.current);
+  }, []);
+  const current = useCallback(() => latest.current, []);
 
   const start = useCallback(
     (body: Schemas["EstimateRequest"], { refresh = false }: { refresh?: boolean } = {}) => {
       controllerRef.current?.abort();
       const controller = new AbortController();
       controllerRef.current = controller;
-      setState({ status: "streaming", phase: "calling_llm", partial: null, startedAt: Date.now() });
+      const startedAt = Date.now();
+      commit(() => ({ status: "streaming", phase: "calling_llm", partial: null, startedAt }));
       // a superseded or stopped request never writes state again
       const update: Update = (next) => {
-        if (!controller.signal.aborted) setState(next);
+        if (!controller.signal.aborted) commit(next);
       };
       void run(refresh ? `${endpoint}?refresh=true` : endpoint, body, controller.signal, update);
     },
-    [endpoint],
+    [endpoint, commit],
   );
 
   const stop = useCallback(() => {
     controllerRef.current?.abort();
-    setState((s) => (s.status === "streaming" ? { status: "cancelled", partial: s.partial } : s));
-  }, []);
+    commit((s) => (s.status === "streaming" ? { status: "cancelled", partial: s.partial } : s));
+  }, [commit]);
 
-  return { state, start, stop };
+  return { state, start, stop, current };
 };
