@@ -15,6 +15,28 @@ const mockFetch = (response: Response = sse()) => vi.spyOn(globalThis, "fetch").
 
 const upstreamInit = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls[0][1] ?? {};
 
+// A request body the test feeds chunk by chunk, counting what the proxy pulls from it.
+const chunkedBody = (chunk: string, { endless = false } = {}) => {
+  const bytes = new TextEncoder().encode(chunk);
+  const seen = { pulls: 0, cancelled: false };
+  const stream = new ReadableStream<Uint8Array>({
+    start: (controller) => controller.enqueue(bytes),
+    pull: (controller) => {
+      seen.pulls += 1;
+      if (endless) controller.enqueue(bytes);
+    },
+    cancel: () => {
+      seen.cancelled = true;
+    },
+  });
+  return { stream, seen };
+};
+// lib.dom's RequestInit has no `duplex`, which undici needs for a stream body
+const streamed = (body: ReadableStream<Uint8Array>, signal?: AbortSignal) => {
+  const init: RequestInit & { duplex: "half" } = { method: "POST", body, duplex: "half", signal, headers: { "content-type": "application/json" } };
+  return new Request("http://web/api/estimate/stream", init);
+};
+
 describe("proxySse", () => {
   beforeEach(() => vi.stubEnv("AI_SERVICE_URL", "http://ai-service:8000"));
   afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
@@ -77,6 +99,38 @@ describe("proxySse", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("stops reading a multi-chunk body as soon as it goes over the limit, and cancels it", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { stream, seen } = chunkedBody("abcd", { endless: true });
+    const res = await proxySse(streamed(stream), STREAM, { maxBodyBytes: 10 });
+    expect(res.status).toBe(413);
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulls).toBeLessThanOrEqual(3); // 3 chunks of 4 bytes cross 10; at most one more is queued
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a bare 499 when the client leaves mid-upload, without calling upstream", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const controller = new AbortController();
+    const { stream, seen } = chunkedBody("{\"transcription\": "); // the rest never arrives
+    const pending = proxySse(streamed(stream, controller.signal), STREAM);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort(new Error("ResponseAborted"));
+    const res = await pending;
+    expect(res.status).toBe(499);
+    expect(await res.text()).toBe("");
+    expect(seen.cancelled).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("always POSTs upstream and never follows an upstream redirect", async () => {
+    const fetchMock = mockFetch();
+    await proxySse(new Request("http://web/api/estimate/stream", { method: "PUT", body: "{}" }), STREAM);
+    const init = upstreamInit(fetchMock);
+    expect(init.method).toBe("POST");
+    expect(init.redirect).toBe("error");
+  });
+
   it("returns a bare 499 when the client left before upstream answered", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const controller = new AbortController();
@@ -129,6 +183,15 @@ describe("proxyJson", () => {
     expect(res.headers.get("x-request-id")).toBe("req-up");
     expect(res.headers.get("set-cookie")).toBeNull();
     expect(await res.json()).toEqual({ prompt_version: "v4" });
+  });
+
+  it("always GETs upstream without a body and never follows an upstream redirect", async () => {
+    const fetchMock = mockFetch(Response.json({}));
+    await proxyJson(new Request("http://web/api/context", { method: "POST", body: "{}" }), "/api/v1/context");
+    const init = upstreamInit(fetchMock);
+    expect(init.method).toBe("GET");
+    expect(init.body).toBeUndefined();
+    expect(init.redirect).toBe("error");
   });
 
   it("maps an unreachable AI service to 503", async () => {
