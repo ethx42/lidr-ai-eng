@@ -37,8 +37,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0482
 - [x] Task 2: Jinja2 prompt loader and estimation/v1 (9552574)
 - [x] Task 3: Context endpoint and cache isolation for typed params (5a4e043)
 - [x] Task 4: prompt_version query parameter (f5c4ba2)
-- [ ] Task 5: Output-format layouts in the markdown renderer
-- [ ] Task 6: Prompt v2 and the comparison eval
+- [x] Task 5: Output-format layouts in the markdown renderer (bee99a6)
+- [x] Task 6: Prompt v2 and the comparison eval (51f550b)
 - [ ] Task 7: Web — typed form workspace with evidence-linked split view
 - [ ] Task 8: E2E, accessibility and media
 - [ ] Task 9: Branch close-out
