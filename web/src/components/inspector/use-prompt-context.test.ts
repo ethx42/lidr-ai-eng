@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ContextParams, usePromptContext } from "./use-prompt-context";
 
@@ -12,8 +12,8 @@ describe("usePromptContext", () => {
     const fetchMock = vi.fn<typeof fetch>(async () => Response.json(prompt("Web SaaS prompt")));
     vi.stubGlobal("fetch", fetchMock);
     const { result, rerender } = renderHook((params: ContextParams) => usePromptContext(params), { initialProps: PARAMS });
-    expect(result.current).toEqual({ context: undefined, loading: true });
-    await waitFor(() => expect(result.current).toEqual({ context: prompt("Web SaaS prompt"), loading: false }));
+    expect(result.current).toMatchObject({ context: undefined, loading: true, failed: false });
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Web SaaS prompt"), loading: false, failed: false }));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/context?project_type=web_saas&detail_level=medium&output_format=phases_table");
 
     rerender({ ...PARAMS, project_type: "mobile_app", prompt_version: "v2" });
@@ -28,27 +28,74 @@ describe("usePromptContext", () => {
     );
     const { result, rerender } = renderHook((params: ContextParams) => usePromptContext(params), { initialProps: PARAMS });
     pending[0].resolve(Response.json(prompt("Medium")));
-    await waitFor(() => expect(result.current).toEqual({ context: prompt("Medium"), loading: false }));
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false, failed: false }));
 
     rerender({ ...PARAMS, detail_level: "summary" });
     rerender({ ...PARAMS, detail_level: "detailed" });
     expect(pending[1].signal?.aborted).toBe(true);
-    expect(result.current).toEqual({ context: prompt("Medium"), loading: true });
+    expect(result.current).toMatchObject({ context: prompt("Medium"), loading: true, failed: false });
 
     pending[2].resolve(Response.json(prompt("Detailed")));
-    await waitFor(() => expect(result.current).toEqual({ context: prompt("Detailed"), loading: false }));
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Detailed"), loading: false, failed: false }));
     pending[1].resolve(Response.json(prompt("Summary")));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.current.context).toEqual(prompt("Detailed"));
   });
 
-  it("reports an error response or a network failure as no context (null)", async () => {
+  it("reports an error response or a network failure as failed, with no context yet", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: { code: "invalid_request" } }, { status: 422 })));
     const failed = renderHook(() => usePromptContext(PARAMS));
-    await waitFor(() => expect(failed.result.current).toEqual({ context: null, loading: false }));
+    await waitFor(() => expect(failed.result.current).toMatchObject({ context: undefined, loading: false, failed: true }));
 
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
     const offline = renderHook(() => usePromptContext(PARAMS));
-    await waitFor(() => expect(offline.result.current).toEqual({ context: null, loading: false }));
+    await waitFor(() => expect(offline.result.current).toMatchObject({ context: undefined, loading: false, failed: true }));
+  });
+
+  // A reload would cost the estimate on screen, which lives only in React state: a failure keeps what was shown and
+  // offers to ask again for the same choices.
+  it("keeps the last good context when the request for new choices fails, and retries those choices", async () => {
+    const answers = [Response.json(prompt("Medium")), Response.json({ error: { code: "upstream_unavailable" } }, { status: 503 }), Response.json(prompt("Detailed"))];
+    const fetchMock = vi.fn<typeof fetch>(async () => answers.shift() ?? Response.error());
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, rerender } = renderHook((params: ContextParams) => usePromptContext(params), { initialProps: PARAMS });
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false, failed: false }));
+
+    rerender({ ...PARAMS, detail_level: "detailed" });
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false, failed: true }));
+
+    act(() => result.current.retry());
+    expect(result.current).toMatchObject({ context: prompt("Medium"), loading: true, failed: false });
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Detailed"), loading: false, failed: false }));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/context?project_type=web_saas&detail_level=medium&output_format=phases_table",
+      "/api/context?project_type=web_saas&detail_level=detailed&output_format=phases_table",
+      "/api/context?project_type=web_saas&detail_level=detailed&output_format=phases_table",
+    ]);
+  });
+
+  it("shows a retry as loading until it answers, even when the choices already have an answer", async () => {
+    const pending: ((res: Response) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(() => new Promise((resolve) => pending.push(resolve))));
+    const { result } = renderHook(() => usePromptContext(PARAMS));
+    pending[0](Response.json({ system_prompt: 42 })); // answered, but unreadable: the tab offers Retry
+    await waitFor(() => expect(result.current).toMatchObject({ loading: false, failed: false }));
+    act(() => result.current.retry());
+    expect(result.current).toMatchObject({ loading: true, failed: false });
+    pending[1](Response.json(prompt("Medium")));
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("Medium"), loading: false }));
+  });
+
+  it("shows the request for other choices as loading, not as the last choices' failure", async () => {
+    const pending: ((res: Response) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(() => new Promise((resolve) => pending.push(resolve))));
+    const { result, rerender } = renderHook((params: ContextParams) => usePromptContext(params), { initialProps: PARAMS });
+    pending[0](Response.json({}, { status: 503 }));
+    await waitFor(() => expect(result.current).toMatchObject({ loading: false, failed: true }));
+
+    rerender({ ...PARAMS, detail_level: "summary" });
+    expect(result.current).toMatchObject({ loading: true, failed: false });
+    rerender(PARAMS); // back to the choices that failed: a new request is on its way
+    expect(result.current).toMatchObject({ loading: true, failed: false });
   });
 });

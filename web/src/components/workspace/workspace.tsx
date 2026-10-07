@@ -22,12 +22,12 @@ import type { components } from "@/lib/ai-service/schema";
 import { toUserMessage } from "@/lib/errors";
 import { readEstimate, readGrounding } from "@/lib/estimate/read";
 import type { StreamState } from "@/lib/estimate/types";
-import type { EvidenceQuote } from "@/lib/evidence";
+import { type EvidenceQuote, evidenceFinder } from "@/lib/evidence";
 import { finePointer, scrollBehavior } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
 import { type ResultView, ResultViewToggle } from "./result-view-toggle";
 import { SHORT, type SplitTab, SplitView, WIDE } from "./split-view";
-import { TranscriptPane } from "./transcript-pane";
+import { type Pin, TranscriptPane } from "./transcript-pane";
 
 type Done = Extract<StreamState, { status: "done" }>;
 // The one run the workspace shows (spec §6.5: a form, not a thread). `kept`: the completed estimate a Regenerate that
@@ -45,11 +45,16 @@ const describe = ({ body, promptVersion }: Run) =>
     .filter(Boolean)
     .join(", ");
 
-// The quotes to mark: every requirement's evidence while it streams, then only those the server grounded.
-const quotesOf = (shown: StreamState): EvidenceQuote[] => {
-  const data = shown.status === "done" ? shown.result.breakdown : shown.status === "idle" ? null : shown.partial;
-  const { ungrounded } = readGrounding(shown.status === "done" ? shown.result.grounding : undefined);
-  return (readEstimate(data).requirements ?? []).flatMap(({ id, evidence }) => (id && evidence && !ungrounded.has(id) ? [{ id, evidence }] : []));
+// The quotes to mark: each complete quote while the estimate streams, then only those the server grounded. Evidence is
+// a requirement's last field, so a snapshot can end inside the newest requirement's quote, and a cut-short quote marks
+// wherever its first letters appear; that requirement waits until a later field (assumptions) starts or the result arrives.
+export const quotesOf = (shown: StreamState): EvidenceQuote[] => {
+  if (shown.status === "idle") return [];
+  const done = shown.status === "done";
+  const { requirements = [], assumptions } = readEstimate(done ? shown.result.breakdown : shown.partial);
+  const { ungrounded } = readGrounding(done ? shown.result.grounding : undefined);
+  const complete = done || assumptions ? requirements : requirements.slice(0, -1);
+  return complete.flatMap(({ id, evidence }) => (id && evidence && !ungrounded.has(id) ? [{ id, evidence }] : []));
 };
 
 // How a run ended, for the announcement made while its estimate is out of sight.
@@ -90,8 +95,11 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const [tab, setTab] = useState<SplitTab>("estimate");
   // The stream state when the estimate went out of sight (the Transcript tab below 768 px): only a later change is news.
   const [hiddenAt, setHiddenAt] = useState<StreamState | null>(null);
+  // Hovered or focused; `pinned` (below 768 px) outlives both, until the next pin or run.
   const [activeRequirement, setActiveRequirement] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<Pin | null>(null);
   const formRef = useRef<EstimateFormHandle>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
   const stopRef = useRef<HTMLButtonElement>(null);
   const splitRef = useRef<HTMLDivElement>(null);
@@ -103,6 +111,12 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const kept = run ? keptFor(state, run.kept) : undefined;
   const shown = kept ?? state;
   const quotes = useMemo(() => quotesOf(shown), [shown]);
+  const transcript = run?.body.transcription ?? "";
+  const find = useMemo(() => evidenceFinder(transcript), [transcript]);
+  // The requirements whose quote is marked in the transcript: only they can be pinned; any other keeps its hover card.
+  const marked = useMemo(() => new Set(find(quotes).map(({ id }) => id)), [find, quotes]);
+  // Side by side, hover and focus link requirements to quotes; a pin made below 768 px waits until it is narrow again.
+  const shownPin = wide ? null : pinned;
   // A stopped or failed stream never replaces the last finished call.
   const lastCall = state.status === "done" ? state : finished;
   // The estimate's own live regions are silent inside a hidden tab panel, so how the run ends is announced from here.
@@ -111,6 +125,17 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const showTab = (next: SplitTab) => {
     setTab(next);
     setHiddenAt(current());
+  };
+
+  // Below 768 px the transcript sits behind a tab, and reaching it ends the hover or focus that links a requirement to
+  // its quote. So Evidence pins the requirement there and opens the transcript at its quote; focus moves to the
+  // transcript, since the tab switch hides the button.
+  const pin = (id: string) => {
+    flushSync(() => {
+      setPinned({ id });
+      showTab("transcript");
+    });
+    transcriptRef.current?.focus({ preventScroll: true });
   };
 
   // `current()` rather than the rendered state: a result that arrived but is not rendered yet still counts as finished.
@@ -131,6 +156,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
       setView("structured");
       setTab("estimate");
       setActiveRequirement(null);
+      setPinned(null);
       start(body, { promptVersion });
     });
     if (resultRef.current) resultRef.current.scrollTop = 0;
@@ -151,6 +177,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
     const latest = settleLast();
     setRun({ ...run, kept: latest.status === "done" ? latest : run.kept });
     setView("structured");
+    setPinned(null); // the new attempt numbers its own requirements
     if (resultRef.current) resultRef.current.scrollTop = 0;
     start(run.body, { refresh: true, promptVersion: run.promptVersion });
   };
@@ -182,16 +209,14 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
               className="min-h-0 flex-1 max-md:flex-none md:short:h-dvh md:short:flex-none"
               transcript={{
                 label: "Transcript",
-                aside: <p className="text-xs text-muted-foreground">{describe(run)}</p>,
-                children: <TranscriptPane key={run.id} transcript={run.body.transcription} quotes={quotes} active={activeRequirement} />,
+                description: describe(run),
+                children: (
+                  <TranscriptPane key={run.id} ref={transcriptRef} transcript={transcript} quotes={quotes} active={activeRequirement} pinned={shownPin} />
+                ),
               }}
               estimate={{
                 label: "Estimate",
-                aside: shown.status === "done" && (
-                  <div className="ml-auto">
-                    <ResultViewToggle value={view} onChange={showView} />
-                  </div>
-                ),
+                aside: shown.status === "done" && <ResultViewToggle value={view} onChange={showView} />,
                 children: (
                   <div ref={resultRef} className="relative h-full overflow-y-auto px-4 py-6 sm:px-6">
                     <AssistantMessage
@@ -202,8 +227,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                       onEditTranscript={() => formRef.current?.edit(run.body.transcription)}
                       stopRef={stopRef}
                       view={view}
-                      activeRequirement={activeRequirement ?? undefined}
+                      activeRequirement={activeRequirement ?? shownPin?.id}
                       onRequirementFocus={setActiveRequirement}
+                      pinFor={wide ? undefined : (id) => (marked.has(id) ? () => pin(id) : undefined)}
                     />
                   </div>
                 ),

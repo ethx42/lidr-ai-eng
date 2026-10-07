@@ -20,6 +20,7 @@ type Props = {
   completed?: boolean;
   activeRequirement?: string;
   onRequirementFocus?: (id: string | null) => void;
+  pinFor?: (id: string) => (() => void) | undefined;
 };
 
 const Assumptions = ({ items, streaming }: { items?: EstimateModel["assumptions"]; streaming: boolean }) => {
@@ -49,7 +50,7 @@ const Assumptions = ({ items, streaming }: { items?: EstimateModel["assumptions"
 
 // Renders any snapshot: every value is read through a guard, and whatever is missing shows as a skeleton.
 // While streaming the article is `aria-busy` and nothing inside it is live; one polite region announces completion.
-export const EstimateView = ({ data, grounding, streaming, completed = false, activeRequirement, onRequirementFocus }: Props) => {
+export const EstimateView = ({ data, grounding, streaming, completed = false, activeRequirement, onRequirementFocus, pinFor }: Props) => {
   const estimate = readEstimate(data);
   const checks = readGrounding(grounding);
   const ready = completed && estimate.totals !== undefined;
@@ -76,6 +77,7 @@ export const EstimateView = ({ data, grounding, streaming, completed = false, ac
         ungrounded={checks.ungrounded}
         activeRequirement={activeRequirement}
         onRequirementFocus={onRequirementFocus}
+        pinFor={pinFor}
       />
       <Assumptions items={estimate.assumptions} streaming={streaming} />
       <OpenQuestions items={estimate.open_questions} streaming={streaming} />

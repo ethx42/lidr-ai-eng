@@ -3,9 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceContextProvider } from "@/components/service-context";
 import { fullResponse } from "@/lib/estimate/fixtures";
+import type { PartialBreakdown, StreamState } from "@/lib/estimate/types";
 import type { Sample } from "@/lib/samples";
 import { stubPointer } from "@/test/pointer";
-import { Workspace } from "./workspace";
+import { Workspace, quotesOf } from "./workspace";
 
 const SAMPLES: Sample[] = [
   { id: "clinic-portal", title: "Clinic portal", description: "Patient portal, medium scope", text: "Sofía: We have three physiotherapy clinics." },
@@ -25,6 +26,7 @@ const context = {
 };
 const tooLong = { error: { code: "invalid_request", message: "Transcription exceeds 50000 characters.", details: [{ type: "string_too_long" }] }, request_id: "req-422" };
 const DEFAULTS = { project_type: "web_saas", detail_level: "medium", output_format: "phases_table" };
+const DESCRIPTION = "Web SaaS, medium detail, phases table, prompt v1";
 
 const encoder = new TextEncoder();
 const frame = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -160,8 +162,10 @@ describe("Workspace", () => {
   it("highlights each grounded quote in the transcript, and the one behind the hovered or focused requirement", async () => {
     const { user, input } = setup();
     await run(user, input);
-    streams[0].push(frame("partial", { seq: 1, breakdown: { requirements: [{ id: "R1", evidence: "patients log in, see their" }] } }));
+    // R1's quote is complete once R2 has started; R2's, cut short, would match R1's sentence ("patients log in")
+    streams[0].push(frame("partial", { seq: 1, breakdown: { requirements: [{ id: "R1", evidence: "patients log in, see their" }, { id: "R2", evidence: "patients" }] } }));
     await waitFor(() => expect(mark("R1")).toHaveTextContent("patients log in, see their")); // marks follow the stream
+    expect(transcriptPane().querySelector('mark[data-req~="R2"]')).toBeNull();
 
     await finish(0);
     expect(runStatus()).toBeEmptyDOMElement(); // the visible estimate announces itself; no second announcement
@@ -406,6 +410,13 @@ describe("Workspace", () => {
     const split = transcriptPane().closest("[data-slot=split-view]");
     expect(split).toHaveClass("flex-1", "md:short:h-dvh", "md:short:flex-none");
     expect(input).toHaveClass("max-h-32"); // compact once a run sits below the form
+    // Side by side both pane headers keep one height, so their rules line up; below 768 px the run description wraps
+    // instead of being cut short (a cut line's title is out of reach by touch and keyboard).
+    const description = screen.getByText(DESCRIPTION);
+    expect(description).toHaveClass("md:truncate");
+    expect(description).not.toHaveClass("truncate");
+    expect(description.parentElement?.parentElement).toHaveClass("min-h-11", "md:h-11");
+    expect(description.parentElement?.parentElement).not.toHaveClass("h-11");
   });
 
   it("below 768 px, shows the transcript and the estimate as tabs, opening Estimate when a run starts", async () => {
@@ -460,6 +471,85 @@ describe("Workspace", () => {
     await waitFor(() => expect(runStatus()).toHaveTextContent("The AI service is unavailable right now. Try again in a moment."));
   });
 
+  // Below 768 px the transcript sits behind a tab, and reaching it ends the hover or focus that linked a requirement.
+  it("below 768 px, Evidence pins its requirement and opens the transcript at its quote, until the next pin or run", async () => {
+    stubPointer("fine", { wide: false });
+    const { user, input, estimate } = setup();
+    await run(user, input);
+    await finish(0);
+    const scrolled = vi.mocked(Element.prototype.scrollIntoView);
+    scrolled.mockClear();
+    const evidence = (id: string) => screen.getByRole("button", { name: `Evidence for ${id}` });
+
+    await user.click(evidence("R2"));
+    expect(screen.getByRole("tab", { name: "Transcript", selected: true })).toBeInTheDocument();
+    expect(transcriptPane()).toHaveFocus(); // the Evidence button is hidden now
+    expect(mark("R2")).toHaveAttribute("data-active");
+    // `main`, not the pane, scrolls below 768 px, so the quote is brought into view through every scrolling ancestor
+    expect(scrolled.mock.contexts).toEqual([mark("R2")]);
+    expect(scrolled).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull(); // the quote shows in the transcript instead
+
+    await user.click(screen.getByRole("tab", { name: "Estimate" }));
+    expect(evidence("R2").closest("li")).toHaveAttribute("data-active"); // hover and focus have left; the pin stays
+    await user.click(screen.getByRole("tab", { name: "Transcript" }));
+    expect(mark("R2")).toHaveAttribute("data-active");
+
+    await user.click(screen.getByRole("tab", { name: "Estimate" }));
+    await user.click(evidence("R1"));
+    expect(mark("R1")).toHaveAttribute("data-active");
+    expect(mark("R2")).not.toHaveAttribute("data-active");
+
+    await user.click(estimate);
+    await finish(1);
+    expect(transcriptPane().querySelector("mark[data-active]")).toBeNull();
+
+    await user.click(evidence("R2"));
+    await user.click(screen.getByRole("tab", { name: "Estimate" }));
+    await user.click(screen.getByRole("button", { name: "Regenerate" }));
+    await finish(2);
+    expect(mark("R2")).toBeInTheDocument();
+    expect(transcriptPane().querySelector("mark[data-active]")).toBeNull(); // the new attempt numbers its own requirements
+  });
+
+  it("leaves the evidence card closed after a tap pins its requirement, also once the viewport widens", async () => {
+    const resize = viewport(false);
+    const { user, input } = setup();
+    await run(user, input);
+    await finish(0);
+    const evidence = screen.getByRole("button", { name: "Evidence for R2" });
+    fireEvent.pointerDown(evidence, { pointerType: "touch" }); // a tap: Radix ignores touch, so the button opens the card itself
+    await user.click(evidence);
+    expect(mark("R2")).toHaveAttribute("data-active");
+    const pastOpenDelay = () => act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    await pastOpenDelay();
+    resize(true); // later, the phone turns to landscape
+    await pastOpenDelay();
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+  });
+
+  it("below 768 px, Evidence for a quote not found in the transcript shows the model's quote instead of pinning", async () => {
+    stubPointer("fine", { wide: false });
+    const { user, input } = setup();
+    await run(user, input);
+    await finish(0); // the grounding report flags R3: no mark to show
+    await user.click(screen.getByRole("button", { name: "Evidence for R3" }));
+    expect(screen.getByRole("tab", { name: "Estimate", selected: true })).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote given by the model, not found in the transcript"));
+  });
+
+  it("ignores a pin side by side, where hover and focus link requirements to quotes", async () => {
+    const resize = viewport(false);
+    const { user, input } = setup();
+    await run(user, input);
+    await finish(0);
+    await user.click(screen.getByRole("button", { name: "Evidence for R2" }));
+    expect(mark("R2")).toHaveAttribute("data-active");
+    resize(true);
+    expect(transcriptPane().querySelector("mark[data-active]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).not.toHaveAttribute("data-active");
+  });
+
   it("keeps the run's panes, focus and scroll when the viewport crosses 768 px mid-run", async () => {
     const resize = viewport(true);
     const { user, input } = setup();
@@ -480,5 +570,37 @@ describe("Workspace", () => {
     expect(screen.queryByRole("tablist", { name: "Result" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBe(stop);
     expect(stop).toHaveFocus();
+  });
+});
+
+describe("quotesOf", () => {
+  const R1 = { id: "R1", statement: "Log in", evidence: "patients log in, see their upcoming appointments" };
+  const streaming = (partial: PartialBreakdown): StreamState => ({ status: "streaming", phase: "calling_llm", partial, startedAt: 0 });
+
+  // Evidence is a requirement's last field, so a snapshot can end inside the newest one's quote ("Pat" of "Patients…"),
+  // which would mark the first place those letters appear.
+  it("leaves out the newest requirement of a snapshot until a later field starts: its quote may be cut short", () => {
+    const cut = { requirements: [R1, { id: "R2", statement: "Book", evidence: "Pat" }] };
+    expect(quotesOf(streaming(cut))).toEqual([{ id: "R1", evidence: R1.evidence }]);
+    expect(quotesOf(streaming({ requirements: [{ id: "R1", evidence: "pat" }] }))).toEqual([]);
+
+    const closed = { requirements: [R1, { id: "R2", statement: "Book", evidence: "Patients should be able to book" }], assumptions: [] };
+    expect(quotesOf(streaming(closed))).toEqual([
+      { id: "R1", evidence: R1.evidence },
+      { id: "R2", evidence: "Patients should be able to book" },
+    ]);
+  });
+
+  it("keeps a stream that stopped or failed mid-quote from marking the cut-short quote", () => {
+    const requirements = [R1, { id: "R2", evidence: "Pat" }];
+    expect(quotesOf({ status: "cancelled", partial: { requirements } })).toEqual([{ id: "R1", evidence: R1.evidence }]);
+    expect(quotesOf({ status: "error", error: { code: "upstream_unavailable", message: "down", retryable: true }, partial: { requirements } })).toEqual([
+      { id: "R1", evidence: R1.evidence },
+    ]);
+  });
+
+  it("marks every quote the server grounded once the result arrives, and nothing before a run", () => {
+    expect(quotesOf({ status: "done", result: fullResponse }).map(({ id }) => id)).toEqual(["R1", "R2"]); // R3 is ungrounded
+    expect(quotesOf({ status: "idle" })).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@ import type { components } from "@/lib/ai-service/schema";
 import { breakdown, fullResponse } from "@/lib/estimate/fixtures";
 import type { StreamState } from "@/lib/estimate/types";
 import { InspectorPanel, InspectorSheet } from "./inspector";
-import { usePromptContext } from "./use-prompt-context";
+import { type ContextParams, usePromptContext } from "./use-prompt-context";
 
 type Done = Extract<StreamState, { status: "done" }>;
 
@@ -32,7 +32,7 @@ const withMetrics = (metrics: Partial<components["schemas"]["CallMetrics"]>, pro
 
 const serve = (respond: () => Promise<Response>) => vi.stubGlobal("fetch", vi.fn(respond));
 // The panel as the workspace renders it: the Context tab shows the prompt for the form's current choices.
-const Panel = ({ call }: { call?: Done }) => <InspectorPanel call={call} context={usePromptContext(PARAMS)} />;
+const Panel = ({ call, params = PARAMS }: { call?: Done; params?: ContextParams }) => <InspectorPanel call={call} context={usePromptContext(params)} />;
 const renderPanel = (call?: Done) => {
   const user = userEvent.setup();
   render(<Panel call={call} />);
@@ -44,6 +44,8 @@ const valueOf = (label: string) => {
   if (!(value instanceof HTMLElement)) throw new Error(`no value for ${label}`);
   return value;
 };
+// The inline context error, found by its text: it is no live region (spec §8 allows only polite status announcements).
+const contextError = async (text: string) => closest(await screen.findByText(text), '[data-slot="alert"]');
 const closest = (element: Element, selector: string) => {
   const found = element.closest(selector);
   if (!(found instanceof HTMLElement)) throw new Error(`no ${selector} around ${element.textContent}`);
@@ -96,10 +98,15 @@ describe("Inspector, Context tab", () => {
     expect(screen.getByRole("tabpanel", { name: "Last call" })).toHaveClass(inset);
   });
 
-  it("keeps the shown prompt, dimmed and busy, while the prompt for new choices loads", () => {
-    render(<InspectorPanel context={{ context, loading: true }} />);
+  // Dimmed to 60 %, muted text fell to 2.6:1 (WCAG 1.4.3 asks 4.5:1).
+  it("keeps the shown prompt, busy but at full contrast, while the prompt for new choices loads, saying it is updating", () => {
+    render(<InspectorPanel context={{ context, loading: true, failed: false, retry: () => {} }} />);
     const busy = screen.getByRole("region", { name: "System prompt" }).closest('[aria-busy="true"]');
-    expect(busy).toHaveClass("opacity-60");
+    if (!(busy instanceof HTMLElement)) throw new Error("the shown prompt is not marked busy");
+    const dimmed = [busy, ...busy.querySelectorAll("*")].filter((element) => [...element.classList].some((name) => name.startsWith("opacity-")));
+    expect(dimmed).toEqual([]);
+    expect(valueOf("Prompt version")).toHaveTextContent("Updating…");
+    expect(valueOf("Prompt version")).not.toHaveTextContent("v4"); // the version for the new choices is not known yet
   });
 
   it("shows skeletons while the context loads", () => {
@@ -110,16 +117,61 @@ describe("Inspector, Context tab", () => {
     expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
   });
 
-  it("says so when the AI service cannot provide its context", async () => {
-    serve(async () => Response.json({ error: { code: "upstream_unavailable" } }, { status: 503 }));
-    renderPanel();
-    expect(await screen.findByText("The prompt and references could not be loaded from the AI service. Reload the page to try again.")).toBeInTheDocument();
+  // Never "reload the page": the estimate on screen lives only in React state.
+  it("says so when the AI service cannot provide its context, and offers to try again", async () => {
+    const answers = [Response.json({ error: { code: "upstream_unavailable" } }, { status: 503 }), Response.json(context)];
+    serve(async () => answers.shift() ?? Response.error());
+    const user = renderPanel();
+    const error = await contextError("The prompt and references could not be loaded from the AI service.");
+    expect(error).not.toHaveAttribute("role");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Context" })).not.toHaveTextContent(/reload/i);
+
+    await user.click(within(error).getByRole("button", { name: "Retry" }));
+    expect(screen.getByRole("tabpanel", { name: "Context" })).toHaveFocus(); // the button is gone; focus stays in the panel
+    expect(await screen.findByRole("region", { name: "System prompt" })).toHaveTextContent("You estimate software projects.");
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
   });
 
-  it("treats a context without a readable system prompt as unavailable", async () => {
-    serve(async () => Response.json({ ...context, system_prompt: 42 }));
-    renderPanel();
-    expect(await screen.findByText(/could not be loaded from the AI service/)).toBeInTheDocument();
+  it("keeps the last good prompt when the prompt for new choices fails to load, with an inline error and Retry", async () => {
+    const answers = [Response.json(context), Response.json({ error: { code: "upstream_unavailable" } }, { status: 503 }), Response.json({ ...context, prompt_version: "v5" })];
+    serve(async () => answers.shift() ?? Response.error());
+    const user = userEvent.setup();
+    const { rerender } = render(<Panel />);
+    await screen.findByRole("region", { name: "System prompt" });
+
+    rerender(<Panel params={{ ...PARAMS, detail_level: "detailed" }} />);
+    const error = await contextError("Could not load the prompt for these choices.");
+    expect(error).toHaveTextContent("The prompt below is for your previous choices.");
+    // not assertive: with the AI service down, each choice (arrow presses included) would interrupt from the inspector
+    expect(error).not.toHaveAttribute("role");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "System prompt" }).textContent).toBe(context.system_prompt); // the last good one
+    expect(screen.getByRole("tabpanel", { name: "Context" })).not.toHaveTextContent(/reload/i);
+
+    await user.click(within(error).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(valueOf("Prompt version")).toHaveTextContent("v5"));
+    expect(screen.queryByText("Could not load the prompt for these choices.")).not.toBeInTheDocument();
+  });
+
+  it("treats a context without a readable system prompt as unavailable, and shows a retry as busy until it answers", async () => {
+    const unreadable = () => Response.json({ ...context, system_prompt: 42 });
+    let answer!: (res: Response) => void;
+    const answers = [Promise.resolve(unreadable()), new Promise<Response>((resolve) => (answer = resolve))];
+    serve(() => answers.shift() ?? Promise.resolve(Response.error()));
+    const user = renderPanel();
+    const error = await contextError("The prompt and references could not be loaded from the AI service.");
+    expect(error).not.toHaveAttribute("aria-busy", "true");
+
+    await user.click(within(error).getByRole("button", { name: "Retry" }));
+    expect(error).toHaveAttribute("aria-busy", "true");
+    // still focusable (it does not drop focus), but announced as unavailable while it does nothing
+    const updating = within(error).getByRole("button", { name: "Updating…" });
+    expect(updating).toHaveAttribute("aria-disabled", "true");
+    expect(updating).not.toBeDisabled();
+    await act(async () => answer(unreadable()));
+    expect(error).toHaveAttribute("aria-busy", "false");
+    expect(within(error).getByRole("button", { name: "Retry" })).not.toHaveAttribute("aria-disabled", "true");
   });
 
   it("skips malformed references and shows n/a for an unreadable prompt version", async () => {

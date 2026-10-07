@@ -1,14 +1,13 @@
 "use client";
 
-import { ChevronRight, Copy } from "lucide-react";
+import { ChevronRight, CircleAlert, Copy, RotateCcw } from "lucide-react";
 import { useId } from "react";
-import { Empty } from "@/components/estimate/section";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { copyText } from "@/lib/copy";
 import { type ReferenceModel, readContext } from "@/lib/estimate/read";
-import { cn } from "@/lib/utils";
 import { NotAvailable, Row, Rows } from "./rows";
 import type { PromptContext } from "./use-prompt-context";
 
@@ -24,6 +23,52 @@ const ContextSkeleton = () => (
     ))}
   </div>
 );
+
+// Where the version will show once the prompt for new choices arrives: a skeleton-style tag that dims nothing.
+const Updating = () => (
+  <span className="inline-flex items-center gap-1.5 font-sans">
+    <span aria-hidden data-slot="skeleton" className="h-3 w-6 rounded-sm bg-muted motion-safe:animate-pulse" />
+    Updating…
+  </span>
+);
+
+type ContextErrorProps = { title: string; description?: string; busy?: boolean; onRetry: () => void };
+
+// Never "reload the page": the run on screen lives only in memory. Retry asks again for the same choices, and shows it
+// is busy while it does; focus moves to the tab panel first, because the error may go away. No live region: an
+// assertive alert remounted with each failed refetch would interrupt every choice in the form (spec §8).
+const ContextError = ({ title, description, busy = false, onRetry }: ContextErrorProps) => (
+  <Alert role={undefined} aria-busy={busy} className="border-destructive/40 bg-danger-subtle">
+    <CircleAlert className="text-destructive" />
+    <AlertTitle className="text-foreground">{title}</AlertTitle>
+    <AlertDescription className="flex flex-col items-start gap-2 text-foreground">
+      {description && <p>{description}</p>}
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        // not `disabled`: that would drop focus to the page; this keeps it on the button and says it does nothing now
+        aria-disabled={busy}
+        onClick={(event) => {
+          if (busy) return;
+          event.currentTarget.closest<HTMLElement>('[role="tabpanel"]')?.focus({ preventScroll: true });
+          onRetry();
+        }}
+      >
+        {busy ? (
+          <Updating />
+        ) : (
+          <>
+            <RotateCcw />
+            Retry
+          </>
+        )}
+      </Button>
+    </AlertDescription>
+  </Alert>
+);
+
+const UNAVAILABLE = "The prompt and references could not be loaded from the AI service.";
 
 const Reference = ({ reference: { size, meetingSummary, projectName, estimation } }: { reference: ReferenceModel }) => (
   <li className="flex flex-col gap-2 py-4">
@@ -53,19 +98,21 @@ const Reference = ({ reference: { size, meetingSummary, projectName, estimation 
 );
 
 // What the model sees for the form's current choices: the system prompt and the reference estimations injected into it
-// (CAG). While the prompt for new choices loads, the previous one stays, dimmed and marked busy.
-export const ContextTab = ({ context: { context, loading } }: { context: PromptContext }) => {
+// (CAG). While the prompt for new choices loads, the previous one stays, marked busy, at full contrast; if it cannot be
+// loaded, the previous one stays under an error that offers to try again.
+export const ContextTab = ({ context: { context, loading, failed, retry } }: { context: PromptContext }) => {
   const promptId = useId();
   const referencesId = useId();
-  if (context === undefined) return <ContextSkeleton />;
+  if (context === undefined && !failed) return <ContextSkeleton />;
   const { promptVersion, systemPrompt, references } = readContext(context);
-  if (!systemPrompt) return <Empty>The prompt and references could not be loaded from the AI service. Reload the page to try again.</Empty>;
+  if (!systemPrompt) return <ContextError title={UNAVAILABLE} busy={loading} onRetry={retry} />;
   return (
-    <div aria-busy={loading} className={cn("flex flex-col gap-8 transition-opacity", loading && "opacity-60")}>
+    <div aria-busy={loading} className="flex flex-col gap-8">
+      {failed && <ContextError title="Could not load the prompt for these choices." description="The prompt below is for your previous choices." onRetry={retry} />}
       <div className="flex flex-col gap-3">
         <Rows>
           <Row label="Prompt version" mono>
-            {promptVersion ?? <NotAvailable />}
+            {loading ? <Updating /> : (promptVersion ?? <NotAvailable />)}
           </Row>
         </Rows>
         <div className="flex items-center justify-between gap-2">
