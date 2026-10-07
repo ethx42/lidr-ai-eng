@@ -7,7 +7,9 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 export type SplitTab = "transcript" | "estimate";
-type Pane = { label: string; aside?: ReactNode; children: ReactNode };
+// `description`: one line under the heading, cut short (whole on hover) when the pane is too narrow; `aside`: controls
+// at the right.
+type Pane = { label: string; description?: string; aside?: ReactNode; children: ReactNode };
 type Props = { transcript: Pane; estimate: Pane; tab: SplitTab; onTabChange: (tab: SplitTab) => void; className?: string; ref?: Ref<HTMLDivElement> };
 
 // Tailwind's `md`: from here the panes sit side by side.
@@ -28,10 +30,19 @@ const SplitPane = ({ value, pane, wide }: { value: SplitTab; pane: Pane; wide: b
       {...(wide ? { role: "group", "aria-labelledby": headingId, tabIndex: undefined } : {})}
       className="flex h-full min-h-0 flex-col focus-visible:-outline-offset-2! max-md:data-[state=inactive]:hidden"
     >
-      <div className={cn("flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 sm:px-6", !pane.aside && "max-md:hidden")}>
-        <h2 id={headingId} className="text-sm font-semibold max-md:hidden">
-          {pane.label}
-        </h2>
+      {/* One fixed height for both panes' headers, which fits the heading over its description and the result view
+          toggle: side by side their rules line up, and nothing below moves when the toggle arrives with the result. */}
+      <div className={cn("flex h-11 shrink-0 items-center gap-3 border-b px-4 sm:px-6", !pane.aside && !pane.description && "max-md:hidden")}>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h2 id={headingId} className="text-sm font-semibold max-md:hidden">
+            {pane.label}
+          </h2>
+          {pane.description && (
+            <p title={pane.description} className="truncate text-xs text-muted-foreground">
+              {pane.description}
+            </p>
+          )}
+        </div>
         {pane.aside}
       </div>
       <div className="min-h-0 flex-1">{pane.children}</div>

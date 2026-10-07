@@ -203,18 +203,14 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
               className="min-h-0 flex-1 max-md:flex-none md:short:h-dvh md:short:flex-none"
               transcript={{
                 label: "Transcript",
-                aside: <p className="text-xs text-muted-foreground">{describe(run)}</p>,
+                description: describe(run),
                 children: (
                   <TranscriptPane key={run.id} ref={transcriptRef} transcript={run.body.transcription} quotes={quotes} active={activeRequirement} pinned={pinned} />
                 ),
               }}
               estimate={{
                 label: "Estimate",
-                aside: shown.status === "done" && (
-                  <div className="ml-auto">
-                    <ResultViewToggle value={view} onChange={showView} />
-                  </div>
-                ),
+                aside: shown.status === "done" && <ResultViewToggle value={view} onChange={showView} />,
                 children: (
                   <div ref={resultRef} className="relative h-full overflow-y-auto px-4 py-6 sm:px-6">
                     <AssistantMessage

@@ -62,6 +62,14 @@ const visibleHeight = (element: Element) => {
   return Math.max(0, Math.min(bottom, window.innerHeight) - Math.max(top, 0));
 };
 
+// Where each pane's header rule sits, in px from the top (transcript, estimate): side by side the rules line up.
+const headerRules = (page: Page) =>
+  Promise.all(
+    ["Transcript", "Estimate"].map((name) =>
+      page.getByRole("group", { name, exact: true }).locator(":scope > div").first().evaluate((header) => header.getBoundingClientRect().bottom),
+    ),
+  );
+
 const transcript = (page: Page) => page.getByRole("textbox", { name: "Transcript" });
 const estimateButton = (page: Page) => page.getByRole("button", { name: "Estimate", exact: true });
 const estimate = (page: Page) => page.getByRole("article");
@@ -173,8 +181,13 @@ test.describe("estimate", () => {
     await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
     await expectPartial(page);
     await shot(page, "streaming");
+    const rules = await headerRules(page);
+    expect(rules[1], "the estimate pane's header rule lines up with the transcript's").toBe(rules[0]);
 
     await expectResult(page);
+    // the Structured | Document toggle arrives with the result and fits the header: nothing below it moves
+    await expect(page.getByRole("radiogroup", { name: "Result view" })).toBeVisible();
+    expect(await headerRules(page), "header rules once the run is done").toEqual(rules);
     await expect(projectName(page)).toHaveText(/\S/);
     // Tasks grouped by phase: one row group per phase, each with its tasks.
     const tasks = estimate(page).getByRole("table");
