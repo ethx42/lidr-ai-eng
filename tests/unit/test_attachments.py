@@ -1,6 +1,7 @@
 import io
 import logging
 import os
+import pickle
 import signal
 import struct
 import subprocess
@@ -11,6 +12,8 @@ import warnings
 import zipfile
 import zlib
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 import pypdf
@@ -18,7 +21,7 @@ import pytest
 from pydantic import ValidationError
 from pypdf import PdfWriter
 
-from app.attachments import extractor
+from app.attachments import extractor, isolation
 from app.attachments.extractor import (
     Attachment,
     AttachmentError,
@@ -225,9 +228,14 @@ def test_settings_carry_the_attachment_limits() -> None:
         attachment_max_chars=1_000,
         attachment_timeout_seconds=2.5,
         attachment_max_memory_bytes=256 * 1024 * 1024,
+        attachment_max_concurrent=4,
     )
     assert loaded.attachment_limits == AttachmentLimits(
-        max_files=2, max_chars=1_000, timeout_seconds=2.5, max_memory_bytes=256 * 1024 * 1024
+        max_files=2,
+        max_chars=1_000,
+        timeout_seconds=2.5,
+        max_memory_bytes=256 * 1024 * 1024,
+        max_concurrent=4,
     )
 
 
@@ -238,8 +246,17 @@ def test_settings_carry_the_attachment_limits() -> None:
         {"attachment_timeout_seconds": 121},
         {"attachment_max_memory_bytes": 64 * 1024 * 1024},
         {"attachment_max_memory_bytes": 9 * 1024**3},
+        {"attachment_max_concurrent": 0},
+        {"attachment_max_concurrent": 17},
     ],
-    ids=["timeout-zero", "timeout-too-long", "memory-too-small", "memory-too-large"],
+    ids=[
+        "timeout-zero",
+        "timeout-too-long",
+        "memory-too-small",
+        "memory-too-large",
+        "no-children",
+        "too-many-children",
+    ],
 )
 def test_child_process_limits_are_bounded(limit: dict[str, float]) -> None:
     with pytest.raises(ValidationError):
@@ -564,3 +581,68 @@ def test_child_parse_failures_reach_the_log_without_content(
         extract_all_isolated([Attachment("bad.docx", data)], AttachmentLimits())
     assert "attachment parse failed: XMLSyntaxError" in caplog.text
     assert "SECRETMARKER" not in caplog.text
+
+
+# Fix round 3: at most `max_concurrent` extraction children at once.
+
+
+def extract_slowly(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    time.sleep(0.5)
+    return extract_all(files, limits, on_file=on_file)
+
+
+def hang(
+    files: Sequence[Attachment], limits: AttachmentLimits, *, on_file: Callable[[str], None]
+) -> list[ExtractedAttachment]:
+    on_file("hung.pdf")
+    time.sleep(30)
+    return []
+
+
+@pytest.fixture
+def one_slot(monkeypatch: pytest.MonkeyPatch) -> AttachmentLimits:
+    """The slot semaphore is sized on first use: start this test without one."""
+    monkeypatch.setattr(isolation, "slot_pool", None)
+    return AttachmentLimits(max_concurrent=1, timeout_seconds=5)
+
+
+def timed(call: Callable[[], object]) -> tuple[object, float]:
+    result = call()
+    return result, time.monotonic()
+
+
+def test_a_second_extraction_waits_for_the_slot(one_slot: AttachmentLimits) -> None:
+    files = [load("notes.txt")]
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(timed, lambda: run_isolated(extract_slowly, files, one_slot))
+        time.sleep(0.1)  # the first one holds the only slot
+        second = pool.submit(timed, lambda: extract_all_isolated(files, one_slot))
+        (first_result, first_done), (second_result, second_done) = first.result(), second.result()
+    assert first_result == second_result == extract_all(files, one_slot)
+    assert second_done > first_done
+
+
+def test_no_slot_within_the_timeout_is_a_busy_error(one_slot: AttachmentLimits) -> None:
+    with ThreadPoolExecutor(1) as pool:
+        hung_limits = replace(one_slot, timeout_seconds=1.0)  # holds the slot past 0.3 s
+        hung = pool.submit(run_isolated, hang, [load("notes.txt")], hung_limits)
+        time.sleep(0.1)
+        started = time.monotonic()
+        with pytest.raises(
+            AttachmentError, match="server is busy reading other attachments"
+        ) as err:
+            extract_all_isolated([load("notes.txt")], replace(one_slot, timeout_seconds=0.3))
+        assert err.value.reason == "busy" and time.monotonic() - started < 1.0
+    with pytest.raises(AttachmentError, match=r"^hung\.pdf: took too long to read$") as killed:
+        hung.result()
+    assert killed.value.reason == "invalid"
+
+
+def test_errors_keep_their_reason_across_the_process_boundary() -> None:
+    with pytest.raises(AttachmentError) as err:
+        extract_all_isolated([load("encrypted.pdf")], AttachmentLimits())
+    assert err.value.reason == "invalid"
+    busy = pickle.loads(pickle.dumps(AttachmentError("x", reason="busy")))  # noqa: S301  (own bytes)
+    assert (str(busy), busy.reason) == ("x", "busy")

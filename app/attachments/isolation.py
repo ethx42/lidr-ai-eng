@@ -5,6 +5,7 @@ import contextlib
 import logging
 import multiprocessing
 import resource
+import threading
 import time
 from collections.abc import Callable, Sequence
 from multiprocessing.connection import Connection
@@ -21,6 +22,12 @@ parse_logger = logging.getLogger("app.attachments.extractor")
 # 160 ms each time). Never fork the threaded web server itself. The preload list is process-wide.
 CONTEXT = multiprocessing.get_context("forkserver")
 CONTEXT.set_forkserver_preload([__name__])
+
+# At most `max_concurrent` children at once, process-wide. Callers wait in worker threads
+# (asyncio.to_thread), so a thread semaphore fits. Sized from the limits on first use: the
+# settings do not change while the service runs.
+slot_pool: threading.BoundedSemaphore | None = None
+slot_pool_lock = threading.Lock()
 
 
 class Extractor(Protocol):
@@ -80,11 +87,34 @@ def extract_all_isolated(
     files: Sequence[Attachment], limits: AttachmentLimits
 ) -> list[ExtractedAttachment]:
     """`extract_all` in a child process, killed after `limits.timeout_seconds`, with its address
-    space capped at `limits.max_memory_bytes` where the OS enforces it."""
+    space capped at `limits.max_memory_bytes` where the OS enforces it. Waits up to the same
+    timeout for one of `limits.max_concurrent` slots, else raises a "busy" AttachmentError."""
     return run_isolated(extract_all, files, limits)
 
 
+def slots(size: int) -> threading.BoundedSemaphore:
+    global slot_pool
+    with slot_pool_lock:
+        if slot_pool is None:
+            slot_pool = threading.BoundedSemaphore(size)
+        return slot_pool
+
+
 def run_isolated(
+    extract: Extractor, files: Sequence[Attachment], limits: AttachmentLimits
+) -> list[ExtractedAttachment]:
+    slot = slots(limits.max_concurrent)
+    if not slot.acquire(timeout=limits.timeout_seconds):
+        raise AttachmentError(
+            "the server is busy reading other attachments, try again", reason="busy"
+        )
+    try:
+        return run_child(extract, files, limits)
+    finally:
+        slot.release()
+
+
+def run_child(
     extract: Extractor, files: Sequence[Attachment], limits: AttachmentLimits
 ) -> list[ExtractedAttachment]:
     receive, send = CONTEXT.Pipe(duplex=False)

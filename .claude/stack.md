@@ -426,6 +426,11 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
   - On macOS, any 512 MB cap fails with `ValueError: current limit exceeds maximum limit`, because the address space already reserved is far larger. Suppress the error there.
   - On Linux it is enforced: `bytearray(1 GiB)` under a 512 MB cap raises `MemoryError` in the child. An idle child with pypdf, python-docx and lxml imported maps about 62 MB (`VmSize`), so 128 MiB is a sane floor.
   - Lower only the soft limit and keep the current hard one.
+- **Bounding concurrency (fix round 3):**
+  - A module-level `threading.BoundedSemaphore` caps the children at `AttachmentLimits.max_concurrent` (default 2). It is created on first use under a `threading.Lock`.
+  - The caller holds a slot for the child's whole lifetime. `acquire(timeout=...)` returns `False` on expiry, which becomes a "busy" `AttachmentError`.
+  - A thread semaphore is right because callers wait in `asyncio.to_thread` worker threads.
+- **Exception attributes across the pipe:** `BaseException.__reduce__` returns `(cls, args, __dict__)`. An attribute set in `__init__` (`AttachmentError.reason`) therefore survives pickling, as long as the extra `__init__` parameter has a default, since unpickling calls `cls(*args)` and then restores `__dict__`. Verified by a round-trip test.
 - **Logging in the child:** a forked child has no handlers, so `logging.lastResort` would print WARNING and above to stderr, unformatted (pypdf's included). Add a `NullHandler` to the root logger in the child and forward only the extractor's type-name records through the pipe.
 
 ### httpx2 2.13.0: async integration tests

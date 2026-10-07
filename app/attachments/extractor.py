@@ -61,7 +61,12 @@ class ExtractedAttachment:
 
 
 class AttachmentError(ValueError):
-    """The message is safe to show to the user."""
+    """The message is safe to show to the user. `reason` is "busy" when the server had no free
+    extraction slot (worth retrying), else "invalid" (the file itself)."""
+
+    def __init__(self, message: str, reason: Literal["invalid", "busy"] = "invalid") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 def unreadable(label: str, exc: Exception) -> AttachmentError:
