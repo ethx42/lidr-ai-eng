@@ -96,10 +96,15 @@ describe("Inspector, Context tab", () => {
     expect(screen.getByRole("tabpanel", { name: "Last call" })).toHaveClass(inset);
   });
 
-  it("keeps the shown prompt, dimmed and busy, while the prompt for new choices loads", () => {
+  // Dimmed to 60 %, muted text fell to 2.6:1 (WCAG 1.4.3 asks 4.5:1).
+  it("keeps the shown prompt, busy but at full contrast, while the prompt for new choices loads, saying it is updating", () => {
     render(<InspectorPanel context={{ context, loading: true }} />);
     const busy = screen.getByRole("region", { name: "System prompt" }).closest('[aria-busy="true"]');
-    expect(busy).toHaveClass("opacity-60");
+    if (!(busy instanceof HTMLElement)) throw new Error("the shown prompt is not marked busy");
+    const dimmed = [busy, ...busy.querySelectorAll("*")].filter((element) => [...element.classList].some((name) => name.startsWith("opacity-")));
+    expect(dimmed).toEqual([]);
+    expect(valueOf("Prompt version")).toHaveTextContent("Updating…");
+    expect(valueOf("Prompt version")).not.toHaveTextContent("v4"); // the version for the new choices is not known yet
   });
 
   it("shows skeletons while the context loads", () => {

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { copyText } from "@/lib/copy";
 import { type ReferenceModel, readContext } from "@/lib/estimate/read";
-import { cn } from "@/lib/utils";
 import { NotAvailable, Row, Rows } from "./rows";
 import type { PromptContext } from "./use-prompt-context";
 
@@ -23,6 +22,14 @@ const ContextSkeleton = () => (
       <Skeleton key={i} className="h-20 w-full" />
     ))}
   </div>
+);
+
+// Where the version will show once the prompt for new choices arrives: a skeleton-style tag that dims nothing.
+const Updating = () => (
+  <span className="inline-flex items-center gap-1.5 font-sans">
+    <span aria-hidden data-slot="skeleton" className="h-3 w-6 rounded-sm bg-muted motion-safe:animate-pulse" />
+    Updating…
+  </span>
 );
 
 const Reference = ({ reference: { size, meetingSummary, projectName, estimation } }: { reference: ReferenceModel }) => (
@@ -53,7 +60,7 @@ const Reference = ({ reference: { size, meetingSummary, projectName, estimation 
 );
 
 // What the model sees for the form's current choices: the system prompt and the reference estimations injected into it
-// (CAG). While the prompt for new choices loads, the previous one stays, dimmed and marked busy.
+// (CAG). While the prompt for new choices loads, the previous one stays, marked busy, at full contrast.
 export const ContextTab = ({ context: { context, loading } }: { context: PromptContext }) => {
   const promptId = useId();
   const referencesId = useId();
@@ -61,11 +68,11 @@ export const ContextTab = ({ context: { context, loading } }: { context: PromptC
   const { promptVersion, systemPrompt, references } = readContext(context);
   if (!systemPrompt) return <Empty>The prompt and references could not be loaded from the AI service. Reload the page to try again.</Empty>;
   return (
-    <div aria-busy={loading} className={cn("flex flex-col gap-8 transition-opacity", loading && "opacity-60")}>
+    <div aria-busy={loading} className="flex flex-col gap-8">
       <div className="flex flex-col gap-3">
         <Rows>
           <Row label="Prompt version" mono>
-            {promptVersion ?? <NotAvailable />}
+            {loading ? <Updating /> : (promptVersion ?? <NotAvailable />)}
           </Row>
         </Rows>
         <div className="flex items-center justify-between gap-2">
