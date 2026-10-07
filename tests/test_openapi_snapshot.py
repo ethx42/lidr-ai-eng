@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -9,6 +10,8 @@ from app.routers.estimations import example_response
 from app.schemas.context import ContextResponse, ReferenceView
 from app.schemas.estimation import CallMetrics, EstimateResponse, Usage
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
+
+ESTIMATE_PATHS = ["/api/v1/estimate", "/api/v1/estimate/stream"]
 
 
 def test_contract_snapshot_is_current() -> None:
@@ -61,9 +64,22 @@ def test_stream_operation_documents_every_event_payload() -> None:
     assert operation["responses"]["422"]
 
 
-@pytest.mark.parametrize("path", ["/api/v1/estimate", "/api/v1/estimate/stream"])
+def query_params(path: str) -> dict[str, dict[str, Any]]:
+    params = create_app().openapi()["paths"][path]["post"]["parameters"]
+    assert {p["name"] for p in params} == {"refresh", "prompt_version"}
+    return {p["name"]: p for p in params}
+
+
+@pytest.mark.parametrize("path", ESTIMATE_PATHS)
 def test_estimate_operations_accept_refresh(path: str) -> None:
-    [param] = create_app().openapi()["paths"][path]["post"]["parameters"]
+    param = query_params(path)["refresh"]
     schema = param["schema"]
     assert (param["name"], param["in"], param["required"]) == ("refresh", "query", False)
     assert (schema["type"], schema["default"]) == ("boolean", False)
+
+
+@pytest.mark.parametrize("path", ESTIMATE_PATHS)
+def test_estimate_operations_accept_prompt_version(path: str) -> None:
+    param = query_params(path)["prompt_version"]
+    assert (param["in"], param["required"]) == ("query", False)
+    assert "default" not in param["schema"]  # omitted: the PROMPT_VERSION setting

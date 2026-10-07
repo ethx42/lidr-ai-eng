@@ -105,14 +105,17 @@ PromptVersionDep = Annotated[str, Depends(checked_prompt_version)]
 
 
 async def service_stream(
-    body: CheckedRequest, service: ServiceDep, refresh: Refresh = False
+    body: CheckedRequest,
+    service: ServiceDep,
+    prompt_version: PromptVersionDep,
+    refresh: Refresh = False,
 ) -> AsyncIterator[AsyncGenerator[StreamItem]]:
     """Owns the service stream's lifetime. FastAPI iterates the endpoint generator in a producer
     task that it cancels but never closes: when a slow reader disconnects, that task is cancelled
     on a full buffer while both generators sit at a `yield`. This request-scoped teardown runs
     after that cancellation, in the request's context, so the upstream stream closes (and the
     call is logged with its request id) now instead of at garbage collection."""
-    items = service.estimate_stream(body, refresh=refresh)
+    items = service.estimate_stream(body, refresh=refresh, prompt_version=prompt_version)
     try:
         yield items
     except* anyio.BrokenResourceError:
@@ -161,16 +164,21 @@ def error_response(description: str) -> dict[str, Any]:
     ),
     responses={
         200: {"content": {"application/json": {"example": example_response()}}},
-        422: error_response("Invalid request (empty, too long, or unknown fields)."),
+        422: error_response(
+            "Invalid request (empty, too long, unknown fields, or unknown prompt version)."
+        ),
         429: error_response("Provider rate limit (`upstream_rate_limited`)."),
         502: error_response("Invalid model output or rejected request."),
         503: error_response("Provider timeout, connection failure, or 5xx."),
     },
 )
 async def estimate(
-    body: CheckedRequest, service: ServiceDep, refresh: Refresh = False
+    body: CheckedRequest,
+    service: ServiceDep,
+    prompt_version: PromptVersionDep,
+    refresh: Refresh = False,
 ) -> EstimateResponse:
-    return await service.estimate(body, refresh=refresh)
+    return await service.estimate(body, refresh=refresh, prompt_version=prompt_version)
 
 
 STREAM_EVENT_REFS = [
@@ -178,9 +186,9 @@ STREAM_EVENT_REFS = [
     for model in (StatusEvent, PartialEvent, EstimateResponse, ErrorEvent)
 ]
 STREAM_DESCRIPTION = """\
-Same body as `POST /api/v1/estimate`; validation errors return `422` JSON before the stream
-starts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq` is
-also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`
+Same body and query as `POST /api/v1/estimate`; validation errors return `422` JSON before the
+stream starts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq`
+is also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`
 (`ErrorEvent`).
 """
 
@@ -192,7 +200,9 @@ also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse
     description=STREAM_DESCRIPTION,
     responses={
         200: {"content": {"text/event-stream": {"schema": {"oneOf": STREAM_EVENT_REFS}}}},
-        422: error_response("Invalid request (empty, too long, or unknown fields)."),
+        422: error_response(
+            "Invalid request (empty, too long, unknown fields, or unknown prompt version)."
+        ),
     },
 )
 async def estimate_stream(items: ServiceStream) -> AsyncIterator[ServerSentEvent]:

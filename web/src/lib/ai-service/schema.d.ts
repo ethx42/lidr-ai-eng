@@ -55,9 +55,9 @@ export interface paths {
         put?: never;
         /**
          * Stream an estimate as Server-Sent Events
-         * @description Same body as `POST /api/v1/estimate`; validation errors return `422` JSON before the stream
-         *     starts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq` is
-         *     also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`
+         * @description Same body and query as `POST /api/v1/estimate`; validation errors return `422` JSON before the
+         *     stream starts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq`
+         *     is also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`
          *     (`ErrorEvent`).
          */
         post: operations["estimate_stream_api_v1_estimate_stream_post"];
@@ -612,6 +612,8 @@ export interface operations {
             query?: {
                 /** @description Skip the cache lookup and regenerate; the fresh result replaces the entry. */
                 refresh?: boolean;
+                /** @description Prompt template version (`v1`, `v2`, …); default: `PROMPT_VERSION`. */
+                prompt_version?: string | null;
             };
             header?: never;
             path?: never;
@@ -842,7 +844,7 @@ export interface operations {
                     "application/json": components["schemas"]["EstimateResponse"];
                 };
             };
-            /** @description Invalid request (empty, too long, or unknown fields). */
+            /** @description Invalid request (empty, too long, unknown fields, or unknown prompt version). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -877,6 +879,8 @@ export interface operations {
             query?: {
                 /** @description Skip the cache lookup and regenerate; the fresh result replaces the entry. */
                 refresh?: boolean;
+                /** @description Prompt template version (`v1`, `v2`, …); default: `PROMPT_VERSION`. */
+                prompt_version?: string | null;
             };
             header?: never;
             path?: never;
@@ -897,7 +901,7 @@ export interface operations {
                     "text/event-stream": components["schemas"]["StatusEvent"] | components["schemas"]["PartialEvent"] | components["schemas"]["EstimateResponse"] | components["schemas"]["ErrorEvent"];
                 };
             };
-            /** @description Invalid request (empty, too long, or unknown fields). */
+            /** @description Invalid request (empty, too long, unknown fields, or unknown prompt version). */
             422: {
                 headers: {
                     [name: string]: unknown;

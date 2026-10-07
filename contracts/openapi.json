@@ -1018,6 +1018,24 @@
               "title": "Refresh",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Prompt template version (`v1`, `v2`, \u2026); default: `PROMPT_VERSION`.",
+            "in": "query",
+            "name": "prompt_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Prompt template version (`v1`, `v2`, \u2026); default: `PROMPT_VERSION`.",
+              "title": "Prompt Version"
+            }
           }
         ],
         "requestBody": {
@@ -1250,7 +1268,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "description": "Invalid request (empty, too long, or unknown fields)."
+            "description": "Invalid request (empty, too long, unknown fields, or unknown prompt version)."
           },
           "429": {
             "description": "Provider rate limit (`upstream_rate_limited`)."
@@ -1270,7 +1288,7 @@
     },
     "/api/v1/estimate/stream": {
       "post": {
-        "description": "Same body as `POST /api/v1/estimate`; validation errors return `422` JSON before the stream\nstarts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq` is\nalso the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`\n(`ErrorEvent`).",
+        "description": "Same body and query as `POST /api/v1/estimate`; validation errors return `422` JSON before the\nstream starts. Events: `status` (`StatusEvent`, any number), `partial` (`PartialEvent`; its `seq`\nis also the SSE `id`), then exactly one terminal event: `result` (`EstimateResponse`) or `error`\n(`ErrorEvent`).",
         "operationId": "estimate_stream_api_v1_estimate_stream_post",
         "parameters": [
           {
@@ -1283,6 +1301,24 @@
               "description": "Skip the cache lookup and regenerate; the fresh result replaces the entry.",
               "title": "Refresh",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Prompt template version (`v1`, `v2`, \u2026); default: `PROMPT_VERSION`.",
+            "in": "query",
+            "name": "prompt_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Prompt template version (`v1`, `v2`, \u2026); default: `PROMPT_VERSION`.",
+              "title": "Prompt Version"
             }
           }
         ],
@@ -1339,7 +1375,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "description": "Invalid request (empty, too long, or unknown fields)."
+            "description": "Invalid request (empty, too long, unknown fields, or unknown prompt version)."
           }
         },
         "summary": "Stream an estimate as Server-Sent Events",

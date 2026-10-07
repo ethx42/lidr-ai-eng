@@ -60,8 +60,8 @@ class EstimationService:
         self.cache_scope = cache_scope
         self.primary_attempt = Attempt(provider.name, provider.model)
 
-    def _render(self, request: EstimateRequest) -> RenderedPrompt:
-        prompt = render(request, self.prompt_version)
+    def _render(self, request: EstimateRequest, prompt_version: str | None) -> RenderedPrompt:
+        prompt = render(request, self.prompt_version if prompt_version is None else prompt_version)
         # Before any provider call: the router's llm_fallback records read it.
         prompt_version_var.set(prompt.version)
         return prompt
@@ -177,8 +177,9 @@ class EstimationService:
         )
 
     def cache_key_for(self, request: EstimateRequest, prompt_version: str | None = None) -> str:
-        version = self.prompt_version if prompt_version is None else prompt_version
-        return self._cache_key(render(request, version))
+        return self._cache_key(
+            render(request, self.prompt_version if prompt_version is None else prompt_version)
+        )
 
     async def _lookup(
         self, key: str, *, version: str, refresh: bool, stream: bool
@@ -212,9 +213,9 @@ class EstimationService:
             await self.cache.set(key, response)
 
     async def estimate(
-        self, request: EstimateRequest, *, refresh: bool = False
+        self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
     ) -> EstimateResponse:
-        prompt = self._render(request)
+        prompt = self._render(request, prompt_version)
         key = self._cache_key(prompt)
         cached, lookup = await self._lookup(
             key, version=prompt.version, refresh=refresh, stream=False
@@ -244,9 +245,9 @@ class EstimationService:
         return response
 
     async def estimate_stream(
-        self, request: EstimateRequest, *, refresh: bool = False
+        self, request: EstimateRequest, *, refresh: bool = False, prompt_version: str | None = None
     ) -> AsyncGenerator[StreamItem]:
-        prompt = self._render(request)
+        prompt = self._render(request, prompt_version)
         key = self._cache_key(prompt)
         cached, lookup = await self._lookup(
             key, version=prompt.version, refresh=refresh, stream=True

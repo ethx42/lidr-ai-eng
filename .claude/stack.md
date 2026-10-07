@@ -546,6 +546,7 @@ Method: Context7 docs plus the installed source and signatures. Every behaviour 
 - **Enum query params:** `project_type: ProjectType = DEFAULT_PARAMS.project_type` becomes `{"in": "query", "required": false, "schema": {"$ref": ".../ProjectType", "default": "web_saas"}}`; a bad value is FastAPI's own 422 with `loc ["query", "project_type"]`. openapi-typescript emits it as `project_type?: components["schemas"]["ProjectType"]`.
 - **Empty query value (verified in `dependencies/utils.py`):** only `Form()` fields treat `""` as missing, so `?prompt_version=` reaches the dependency as `""` (not `None`) and fails the version check (422), instead of falling back to the default.
 - **Version check as a dependency:** `checked_prompt_version` (`PromptVersionDep`) raises `RequestValidationError` with `loc ("query", "prompt_version")` before any template lookup; the value must match `VERSION_PATTERN` and be one of `available_versions()` (the directory listing). Tests serve an extra version with the `prompts_v99` fixture (`tests/conftest.py`: v1's templates copied as v1 and v99 under `tmp_path`, loader `PROMPTS_DIR` and `_env` patched).
+- **Shared query dependency (verified in the contract):** `PromptVersionDep` on `/estimate` and on the stream's request-scoped `service_stream` dependency shows up as one optional `prompt_version` query parameter in each operation (`anyOf [string, null]`, no `default`: FastAPI drops a `None` default), and its 422 still comes as JSON before the stream starts, like `CheckedRequest`.
 
 ## Web, BFF, Docker and CI (2026-10-06)
 
