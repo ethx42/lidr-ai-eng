@@ -7,10 +7,11 @@ import anthropic
 import httpx2
 import pydantic
 from anthropic import AsyncAnthropic, DefaultAsyncHttpxClient, transform_schema
-from anthropic.types import Message
+from anthropic.types import Message, TextBlockParam
 from pydantic import BaseModel, TypeAdapter
 
 from app.config import Provider, ReasoningEffort
+from app.prompts.loader import split_system
 from app.schemas.estimation import Usage
 from app.services.errors import (
     QUOTA,
@@ -45,6 +46,18 @@ QUOTA_MESSAGES = ("You have reached your specified", "Your credit balance is too
 def output_format(schema: type[BaseModel]) -> dict[str, Any]:  # JSON request fragment
     """The `output_config.format` that `messages.parse(output_format=schema)` would send."""
     return {"type": "json_schema", "schema": transform_schema(TypeAdapter(schema).json_schema())}
+
+
+def system_blocks(system: str) -> list[TextBlockParam]:
+    """The cache breakpoint sits on the static prefix, so a request with another tail (enums,
+    session metadata) still reads the cache any variant wrote."""
+    static, tail = split_system(system)
+    cached: TextBlockParam = {
+        "type": "text",
+        "text": static,
+        "cache_control": {"type": "ephemeral"},
+    }
+    return [cached, {"type": "text", "text": tail}] if tail else [cached]
 
 
 async def _no_retry_on_spend_cap(response: httpx2.Response) -> None:
@@ -179,7 +192,7 @@ class AnthropicProvider:
         return {
             **self.params,
             "model": self.model,
-            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "system": system_blocks(system),
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "output_config": {
                 **self.params.get("output_config", {}),

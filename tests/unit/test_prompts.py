@@ -17,6 +17,7 @@ from app.prompts.loader import (
     render,
     render_estimation_prompt,
     render_system,
+    split_system,
 )
 from app.schemas.estimation import DetailLevel, OutputFormat, ProjectType
 from app.sessions import ProjectMetadata
@@ -128,6 +129,25 @@ def test_every_version_has_a_pin() -> None:
 
 
 METADATA = ProjectMetadata(project_name="Yoga Booking", mentioned_technologies=["Stripe"])
+
+
+@pytest.mark.parametrize("version", available_versions())
+def test_static_prefix_is_shared_by_every_render_of_a_version(version: str) -> None:
+    # The provider-side cache prefix: enums and session metadata only ever change the tail.
+    systems = [
+        render_system(PromptParams(*choices), version, metadata=metadata)
+        for choices in product(ProjectType, DetailLevel, OutputFormat)
+        for metadata in (None, METADATA)
+    ]
+    statics = {split_system(system)[0] for system in systems}
+    assert len(statics) == 1
+    [static] = statics
+    assert static.endswith("</reference_estimations>\n")
+    assert all(system.startswith(static) and system != static for system in systems)
+
+
+def test_system_without_the_boundary_is_all_static() -> None:
+    assert split_system("SYS") == ("SYS", "")
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])

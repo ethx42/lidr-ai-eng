@@ -12,7 +12,14 @@ import pytest
 from anthropic import AsyncAnthropic
 
 from app.config import ReasoningEffort
-from app.schemas.estimation import EstimationBreakdown, Usage
+from app.prompts.loader import DEFAULT_PARAMS, PromptParams, render_system
+from app.schemas.estimation import (
+    DetailLevel,
+    EstimationBreakdown,
+    OutputFormat,
+    ProjectType,
+    Usage,
+)
 from app.services.errors import (
     InvalidModelOutput,
     LLMError,
@@ -23,6 +30,7 @@ from app.services.errors import (
 from app.services.providers.anthropic_provider import AnthropicProvider, output_format
 from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, TextDelta
 from app.services.providers.profiles import get_profile
+from app.sessions import ProjectMetadata
 from scripts.record_sse_fixture import MAX_OUTPUT_TOKENS, anthropic_body, parse_sse
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "sse" / "anthropic"
@@ -340,6 +348,28 @@ async def test_anthropic_sends_history_as_messages(stream: bool) -> None:
         ("assistant", "a1"),
         ("user", "u2"),
     ]
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["generate", "stream"])
+async def test_anthropic_caches_only_the_static_system_prefix(stream: bool) -> None:
+    metadata = ProjectMetadata(project_name="Yoga Booking", mentioned_technologies=["Stripe"])
+    system = render_system(DEFAULT_PARAMS, "v3", metadata=metadata)
+    bodies: list[JSON] = []
+    provider = provider_for(capturing(bodies))
+    args = {"system": system, "messages": HISTORY, "schema": EstimationBreakdown, "cache_key": "k"}
+    with pytest.raises(UpstreamError):
+        if stream:
+            [_ async for _ in provider.stream(**args)]
+        else:
+            await provider.generate(**args)
+    [body] = bodies
+    static, tail = body["system"]
+    assert static["cache_control"] == {"type": "ephemeral"}
+    assert tail == {"type": "text", "text": tail["text"]}
+    assert static["text"] + tail["text"] == system
+    # Another variant (enums, no metadata) reads the cache this one writes.
+    other = PromptParams(ProjectType.DATA_PIPELINE, DetailLevel.SUMMARY, OutputFormat.NARRATIVE)
+    assert render_system(other, "v3").startswith(static["text"])
 
 
 async def test_fixture_recorder_sends_the_provider_body() -> None:

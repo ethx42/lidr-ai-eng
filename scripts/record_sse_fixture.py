@@ -18,7 +18,7 @@ import httpx2
 from app.config import Settings
 from app.schemas.estimation import EstimationBreakdown, Usage
 from app.services.pricing import cost_usd
-from app.services.providers.anthropic_provider import output_format
+from app.services.providers.anthropic_provider import output_format, system_blocks
 from app.services.providers.openai_provider import text_format
 from app.services.providers.profiles import get_profile, request_params
 from scripts.live_budget import ensure_budget, record_spend
@@ -74,7 +74,7 @@ def anthropic_body(system: str, user: str, *, temperature: float) -> dict[str, A
     )
     return {
         "model": ANTHROPIC_MODEL,
-        "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        "system": system_blocks(system),
         "messages": [{"role": "user", "content": user}],
         "output_config": {"format": output_format(EstimationBreakdown)},
         "stream": True,
