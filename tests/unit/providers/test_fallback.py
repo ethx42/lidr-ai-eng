@@ -18,7 +18,11 @@ from tests.fakes import FakeProvider, SlowFakeProvider, SlowToFailProvider
 
 ARGS = {
     "system": "S",
-    "messages": [ChatMessage("user", "U")],
+    "messages": [
+        ChatMessage("user", "U1"),
+        ChatMessage("assistant", "A1"),
+        ChatMessage("user", "U2"),
+    ],
     "schema": EstimationBreakdown,
     "cache_key": "k",
 }
@@ -29,6 +33,18 @@ async def test_falls_back_on_unavailable_and_reports_it() -> None:
     secondary = FakeProvider(name="anthropic", model="claude-haiku-4-5")
     result = await FallbackProvider([primary, secondary], Cooldown()).generate(**ARGS)
     assert result.provider == "anthropic" and result.fallback_used and result.attempts == 2
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["generate", "stream"])
+async def test_the_fallback_attempt_receives_the_full_history(stream: bool) -> None:
+    primary = FakeProvider(error=UpstreamUnavailable())
+    secondary = FakeProvider(name="anthropic")
+    router = FallbackProvider([primary, secondary], Cooldown())
+    if stream:
+        [e async for e in router.stream(**ARGS)]
+    else:
+        await router.generate(**ARGS)
+    assert primary.calls[0]["messages"] == secondary.calls[0]["messages"] == ARGS["messages"]
 
 
 @pytest.mark.parametrize("error", [UpstreamError(), InvalidModelOutput()])

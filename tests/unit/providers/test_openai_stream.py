@@ -263,13 +263,16 @@ async def test_wire_text_format_matches_sdk_parse() -> None:
     assert (ours["store"], ours["prompt_cache_key"]) == (False, "k")
 
 
-async def test_openai_sends_history_as_input_items() -> None:
+@pytest.mark.parametrize("stream", [False, True], ids=["generate", "stream"])
+async def test_openai_sends_history_as_input_items(stream: bool) -> None:
     bodies: list[JSON] = []
     provider = provider_for(capturing(bodies))
+    args = {"system": "SYS", "messages": HISTORY, "schema": EstimationBreakdown, "cache_key": "k"}
     with pytest.raises(UpstreamError):  # `capturing` answers 400
-        await provider.generate(
-            system="SYS", messages=HISTORY, schema=EstimationBreakdown, cache_key="k"
-        )
+        if stream:
+            [_ async for _ in provider.stream(**args)]
+        else:
+            await provider.generate(**args)
     [body] = bodies
     assert body["instructions"] == "SYS"
     assert [(i["role"], i["content"]) for i in body["input"]] == [

@@ -5,11 +5,13 @@ from pathlib import Path
 import pytest
 
 from app.schemas.estimation import EstimationBreakdown
-from app.services.errors import InvalidModelOutput
+from app.services.errors import InvalidModelOutput, UpstreamError
 from app.services.pricing import cost_usd
 from app.services.providers.base import ChatMessage, LLMResult, TextDelta
+from app.services.providers.fallback import Cooldown, FallbackProvider
 from app.services.providers.replay_provider import ReplayProvider, cassette_key
 from tests.factories import breakdown
+from tests.fakes import FakeProvider
 
 MESSAGES = [ChatMessage("user", "U")]
 
@@ -178,15 +180,42 @@ async def test_fallback_choice_is_deterministic_per_prompt_pair(tmp_path: Path) 
         assert first.parsed == again.parsed == expected
 
 
-async def test_a_conversation_replays_the_cassette_of_its_latest_message(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "tail",
+    [[], [ChatMessage("assistant", '{"project_name": "')]],
+    ids=["ends-with-user", "assistant-prefill"],
+)
+async def test_a_conversation_replays_the_cassette_of_its_latest_user_message(
+    tmp_path: Path, tail: list[ChatMessage]
+) -> None:
     text = breakdown(project_name="Recorded").model_dump_json()
     write_cassette(tmp_path, cassette_key("S", "U"), [[0, text]])
     p = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], delay_scale=0)
-    history = [ChatMessage("user", "first"), ChatMessage("assistant", "{}"), *MESSAGES]
+    history = [ChatMessage("user", "first"), ChatMessage("assistant", "{}"), *MESSAGES, *tail]
     result = await p.generate(
         system="S", messages=history, schema=EstimationBreakdown, cache_key="k"
     )
     assert result.parsed.project_name == "Recorded"
+
+
+@pytest.mark.parametrize(
+    "messages", [[], [ChatMessage("assistant", "{}")]], ids=["empty", "no-user-message"]
+)
+@pytest.mark.parametrize("stream", [False, True], ids=["generate", "stream"])
+async def test_a_call_without_a_user_message_is_an_upstream_error_the_router_does_not_retry(
+    tmp_path: Path, messages: list[ChatMessage], stream: bool
+) -> None:
+    secondary = FakeProvider(name="anthropic")
+    replay = ReplayProvider(cassette_dir=tmp_path, fallback=[breakdown()], delay_scale=0)
+    router = FallbackProvider([replay, secondary], Cooldown())
+    args = {"system": "S", "messages": messages, "schema": EstimationBreakdown, "cache_key": "k"}
+    with pytest.raises(UpstreamError) as info:
+        if stream:
+            [e async for e in router.stream(**args)]
+        else:
+            await router.generate(**args)
+    assert info.value.cause == "no_user_message"
+    assert secondary.calls == []
 
 
 async def test_cassette_with_invalid_json_is_invalid_model_output(tmp_path: Path) -> None:

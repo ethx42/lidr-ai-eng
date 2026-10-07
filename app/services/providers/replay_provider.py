@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.config import Provider
 from app.schemas.estimation import EstimationBreakdown, Usage
-from app.services.errors import InvalidModelOutput
+from app.services.errors import InvalidModelOutput, UpstreamError
 from app.services.providers.base import ChatMessage, LLMResult, StreamEvent, T, TextDelta
 
 type Chunks = list[tuple[float, str]]  # (ms since the first chunk, text)
@@ -57,8 +57,12 @@ class ReplayProvider:
         self.model = model
 
     def _recording(self, system: str, messages: Sequence[ChatMessage]) -> tuple[Chunks, Usage]:
-        # Keyed on the latest message only, so a single-turn call keeps its recorded cassette.
-        key = cassette_key(system, messages[-1].content)
+        # Keyed on the latest user message only, so a single-turn call keeps its recorded cassette.
+        latest = next((m.content for m in reversed(messages) if m.role == "user"), None)
+        if latest is None:
+            # A caller error: an UpstreamError, which the router does not retry elsewhere.
+            raise UpstreamError(reason="no_user_message")
+        key = cassette_key(system, latest)
         path = self.cassette_dir / f"{key}.json"
         if path.is_file():
             cassette = Cassette.model_validate_json(path.read_bytes())

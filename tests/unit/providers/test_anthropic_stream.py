@@ -321,13 +321,16 @@ async def test_wire_output_config_and_cached_system_block(
     assert ours["stream"] is True
 
 
-async def test_anthropic_sends_history_as_messages() -> None:
+@pytest.mark.parametrize("stream", [False, True], ids=["generate", "stream"])
+async def test_anthropic_sends_history_as_messages(stream: bool) -> None:
     bodies: list[JSON] = []
     provider = provider_for(capturing(bodies))
+    args = {"system": "SYS", "messages": HISTORY, "schema": EstimationBreakdown, "cache_key": "k"}
     with pytest.raises(UpstreamError):
-        await provider.generate(
-            system="SYS", messages=HISTORY, schema=EstimationBreakdown, cache_key="k"
-        )
+        if stream:
+            [_ async for _ in provider.stream(**args)]
+        else:
+            await provider.generate(**args)
     [body] = bodies
     assert body["system"] == [
         {"type": "text", "text": "SYS", "cache_control": {"type": "ephemeral"}}
