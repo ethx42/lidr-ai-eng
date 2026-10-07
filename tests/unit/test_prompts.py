@@ -10,15 +10,21 @@ from app.prompts.loader import (
     DEFAULT_PARAMS,
     DEFAULT_VERSION,
     EVIDENCE_REMINDER,
+    PromptParams,
     render,
     render_estimation_prompt,
     render_system,
 )
+from app.schemas.estimation import DetailLevel, OutputFormat, ProjectType
 from tests.factories import typed_request
 
-# estimation/v1 rendered with the default params. A changed template needs a new version
-# directory (app/prompts/estimation/vN/) and a new pin; published versions never change.
-PINNED_SHA256 = "51ec6effe133b583a997f213c57d058e96232bde0c2194059a820858dde6d93d"
+# Each published version's system prompt for every detail level and output format, plus its user
+# message with and without an explicit language. Published versions never change: a changed
+# template needs a new version directory (app/prompts/estimation/vN/) and a new pin.
+PINNED_SHA256 = {
+    "v1": "17e613255d81caed0e06c3f9c0a1410f1ca605cbfdfb78543777a22d661147ad",
+    "v2": "b798680b915a4ab52cd885b15cafafc7131a3173e609e71da658a2fa896ab9b9",
+}
 
 
 def user_message(transcription: str, output_language: str | None) -> str:
@@ -76,9 +82,33 @@ def test_system_text_has_no_request_data() -> None:
     assert "UNIQUE-TRANSCRIPT-MARKER" in user
 
 
-def test_pinned_hash() -> None:
-    digest = hashlib.sha256(render_system(DEFAULT_PARAMS).encode()).hexdigest()
-    assert digest == PINNED_SHA256, f"prompt changed: add a new version and pin {digest}"
+def published_renders(version: str) -> str:
+    systems = [
+        render_system(PromptParams(ProjectType.WEB_SAAS, detail, output), version)
+        for detail in DetailLevel
+        for output in OutputFormat
+    ]
+    users = [
+        render_estimation_prompt(
+            typed_request(
+                "Client: we need a booking app.",
+                project_type=ProjectType.WEB_SAAS,
+                output_language=language,
+            ),
+            version,
+        )[1]
+        for language in (None, "Spanish")
+    ]
+    return "\x00".join([*systems, *users])
+
+
+@pytest.mark.parametrize("version", PINNED_SHA256)
+def test_published_versions_never_change(version: str) -> None:
+    digest = hashlib.sha256(published_renders(version).encode()).hexdigest()
+    assert digest == PINNED_SHA256[version], (
+        f"estimation/{version} changed, but published versions never change: revert the edit "
+        f"and make it in a new version directory (vN+1) with its own pin. Digest now: {digest}"
+    )
 
 
 def test_user_message_delimits_transcript() -> None:
