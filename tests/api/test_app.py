@@ -172,7 +172,7 @@ def test_a_broken_template_fails_startup_not_the_first_request(
     (version / "user.j2").write_text("{{ transcript }} {{ typo_variable }}")
     monkeypatch.setattr(loader, "PROMPTS_DIR", tmp_path)
     monkeypatch.setattr(loader, "_env", loader._env.overlay(loader=FileSystemLoader(tmp_path)))
-    with pytest.raises(UndefinedError, match="typo_variable"), make_client():
+    with pytest.raises(UndefinedError, match="typo_variable"), make_client(prompt_version="v1"):
         pass
 
 

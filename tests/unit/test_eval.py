@@ -22,6 +22,7 @@ from app.services.providers.base import LLMResult
 from evals.run_eval import (
     GOLDEN_DIR,
     GoldenCase,
+    check_response,
     detect_language,
     expected_language,
     load_golden_cases,
@@ -30,7 +31,14 @@ from evals.run_eval import (
     run_cases,
 )
 from scripts.live_budget import BudgetExceeded, call_bound_usd
-from tests.factories import TRANSCRIPT, breakdown, make_service, task
+from tests.factories import (
+    TRANSCRIPT,
+    breakdown,
+    make_service,
+    response_fixture,
+    task,
+    typed_request,
+)
 from tests.fakes import FakeProvider
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -205,6 +213,23 @@ async def test_score_granularity() -> None:
     assert failing["checks"]["covers_devops"] is False
 
 
+def frontend_case(expects_frontend: bool) -> GoldenCase:
+    return GoldenCase("x", TRANSCRIPT, expects_frontend=expects_frontend)
+
+
+def test_covers_frontend_only_checked_when_expected() -> None:
+    no_frontend = response_fixture()  # backend + qa tasks only
+    assert check_response(frontend_case(True), no_frontend)["covers_frontend"] is False
+    assert "covers_frontend" not in check_response(frontend_case(False), no_frontend)
+    assert check_response(frontend_case(True), None)["covers_frontend"] is False
+
+
+async def test_a_frontend_task_covers_frontend() -> None:
+    with_frontend = breakdown(tasks=[*FULL.tasks, task("T5", basis=["R1"], phase="frontend")])
+    response = await make_service(FakeProvider(result=with_frontend)).estimate(typed_request())
+    assert check_response(frontend_case(True), response)["covers_frontend"] is True
+
+
 async def test_fabricated_requirement_fails_grounding() -> None:
     fabricated = breakdown(
         requirements=[
@@ -240,7 +265,7 @@ async def test_explicit_report_path(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert path == target
     report = json.loads(target.read_text())
     assert 0 <= report["score"] <= 1
-    assert report["prompt_version"] == "v1"
+    assert report["prompt_version"] == "v2"
     assert len(report["cases"]) == len(load_golden_cases(GOLDEN_DIR))
     assert fake.closed
     assert "score=" in capsys.readouterr().out
@@ -255,7 +280,7 @@ async def test_default_report_name_includes_version(
     settings = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
     path = await main([], settings=settings, provider_factory=lambda _: FakeProvider(result=FULL))
     assert path.parent == tmp_path
-    assert path.name.startswith("v1-")
+    assert path.name.startswith("v2-")
 
 
 def test_detect_language() -> None:

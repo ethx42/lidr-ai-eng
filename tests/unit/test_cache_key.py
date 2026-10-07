@@ -43,3 +43,10 @@ def test_every_enum_combination_has_its_own_key(
         for p, d, o in COMBINATIONS
     }
     assert len(keys) == len(COMBINATIONS) == 36
+
+
+def test_cache_key_changes_with_prompt_version(service_with_fake: EstimationService) -> None:
+    request = typed_request()
+    assert service_with_fake.cache_key_for(request, "v1") != service_with_fake.cache_key_for(
+        request, "v2"
+    )

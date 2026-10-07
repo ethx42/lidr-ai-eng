@@ -76,6 +76,14 @@ async def test_cache_key_follows_prompt_version() -> None:
     assert keys[2] == "estimator-v99"
 
 
+async def test_a_v2_request_routes_with_estimator_v2() -> None:
+    provider = FakeProvider()
+    request = typed_request("Client: one")
+    await service(provider).estimate(request, prompt_version="v2")
+    await service(provider).estimate(request)
+    assert [call["cache_key"] for call in provider.calls] == ["estimator-v2", "estimator-v1"]
+
+
 async def test_grounding_flags_fabricated_requirement() -> None:
     fabricated = breakdown(
         requirements=[
