@@ -11,20 +11,24 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic.json_schema import models_json_schema
 from starlette.datastructures import Headers
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
+from app.attachments.extractor import AttachmentError
 from app.config import Settings, get_settings
 from app.observability import configure_logging, request_id_var
 from app.prompts.loader import DEFAULT_PARAMS, available_versions, render_estimation_prompt
-from app.routers import estimations
+from app.routers import estimations, sessions
 from app.schemas.estimation import EstimateRequest
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.cache import ResponseCache, build_cache, cache_scope
+from app.services.conversation import ConversationService, SessionBusy, SessionNotFound
 from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
 from app.services.providers.factory import build_provider
+from app.sessions import InMemorySessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +134,23 @@ class AllowedHostMiddleware:
         await response(scope, receive, send)
 
 
+class BodyLimitMiddleware:
+    """Starlette's RequestBodyLimitMiddleware, sized from the settings the lifespan resolved: a
+    turn's largest upload plus 1 MiB for the form fields. Its 413 body is plain text, not the
+    API's error shape (FastAPI's `{"detail"}` JSON for a chunked body)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        settings: Settings = scope["app"].state.settings
+        limit = settings.attachment_max_files * settings.attachment_max_bytes + 1024 * 1024
+        await RequestBodyLimitMiddleware(self.app, max_body_size=limit)(scope, receive, send)
+
+
 def create_app(
     settings: Settings | None = None,
     provider_factory: Callable[[Settings], LLMProvider] = build_provider,
@@ -151,6 +172,16 @@ def create_app(
             cache=cache,
             cache_scope=cache_scope(resolved),
         )
+        app.state.conversation = ConversationService(
+            estimation=app.state.service,
+            store=InMemorySessionStore(
+                max_turns=resolved.max_turns,
+                max_history_chars=resolved.max_history_chars,
+                ttl_seconds=resolved.session_ttl_seconds,
+                max_sessions=resolved.max_sessions,
+            ),
+            limits=resolved.attachment_limits,
+        )
         try:
             yield
         finally:
@@ -163,9 +194,11 @@ def create_app(
         version=__version__,
         lifespan=lifespan,
     )
+    app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(AllowedHostMiddleware)
     app.add_middleware(RequestIdMiddleware)  # outermost: rejections carry the request id too
     app.include_router(estimations.router)
+    app.include_router(sessions.router)
     default_openapi = app.openapi
 
     def openapi() -> dict[str, Any]:  # same signature as FastAPI.openapi
@@ -178,6 +211,22 @@ def create_app(
     @app.exception_handler(LLMError)
     async def llm_error_handler(_: Request, exc: LLMError) -> JSONResponse:
         return JSONResponse(error_body(exc.code, exc.message), exc.status_code)
+
+    @app.exception_handler(SessionNotFound)
+    async def session_not_found_handler(_: Request, exc: SessionNotFound) -> JSONResponse:
+        return JSONResponse(error_body(exc.code, exc.message), 404)
+
+    @app.exception_handler(SessionBusy)
+    async def session_busy_handler(_: Request, exc: SessionBusy) -> JSONResponse:
+        return JSONResponse(error_body(exc.code, exc.message), 409)
+
+    @app.exception_handler(AttachmentError)
+    async def attachment_error_handler(_: Request, exc: AttachmentError) -> JSONResponse:
+        # No exc_info: a traceback could quote the parser, and the parser the document.
+        logger.warning("attachment_rejected", extra={"fields": {"reason": exc.reason}})
+        if exc.reason == "busy":
+            return JSONResponse(error_body("attachments_busy", str(exc)), 503)
+        return JSONResponse(error_body("invalid_attachment", str(exc)), 422)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:

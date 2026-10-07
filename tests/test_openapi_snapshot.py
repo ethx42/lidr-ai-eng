@@ -10,9 +10,12 @@ from app.main import create_app
 from app.routers.estimations import example_response
 from app.schemas.context import ContextResponse, ReferenceView
 from app.schemas.estimation import CallMetrics, EstimateResponse, Usage
+from app.schemas.session import SessionView, TurnResponse
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
+from app.sessions import ProjectMetadata
 
 ESTIMATE_PATHS = ["/api/v1/estimate", "/api/v1/estimate/stream"]
+SESSION_TURN_PATHS = ["/sessions/{session_id}/estimate", "/sessions/{session_id}/estimate/stream"]
 
 
 def test_contract_snapshot_is_current() -> None:
@@ -37,6 +40,9 @@ def test_stream_event_models_are_in_the_contract() -> None:
         ErrorEvent,
         ContextResponse,
         ReferenceView,
+        TurnResponse,
+        SessionView,
+        ProjectMetadata,
     ],
 )
 def test_always_serialized_fields_are_required(model: type[BaseModel]) -> None:
@@ -71,6 +77,20 @@ def test_stream_operation_documents_every_event_payload() -> None:
     refs = {item["$ref"].rsplit("/", 1)[1] for item in content["schema"]["oneOf"]}
     assert refs == {"StatusEvent", "PartialEvent", "EstimateResponse", "ErrorEvent"}
     assert operation["responses"]["422"]
+
+
+def test_session_stream_operation_documents_every_event_payload() -> None:
+    operation = create_app().openapi()["paths"][SESSION_TURN_PATHS[1]]["post"]
+    content = operation["responses"]["200"]["content"]["text/event-stream"]
+    refs = {item["$ref"].rsplit("/", 1)[1] for item in content["schema"]["oneOf"]}
+    assert refs == {"StatusEvent", "PartialEvent", "TurnResponse", "ErrorEvent"}
+
+
+@pytest.mark.parametrize("path", SESSION_TURN_PATHS)
+def test_session_turns_take_a_multipart_body(path: str) -> None:
+    operation = create_app().openapi()["paths"][path]["post"]
+    assert list(operation["requestBody"]["content"]) == ["multipart/form-data"]
+    assert {"404", "409", "413", "422", "503"} <= set(operation["responses"])
 
 
 def query_params(path: str) -> dict[str, dict[str, Any]]:  # Any: OpenAPI parameter objects are JSON

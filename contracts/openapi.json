@@ -591,6 +591,19 @@
         "title": "GroundingReport",
         "type": "object"
       },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "OutputFormat": {
         "enum": [
           "phases_table",
@@ -617,6 +630,59 @@
           "breakdown"
         ],
         "title": "PartialEvent",
+        "type": "object"
+      },
+      "ProjectMetadata": {
+        "properties": {
+          "agreed_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agreed Scope"
+          },
+          "assumed_team_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumed Team Size"
+          },
+          "mentioned_technologies": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Mentioned Technologies",
+            "type": "array"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
+          }
+        },
+        "required": [
+          "project_name",
+          "assumed_team_size",
+          "mentioned_technologies",
+          "agreed_scope"
+        ],
+        "title": "ProjectMetadata",
         "type": "object"
       },
       "ProjectType": {
@@ -706,6 +772,101 @@
           "mitigation"
         ],
         "title": "Risk",
+        "type": "object"
+      },
+      "SessionCreated": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "SessionCreated",
+        "type": "object"
+      },
+      "SessionEstimateForm": {
+        "additionalProperties": false,
+        "properties": {
+          "attachments": {
+            "default": [],
+            "description": "PDF, DOCX or plain text. Empty file inputs are ignored.",
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "detail_level": {
+            "$ref": "#/components/schemas/DetailLevel"
+          },
+          "output_format": {
+            "$ref": "#/components/schemas/OutputFormat"
+          },
+          "output_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty means not given: the transcription's language.",
+            "title": "Output Language"
+          },
+          "project_type": {
+            "$ref": "#/components/schemas/ProjectType"
+          },
+          "transcript": {
+            "description": "This turn's meeting transcription. Treated strictly as data.",
+            "minLength": 1,
+            "title": "Transcript",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transcript",
+          "project_type",
+          "detail_level",
+          "output_format"
+        ],
+        "title": "SessionEstimateForm",
+        "type": "object"
+      },
+      "SessionView": {
+        "properties": {
+          "history_turns": {
+            "title": "History Turns",
+            "type": "integer"
+          },
+          "max_turns": {
+            "title": "Max Turns",
+            "type": "integer"
+          },
+          "project_metadata": {
+            "$ref": "#/components/schemas/ProjectMetadata"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "project_metadata",
+          "history_turns",
+          "max_turns",
+          "prompt_version"
+        ],
+        "title": "SessionView",
         "type": "object"
       },
       "StatusEvent": {
@@ -907,6 +1068,80 @@
         "title": "Totals",
         "type": "object"
       },
+      "TurnResponse": {
+        "properties": {
+          "breakdown": {
+            "$ref": "#/components/schemas/EnrichedBreakdown"
+          },
+          "estimation": {
+            "description": "Estimation rendered as markdown.",
+            "title": "Estimation",
+            "type": "string"
+          },
+          "grounding": {
+            "$ref": "#/components/schemas/GroundingReport"
+          },
+          "history_turns": {
+            "title": "History Turns",
+            "type": "integer"
+          },
+          "metadata_changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Metadata Changes",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/CallMetrics"
+          },
+          "model": {
+            "description": "Model that served the result.",
+            "title": "Model",
+            "type": "string"
+          },
+          "project_metadata": {
+            "$ref": "#/components/schemas/ProjectMetadata"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "description": "Provider that served the result.",
+            "enum": [
+              "openai",
+              "anthropic",
+              "replay"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "required": [
+          "estimation",
+          "breakdown",
+          "grounding",
+          "model",
+          "provider",
+          "prompt_version",
+          "usage",
+          "metrics",
+          "session_id",
+          "project_metadata",
+          "metadata_changes",
+          "history_turns"
+        ],
+        "title": "TurnResponse",
+        "type": "object"
+      },
       "Usage": {
         "properties": {
           "cache_write_tokens": {
@@ -937,6 +1172,46 @@
           "cache_write_tokens"
         ],
         "title": "Usage",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
         "type": "object"
       }
     }
@@ -1437,6 +1712,225 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/sessions": {
+      "post": {
+        "operationId": "create_session_sessions_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Start a conversational estimation session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/sessions/{session_id}": {
+      "get": {
+        "operationId": "get_session_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown, expired or evicted session (`session_not_found`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What a session knows so far",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/sessions/{session_id}/estimate": {
+      "post": {
+        "description": "A `multipart/form-data` body: `transcript`, `project_type`, `detail_level`, `output_format`, an\noptional `output_language`, and up to `ATTACHMENT_MAX_FILES` `attachments` (PDF, DOCX or plain\ntext, `ATTACHMENT_MAX_BYTES` each). Their text joins the turn's prompt. Turns never use the\nresponse cache. A body over `ATTACHMENT_MAX_FILES` \u00d7 `ATTACHMENT_MAX_BYTES` + 1 MiB gets a `413`\nwhose body is not the JSON error shape.",
+        "operationId": "estimate_sessions__session_id__estimate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionEstimateForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown, expired or evicted session (`session_not_found`)."
+          },
+          "409": {
+            "description": "Another turn of this session is in progress (`session_busy`)."
+          },
+          "413": {
+            "description": "Body too large (plain text, not the JSON error shape)."
+          },
+          "422": {
+            "description": "Invalid field or transcript too long (`invalid_request`), or an attachment that is unsupported, unreadable, too large or one too many (`invalid_attachment`; the message names the file)."
+          },
+          "429": {
+            "description": "Provider rate limit (`upstream_rate_limited`)."
+          },
+          "502": {
+            "description": "Invalid model output or rejected request."
+          },
+          "503": {
+            "description": "Provider timeout, connection failure or 5xx, or no free attachment reader (`attachments_busy`)."
+          }
+        },
+        "summary": "Estimate one turn of a session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/sessions/{session_id}/estimate/stream": {
+      "post": {
+        "description": "A `multipart/form-data` body: `transcript`, `project_type`, `detail_level`, `output_format`, an\noptional `output_language`, and up to `ATTACHMENT_MAX_FILES` `attachments` (PDF, DOCX or plain\ntext, `ATTACHMENT_MAX_BYTES` each). Their text joins the turn's prompt. Turns never use the\nresponse cache. A body over `ATTACHMENT_MAX_FILES` \u00d7 `ATTACHMENT_MAX_BYTES` + 1 MiB gets a `413`\nwhose body is not the JSON error shape.\n\nEvery error above is JSON, sent before the stream starts. Events: `status`, `partial` (its `seq` is also the SSE `id`), then exactly one terminal event: `result` (`TurnResponse`) or `error` (`ErrorEvent`). The session changes only with a `result`.",
+        "operationId": "estimate_stream_sessions__session_id__estimate_stream_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionEstimateForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/StatusEvent"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PartialEvent"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TurnResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEvent"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown, expired or evicted session (`session_not_found`)."
+          },
+          "409": {
+            "description": "Another turn of this session is in progress (`session_busy`)."
+          },
+          "413": {
+            "description": "Body too large (plain text, not the JSON error shape)."
+          },
+          "422": {
+            "description": "Invalid field or transcript too long (`invalid_request`), or an attachment that is unsupported, unreadable, too large or one too many (`invalid_attachment`; the message names the file)."
+          },
+          "503": {
+            "description": "No free attachment reader (`attachments_busy`); try again."
+          }
+        },
+        "summary": "Stream one turn of a session as Server-Sent Events",
+        "tags": [
+          "sessions"
         ]
       }
     }

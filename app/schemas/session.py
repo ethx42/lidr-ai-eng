@@ -6,6 +6,10 @@ from app.schemas.estimation import EstimateResponse
 from app.sessions import ProjectMetadata
 
 
+class SessionCreated(BaseModel):
+    session_id: str
+
+
 class TurnResponse(EstimateResponse):
     session_id: str
     project_metadata: ProjectMetadata

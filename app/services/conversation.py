@@ -23,9 +23,15 @@ from app.sessions import Session, SessionStore, merge_metadata
 class SessionBusy(Exception):
     """Another turn of this session is in flight."""
 
+    code = "session_busy"
+    message = "Another turn of this session is in progress. Try again when it ends."
+
 
 class SessionNotFound(Exception):
     """Unknown, expired or evicted."""
+
+    code = "session_not_found"
+    message = "Session not found or expired. Start a new session."
 
 
 class ConversationService:

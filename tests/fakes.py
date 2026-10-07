@@ -115,15 +115,18 @@ class FakeProvider:
 
 
 class GatedFakeProvider(FakeProvider):
-    """`generate` answers only once `release` is set: a turn held in flight."""
+    """`generate` sets `entered`, then answers only once `release` is set: a turn held in
+    flight."""
 
     def __init__(self) -> None:
         super().__init__()
+        self.entered = asyncio.Event()
         self.release = asyncio.Event()
 
     async def generate(
         self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
     ) -> LLMResult[T]:
+        self.entered.set()
         await self.release.wait()
         return await super().generate(
             system=system, messages=messages, schema=schema, cache_key=cache_key
