@@ -660,14 +660,33 @@ it("returns null on the first turn and the signed change afterwards", () => {
 ```
 
 ```ts
-// route.test.ts: the BFF forwards multipart with the original boundary and propagates abort
-it("forwards the multipart body and content-type to the AI service", async () => { /* mock global fetch, call POST(request, { params }), assert upstream URL `${AI_SERVICE_URL}/sessions/s1/estimate/stream`, header content-type startsWith "multipart/form-data; boundary=", and `duplex: "half"` */ });
+// web/src/app/api/sessions/[id]/estimate/stream/route.test.ts
+// @vitest-environment node
+it("re-sends the validated form to the AI service and propagates abort", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("event: status\ndata: {}\n\n", { headers: { "content-type": "text/event-stream" } }));
+  const form = new FormData();
+  form.set("transcript", "turn one");
+  form.set("project_type", "web_saas");
+  form.append("attachments", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
+  const req = new Request("http://web/api/sessions/s1/estimate/stream", { method: "POST", body: form });
+  const res = await POST(req, { params: Promise.resolve({ id: "s1" }) });
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("http://ai-service:8000/sessions/s1/estimate/stream");
+  const sent = (init as RequestInit).body as FormData;
+  expect(sent.get("transcript")).toBe("turn one");
+  expect((sent.get("attachments") as File).name).toBe("spec.pdf");
+  expect((init as RequestInit).headers).not.toHaveProperty("content-type");
+  expect((init as RequestInit).signal).toBe(req.signal);
+  expect(res.headers.get("cache-control")).toMatch(/no-transform/);
+});
+it("rejects a disallowed file type before calling upstream", async () => { /* same setup with virus.exe → 422 invalid_attachment, fetch not called */ });
+it("rejects a session id that is not a UUID before calling upstream", async () => { /* params id "../x" → 404, fetch not called (path-injection guard) */ });
 ```
 
-Write the route test fully against the helper you implement in `proxy.ts` (assert on the mocked `fetch` call arguments).
+Complete the two short tests in the same style. Validate `params.id` against a UUID pattern before building the upstream path.
 
 - [ ] **Step 2: Implement**
-  - BFF multipart passthrough: stream `request.body` to the upstream with the original `content-type` header and `duplex: "half"` (verify in `.claude/stack.md`), abort via `request.signal`; reject bodies above the same limit early using `content-length`.
+  - BFF multipart forwarding (verified "simplest and validatable" route, `.claude/stack.md` "Next.js 16.4.0 → Multipart uploads"): reject early on `content-length` above the server limit (413); `const form = await request.formData()`; validate in the BFF too (count, each `file instanceof File`, `file.size`, extension/type allow-list), then `fetch(upstream, { method: "POST", body: form, signal: request.signal })` **without** setting `content-type` (undici writes the boundary). This buffers uploads in memory, acceptable at 5 × 10 MB. Route handlers have no framework body limit and no `proxy.ts` may match these routes (it truncates bodies over 10 MB). The route test asserts the upstream receives a `FormData` with the same fields and files, not a raw body.
   - Workspace layout: left column = thread of `TurnCard`s (each: collapsed transcript + attachment chips, the `EstimateView`, `TotalsDelta` badge such as "+30 h vs previous turn"); bottom composer = typed form + `Dropzone` (multiple, accepts `.pdf,.docx,.txt`, per-file chip with size, remove button, client-side checks mirroring server limits); right panel = `MemoryPanel` (four facts; values changed this turn get a subtle "Updated" badge driven by `metadata_changes`) and `ContextMeter` ("History 4 / 6 turns", tooltip: "Older turns are dropped first. Project facts on the left are kept separately and always sent.").
   - Header action "New conversation" (secondary button, confirm if a turn is streaming) → `reset()`.
   - 409 → toast "This conversation is still answering the previous turn"; 404 → create a new session and tell the user.
