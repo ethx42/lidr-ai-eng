@@ -6,8 +6,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic.json_schema import models_json_schema
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
@@ -15,6 +17,7 @@ from app.config import Settings, get_settings
 from app.observability import configure_logging, request_id_var
 from app.prompts.loader import load_prompt
 from app.routers import estimations
+from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.errors import LLMError
 from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
@@ -29,6 +32,16 @@ Turns a meeting transcription into a software estimation using Cache-Augmented G
 reference estimations travel inside a cache-stable system prompt, the LLM returns a structured
 breakdown, and totals, grounding checks, and the markdown report are computed in code.
 """
+
+# SSE payloads are not route models, so FastAPI would leave them out of the contract. Dumped
+# with exclude_none like FastAPI's own schemas, so the whole contract follows one convention.
+STREAM_EVENT_SCHEMAS: dict[str, Any] = jsonable_encoder(  # JSON Schema objects by model name
+    models_json_schema(
+        [(model, "serialization") for model in (StatusEvent, PartialEvent, ErrorEvent)],
+        ref_template="#/components/schemas/{model}",
+    )[1]["$defs"],
+    exclude_none=True,
+)
 
 
 def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -104,6 +117,14 @@ def create_app(
     )
     app.add_middleware(RequestIdMiddleware)
     app.include_router(estimations.router)
+    default_openapi = app.openapi
+
+    def openapi() -> dict[str, Any]:  # same signature as FastAPI.openapi
+        schema = default_openapi()  # cached on app.openapi_schema; rebuilt when routes change
+        schema["components"]["schemas"].update(STREAM_EVENT_SCHEMAS)
+        return schema
+
+    app.openapi = openapi  # type: ignore[method-assign]  # FastAPI's documented extension hook
 
     @app.exception_handler(LLMError)
     async def llm_error_handler(_: Request, exc: LLMError) -> JSONResponse:

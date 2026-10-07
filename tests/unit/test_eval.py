@@ -245,3 +245,18 @@ async def test_ledger_guards_and_records_eval_spend(tmp_path: Path) -> None:
         ledger=ledger,
     )
     assert json.loads(ledger.read_text().splitlines()[-1])["command"] == "eval"
+
+
+async def test_eval_spend_is_the_summed_call_cost(tmp_path: Path) -> None:
+    ledger = tmp_path / "spend.jsonl"
+    settings = Settings(_env_file=None, openai_api_key="test-key")
+    path = await main(
+        ["--report", str(tmp_path / "r.json")],
+        settings=settings,
+        provider_factory=lambda _: FakeProvider(result=FULL, model="gpt-4o-mini"),
+        ledger=ledger,
+    )
+    costs = [case["cost_usd"] for case in json.loads(path.read_text())["cases"]]
+    assert all(cost > 0 for cost in costs)
+    recorded = json.loads(ledger.read_text().splitlines()[-1])["cost_usd"]
+    assert recorded == pytest.approx(sum(costs))

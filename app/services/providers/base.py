@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
@@ -14,6 +15,27 @@ class LLMResult[M: BaseModel]:
     parsed: M
     usage: Usage
     latency_ms: int
+    provider: Provider
+    model: str
+    attempts: int = 1
+    fallback_used: bool = False
+
+
+@dataclass(frozen=True)
+class TextDelta:
+    text: str
+    snapshot: str  # all text received so far
+
+
+@dataclass(frozen=True)
+class ProviderSwitch:
+    provider: Provider
+    model: str
+    cause: str | None
+
+
+# A stream yields deltas (and switches before the first delta), then exactly one LLMResult.
+type StreamEvent[M: BaseModel] = TextDelta | ProviderSwitch | LLMResult[M]
 
 
 class LLMProvider(Protocol):
@@ -23,5 +45,9 @@ class LLMProvider(Protocol):
     async def generate(
         self, *, system: str, user: str, schema: type[T], cache_key: str
     ) -> LLMResult[T]: ...
+
+    def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncIterator[StreamEvent[T]]: ...
 
     async def aclose(self) -> None: ...

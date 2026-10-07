@@ -18,6 +18,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.config import Provider
+
 Phase = Literal[
     "discovery",
     "ux_ui",
@@ -173,7 +175,14 @@ class GroundingReport(BaseModel):
     score: float
 
 
+# Response-side models: every field is always serialized (nulls included), so the contract marks
+# defaulted fields required too.
+RESPONSE_CONFIG = ConfigDict(json_schema_serialization_defaults_required=True)
+
+
 class Usage(BaseModel):
+    model_config = RESPONSE_CONFIG
+
     input_tokens: int = 0
     output_tokens: int = 0
     cached_input_tokens: int = 0
@@ -207,11 +216,23 @@ class EstimateRequest(BaseModel):
     )
 
 
+class CallMetrics(BaseModel):
+    model_config = RESPONSE_CONFIG
+
+    latency_ms: int
+    ttft_ms: int | None = Field(default=None, description="Streaming only: time to first delta.")
+    cost_usd: float | None = Field(default=None, description="None when the model has no price.")
+    cache_hit: bool = False
+    fallback_used: bool = False
+    attempts: int = 1
+
+
 class EstimateResponse(BaseModel):
     estimation: str = Field(description="Estimation rendered as markdown.")
     breakdown: EnrichedBreakdown
     grounding: GroundingReport
-    model: str
-    provider: Literal["openai", "anthropic"]
+    model: str = Field(description="Model that served the result.")
+    provider: Provider = Field(description="Provider that served the result.")
     prompt_version: str
     usage: Usage
+    metrics: CallMetrics

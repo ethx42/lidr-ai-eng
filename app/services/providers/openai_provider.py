@@ -1,4 +1,5 @@
 import time
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx2
@@ -15,7 +16,7 @@ from app.services.errors import (
     UpstreamUnavailable,
     from_status,
 )
-from app.services.providers.base import LLMResult, T
+from app.services.providers.base import LLMResult, StreamEvent, T, TextDelta
 from app.services.providers.profiles import ModelProfile, request_params
 
 QUOTA = "insufficient_quota"
@@ -112,7 +113,18 @@ class OpenAIProvider:
                 cache_write_tokens=(details.cache_write_tokens or 0) if details else 0,
             ),
             latency_ms=round((time.perf_counter() - start) * 1000),
+            provider=self.name,
+            model=self.model,
         )
+
+    async def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncIterator[StreamEvent[T]]:
+        # Interim: the blocking call as a single delta until native streaming lands.
+        result = await self.generate(system=system, user=user, schema=schema, cache_key=cache_key)
+        text = result.parsed.model_dump_json()
+        yield TextDelta(text=text, snapshot=text)
+        yield result
 
     async def aclose(self) -> None:
         await self.client.close()

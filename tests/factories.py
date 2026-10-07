@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.schemas.estimation import EstimationBreakdown
+from app.schemas.estimation import EstimateRequest, EstimationBreakdown
 
 TRANSCRIPT = (
     "Client: We need a booking app for our “yoga studio”.\n"
@@ -61,3 +61,7 @@ def breakdown_data(**overrides: Any) -> dict[str, Any]:
 
 def breakdown(**overrides: Any) -> EstimationBreakdown:
     return EstimationBreakdown.model_validate(breakdown_data(**overrides))
+
+
+def request(**overrides: object) -> EstimateRequest:
+    return EstimateRequest.model_validate({"transcription": TRANSCRIPT} | overrides)

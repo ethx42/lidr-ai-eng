@@ -4,7 +4,7 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-Provider = Literal["openai", "anthropic"]
+Provider = Literal["openai", "anthropic", "replay"]
 # Every level the installed SDKs define; which ones a model accepts lives in its profile.
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 

@@ -1,0 +1,936 @@
+{
+  "components": {
+    "schemas": {
+      "Assumption": {
+        "properties": {
+          "id": {
+            "description": "Identifier A1, A2, ...",
+            "title": "Id",
+            "type": "string"
+          },
+          "impact_if_wrong": {
+            "description": "How the estimate changes if the assumption fails.",
+            "title": "Impact If Wrong",
+            "type": "string"
+          },
+          "statement": {
+            "description": "Something not stated in the transcript that we assume.",
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "statement",
+          "impact_if_wrong"
+        ],
+        "title": "Assumption",
+        "type": "object"
+      },
+      "CallMetrics": {
+        "properties": {
+          "attempts": {
+            "default": 1,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "cache_hit": {
+            "default": false,
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None when the model has no price.",
+            "title": "Cost Usd"
+          },
+          "fallback_used": {
+            "default": false,
+            "title": "Fallback Used",
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "ttft_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Streaming only: time to first delta.",
+            "title": "Ttft Ms"
+          }
+        },
+        "required": [
+          "latency_ms",
+          "ttft_ms",
+          "cost_usd",
+          "cache_hit",
+          "fallback_used",
+          "attempts"
+        ],
+        "title": "CallMetrics",
+        "type": "object"
+      },
+      "EnrichedBreakdown": {
+        "properties": {
+          "assumptions": {
+            "description": "Gaps filled with explicit assumptions instead of invented scope.",
+            "items": {
+              "$ref": "#/components/schemas/Assumption"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "confidence": {
+            "description": "Confidence in this estimate; low for vague input.",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "confidence_rationale": {
+            "description": "Why this confidence level.",
+            "title": "Confidence Rationale",
+            "type": "string"
+          },
+          "open_questions": {
+            "description": "Questions to ask the client before committing.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Questions",
+            "type": "array"
+          },
+          "project_name": {
+            "description": "Short project name.",
+            "title": "Project Name",
+            "type": "string"
+          },
+          "requirements": {
+            "description": "Requirements explicitly stated in the transcript, each with verbatim evidence.",
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "risks": {
+            "description": "Main delivery risks.",
+            "items": {
+              "$ref": "#/components/schemas/Risk"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "summary": {
+            "description": "Two to four sentences describing the project scope.",
+            "title": "Summary",
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/EstimatedTask"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "team": {
+            "description": "Recommended team composition.",
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            },
+            "title": "Team",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/Totals"
+          }
+        },
+        "required": [
+          "project_name",
+          "summary",
+          "requirements",
+          "assumptions",
+          "open_questions",
+          "tasks",
+          "team",
+          "risks",
+          "confidence",
+          "confidence_rationale",
+          "totals"
+        ],
+        "title": "EnrichedBreakdown",
+        "type": "object"
+      },
+      "ErrorEvent": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "request_id"
+        ],
+        "title": "ErrorEvent",
+        "type": "object"
+      },
+      "EstimateRequest": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "output_language": "English",
+            "transcription": "Client: We run three yoga studios and want customers to book and pay for classes online from their phones..."
+          }
+        ],
+        "properties": {
+          "output_language": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Language for narrative fields. Defaults to the transcription's language.",
+            "title": "Output Language"
+          },
+          "transcription": {
+            "description": "Meeting transcription to estimate. Treated strictly as data.",
+            "minLength": 1,
+            "title": "Transcription",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transcription"
+        ],
+        "title": "EstimateRequest",
+        "type": "object"
+      },
+      "EstimateResponse": {
+        "properties": {
+          "breakdown": {
+            "$ref": "#/components/schemas/EnrichedBreakdown"
+          },
+          "estimation": {
+            "description": "Estimation rendered as markdown.",
+            "title": "Estimation",
+            "type": "string"
+          },
+          "grounding": {
+            "$ref": "#/components/schemas/GroundingReport"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/CallMetrics"
+          },
+          "model": {
+            "description": "Model that served the result.",
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "description": "Provider that served the result.",
+            "enum": [
+              "openai",
+              "anthropic",
+              "replay"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "required": [
+          "estimation",
+          "breakdown",
+          "grounding",
+          "model",
+          "provider",
+          "prompt_version",
+          "usage",
+          "metrics"
+        ],
+        "title": "EstimateResponse",
+        "type": "object"
+      },
+      "EstimatedTask": {
+        "properties": {
+          "basis": {
+            "description": "Requirement and/or assumption identifiers (R*, A*) this task rests on.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Basis",
+            "type": "array"
+          },
+          "expected_hours": {
+            "description": "PERT expected hours, computed in code.",
+            "title": "Expected Hours",
+            "type": "number"
+          },
+          "id": {
+            "description": "Identifier T1, T2, ...",
+            "title": "Id",
+            "type": "string"
+          },
+          "likely_hours": {
+            "description": "Most likely effort in hours.",
+            "title": "Likely Hours",
+            "type": "number"
+          },
+          "name": {
+            "description": "Short task name.",
+            "title": "Name",
+            "type": "string"
+          },
+          "optimistic_hours": {
+            "description": "Best-case effort in hours.",
+            "title": "Optimistic Hours",
+            "type": "number"
+          },
+          "pessimistic_hours": {
+            "description": "Worst-case effort in hours.",
+            "title": "Pessimistic Hours",
+            "type": "number"
+          },
+          "phase": {
+            "description": "Delivery phase this task belongs to.",
+            "enum": [
+              "discovery",
+              "ux_ui",
+              "backend",
+              "frontend",
+              "integrations",
+              "qa",
+              "devops",
+              "project_management"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this task is needed and what drives its size.",
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase",
+          "name",
+          "rationale",
+          "basis",
+          "optimistic_hours",
+          "likely_hours",
+          "pessimistic_hours",
+          "expected_hours"
+        ],
+        "title": "EstimatedTask",
+        "type": "object"
+      },
+      "GroundingReport": {
+        "properties": {
+          "requirements_grounded": {
+            "title": "Requirements Grounded",
+            "type": "integer"
+          },
+          "requirements_total": {
+            "title": "Requirements Total",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "tasks_without_valid_basis": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tasks Without Valid Basis",
+            "type": "array"
+          },
+          "ungrounded_requirement_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ungrounded Requirement Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "requirements_total",
+          "requirements_grounded",
+          "ungrounded_requirement_ids",
+          "tasks_without_valid_basis",
+          "score"
+        ],
+        "title": "GroundingReport",
+        "type": "object"
+      },
+      "PartialEvent": {
+        "properties": {
+          "breakdown": {
+            "additionalProperties": true,
+            "title": "Breakdown",
+            "type": "object"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "breakdown"
+        ],
+        "title": "PartialEvent",
+        "type": "object"
+      },
+      "Requirement": {
+        "properties": {
+          "evidence": {
+            "description": "Exact verbatim quote from the transcript that states this requirement, copied character for character in the transcript's original language.",
+            "title": "Evidence",
+            "type": "string"
+          },
+          "id": {
+            "description": "Identifier R1, R2, ... in order of appearance.",
+            "title": "Id",
+            "type": "string"
+          },
+          "statement": {
+            "description": "What the client needs, in the output language.",
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "statement",
+          "evidence"
+        ],
+        "title": "Requirement",
+        "type": "object"
+      },
+      "Risk": {
+        "properties": {
+          "description": {
+            "description": "What could go wrong.",
+            "title": "Description",
+            "type": "string"
+          },
+          "impact": {
+            "description": "Impact on schedule or cost.",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Impact",
+            "type": "string"
+          },
+          "mitigation": {
+            "description": "How to reduce or handle the risk.",
+            "title": "Mitigation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "impact",
+          "mitigation"
+        ],
+        "title": "Risk",
+        "type": "object"
+      },
+      "StatusEvent": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "phase": {
+            "enum": [
+              "calling_llm",
+              "fallback",
+              "validating",
+              "cache_hit"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "required": [
+          "phase",
+          "provider",
+          "model"
+        ],
+        "title": "StatusEvent",
+        "type": "object"
+      },
+      "TeamMember": {
+        "properties": {
+          "count": {
+            "description": "Number of people in this role.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "role": {
+            "description": "Role name, e.g. Backend developer.",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "count"
+        ],
+        "title": "TeamMember",
+        "type": "object"
+      },
+      "Totals": {
+        "properties": {
+          "duration_weeks_max": {
+            "title": "Duration Weeks Max",
+            "type": "number"
+          },
+          "duration_weeks_min": {
+            "title": "Duration Weeks Min",
+            "type": "number"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "expected_hours": {
+            "title": "Expected Hours",
+            "type": "number"
+          },
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
+          "optimistic_hours": {
+            "title": "Optimistic Hours",
+            "type": "number"
+          },
+          "pessimistic_hours": {
+            "title": "Pessimistic Hours",
+            "type": "number"
+          },
+          "team_size": {
+            "title": "Team Size",
+            "type": "integer"
+          },
+          "weekly_capacity_hours": {
+            "title": "Weekly Capacity Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "expected_hours",
+          "optimistic_hours",
+          "pessimistic_hours",
+          "team_size",
+          "weekly_capacity_hours",
+          "duration_weeks_min",
+          "duration_weeks_max",
+          "hourly_rate",
+          "estimated_cost"
+        ],
+        "title": "Totals",
+        "type": "object"
+      },
+      "Usage": {
+        "properties": {
+          "cache_write_tokens": {
+            "default": 0,
+            "title": "Cache Write Tokens",
+            "type": "integer"
+          },
+          "cached_input_tokens": {
+            "default": 0,
+            "title": "Cached Input Tokens",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "cached_input_tokens",
+          "cache_write_tokens"
+        ],
+        "title": "Usage",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Turns a meeting transcription into a software estimation using Cache-Augmented Generation:\nreference estimations travel inside a cache-stable system prompt, the LLM returns a structured\nbreakdown, and totals, grounding checks, and the markdown report are computed in code.\n",
+    "title": "CAG Software Estimator",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/estimate": {
+      "post": {
+        "description": "Send the body as JSON with `Content-Type: application/json`; other content types are rejected with `422 invalid_request`.",
+        "operationId": "estimate_api_v1_estimate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstimateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "breakdown": {
+                    "assumptions": [
+                      {
+                        "id": "A1",
+                        "impact_if_wrong": "Copywriting and photography add roughly 15-25 hours.",
+                        "statement": "The clinic provides all texts and photos."
+                      },
+                      {
+                        "id": "A2",
+                        "impact_if_wrong": "A headless CMS adds roughly 20 hours.",
+                        "statement": "No CMS: content changes are rare and made by the developer."
+                      },
+                      {
+                        "id": "A3",
+                        "impact_if_wrong": "Custom server setup adds roughly 6-10 hours.",
+                        "statement": "Hosting on a managed static host; the clinic controls DNS."
+                      }
+                    ],
+                    "confidence": "high",
+                    "confidence_rationale": "Small, well-understood scope with few integrations.",
+                    "open_questions": [
+                      "Who will update the content after launch, and how often?",
+                      "Is the site needed in more than one language?",
+                      "What consent text is required for collecting patient contact data?"
+                    ],
+                    "project_name": "Dental clinic website",
+                    "requirements": [
+                      {
+                        "evidence": "We want a new website with our services, the team, and opening hours.",
+                        "id": "R1",
+                        "statement": "Website presenting services, team, and opening hours."
+                      },
+                      {
+                        "evidence": "Patients should be able to request an appointment through a form",
+                        "id": "R2",
+                        "statement": "Appointment request form; staff confirm by phone."
+                      },
+                      {
+                        "evidence": "The requests should arrive in our clinic email inbox.",
+                        "id": "R3",
+                        "statement": "Form submissions delivered to the clinic email inbox."
+                      },
+                      {
+                        "evidence": "It has to look good on phones.",
+                        "id": "R4",
+                        "statement": "Responsive, mobile-friendly design."
+                      }
+                    ],
+                    "risks": [
+                      {
+                        "description": "Content arrives late from the clinic.",
+                        "impact": "medium",
+                        "mitigation": "Agree on a content deadline at kickoff; use placeholders."
+                      },
+                      {
+                        "description": "Patient data in the form falls under health privacy rules.",
+                        "impact": "medium",
+                        "mitigation": "Collect only contact data; add consent text reviewed by the clinic."
+                      }
+                    ],
+                    "summary": "Replace a ten-year-old clinic website with a mobile-first marketing site presenting services, team, and opening hours, plus an appointment request form delivered to the clinic's inbox.",
+                    "tasks": [
+                      {
+                        "basis": [
+                          "R1",
+                          "A1"
+                        ],
+                        "expected_hours": 4.0,
+                        "id": "T1",
+                        "likely_hours": 4.0,
+                        "name": "Kickoff, sitemap, and content inventory",
+                        "optimistic_hours": 2.0,
+                        "pessimistic_hours": 6.0,
+                        "phase": "discovery",
+                        "rationale": "Agree on pages and collect existing material."
+                      },
+                      {
+                        "basis": [
+                          "R1",
+                          "R4"
+                        ],
+                        "expected_hours": 12.5,
+                        "id": "T2",
+                        "likely_hours": 12.0,
+                        "name": "Mobile-first design for five pages",
+                        "optimistic_hours": 8.0,
+                        "pessimistic_hours": 20.0,
+                        "phase": "ux_ui",
+                        "rationale": "Home, services, team, hours/contact, and appointment form."
+                      },
+                      {
+                        "basis": [
+                          "R1",
+                          "R4"
+                        ],
+                        "expected_hours": 16.5,
+                        "id": "T3",
+                        "likely_hours": 16.0,
+                        "name": "Build responsive pages",
+                        "optimistic_hours": 10.0,
+                        "pessimistic_hours": 24.0,
+                        "phase": "frontend",
+                        "rationale": "Static pages from the approved design."
+                      },
+                      {
+                        "basis": [
+                          "R2",
+                          "R3"
+                        ],
+                        "expected_hours": 6.5,
+                        "id": "T4",
+                        "likely_hours": 6.0,
+                        "name": "Appointment form with email delivery and spam protection",
+                        "optimistic_hours": 4.0,
+                        "pessimistic_hours": 10.0,
+                        "phase": "backend",
+                        "rationale": "Form endpoint or form service forwarding to the clinic inbox."
+                      },
+                      {
+                        "basis": [
+                          "R2",
+                          "R4"
+                        ],
+                        "expected_hours": 4.5,
+                        "id": "T5",
+                        "likely_hours": 4.0,
+                        "name": "Cross-device and form testing",
+                        "optimistic_hours": 3.0,
+                        "pessimistic_hours": 8.0,
+                        "phase": "qa",
+                        "rationale": "Phones, tablets, desktop browsers; end-to-end form delivery."
+                      },
+                      {
+                        "basis": [
+                          "A3"
+                        ],
+                        "expected_hours": 4.0,
+                        "id": "T6",
+                        "likely_hours": 4.0,
+                        "name": "Hosting, DNS, SSL, and deployment",
+                        "optimistic_hours": 2.0,
+                        "pessimistic_hours": 6.0,
+                        "phase": "devops",
+                        "rationale": "Point the existing domain to the new host."
+                      },
+                      {
+                        "basis": [
+                          "R1"
+                        ],
+                        "expected_hours": 4.0,
+                        "id": "T7",
+                        "likely_hours": 4.0,
+                        "name": "Coordination and client reviews",
+                        "optimistic_hours": 3.0,
+                        "pessimistic_hours": 6.0,
+                        "phase": "project_management",
+                        "rationale": "Two review rounds and launch coordination."
+                      }
+                    ],
+                    "team": [
+                      {
+                        "count": 1,
+                        "role": "Full-stack developer"
+                      },
+                      {
+                        "count": 1,
+                        "role": "UX/UI designer (part-time)"
+                      }
+                    ],
+                    "totals": {
+                      "duration_weeks_max": 1.5,
+                      "duration_weeks_min": 1.0,
+                      "estimated_cost": 4940.0,
+                      "expected_hours": 52.0,
+                      "hourly_rate": 95.0,
+                      "optimistic_hours": 32.0,
+                      "pessimistic_hours": 80.0,
+                      "team_size": 2,
+                      "weekly_capacity_hours": 30.0
+                    }
+                  },
+                  "estimation": "## Estimation: Dental clinic website\n\nReplace a ten-year-old clinic website with a mobile-first marketing site presenting services, team, and opening hours, plus an appointment request form delivered to the clinic's inbox.\n\n**Confidence:** high \u2014 Small, well-understood scope with few integrations.\n\n### Requirements\n- **R1** Website presenting services, team, and opening hours. \u2014 _\"We want a new website with our services, the team, and opening hours.\"_\n- **R2** Appointment request form; staff confirm by phone. \u2014 _\"Patients should be able to request an appointment through a form\"_\n- **R3** Form submissions delivered to the clinic email inbox. \u2014 _\"The requests should arrive in our clinic email inbox.\"_\n- **R4** Responsive, mobile-friendly design. \u2014 _\"It has to look good on phones.\"_\n\n### Task breakdown\n\n| ID | Phase | Task | Optimistic | Likely | Pessimistic | Expected | Basis |\n|---|---|---|---:|---:|---:|---:|---|\n| T1 | discovery | Kickoff, sitemap, and content inventory | 2.0 | 4.0 | 6.0 | 4.0 | R1, A1 |\n| T2 | ux_ui | Mobile-first design for five pages | 8.0 | 12.0 | 20.0 | 12.5 | R1, R4 |\n| T3 | frontend | Build responsive pages | 10.0 | 16.0 | 24.0 | 16.5 | R1, R4 |\n| T4 | backend | Appointment form with email delivery and spam protection | 4.0 | 6.0 | 10.0 | 6.5 | R2, R3 |\n| T5 | qa | Cross-device and form testing | 3.0 | 4.0 | 8.0 | 4.5 | R2, R4 |\n| T6 | devops | Hosting, DNS, SSL, and deployment | 2.0 | 4.0 | 6.0 | 4.0 | A3 |\n| T7 | project_management | Coordination and client reviews | 3.0 | 4.0 | 6.0 | 4.0 | R1 |\n\n**Total estimated: 52.0 hours** (range 32.0\u201380.0 h)\n\n### Team\n- 1\u00d7 Full-stack developer\n- 1\u00d7 UX/UI designer (part-time)\n\n### Duration\n1\u20131.5 weeks (team of 2, 30 h/week per person)\n\n### Cost\n4,940.00 at 95/h blended rate\n\n### Assumptions\n- **A1** The clinic provides all texts and photos. _(if wrong: Copywriting and photography add roughly 15-25 hours.)_\n- **A2** No CMS: content changes are rare and made by the developer. _(if wrong: A headless CMS adds roughly 20 hours.)_\n- **A3** Hosting on a managed static host; the clinic controls DNS. _(if wrong: Custom server setup adds roughly 6-10 hours.)_\n\n### Risks\n- [medium] Content arrives late from the clinic. \u2014 Agree on a content deadline at kickoff; use placeholders.\n- [medium] Patient data in the form falls under health privacy rules. \u2014 Collect only contact data; add consent text reviewed by the clinic.\n\n### Open questions\n- Who will update the content after launch, and how often?\n- Is the site needed in more than one language?\n- What consent text is required for collecting patient contact data?\n",
+                  "grounding": {
+                    "requirements_grounded": 4,
+                    "requirements_total": 4,
+                    "score": 1.0,
+                    "tasks_without_valid_basis": [],
+                    "ungrounded_requirement_ids": []
+                  },
+                  "metrics": {
+                    "attempts": 1,
+                    "cache_hit": false,
+                    "cost_usd": 0.001296,
+                    "fallback_used": false,
+                    "latency_ms": 9800,
+                    "ttft_ms": 1150
+                  },
+                  "model": "gpt-4o-mini",
+                  "prompt_version": "v4",
+                  "provider": "openai",
+                  "usage": {
+                    "cache_write_tokens": 0,
+                    "cached_input_tokens": 5120,
+                    "input_tokens": 5600,
+                    "output_tokens": 1400
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EstimateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Invalid request (empty, too long, or unknown fields)."
+          },
+          "429": {
+            "description": "Provider rate limit (`upstream_rate_limited`)."
+          },
+          "502": {
+            "description": "Invalid model output or rejected request."
+          },
+          "503": {
+            "description": "Provider timeout, connection failure, or 5xx."
+          }
+        },
+        "summary": "Estimate a project from a meeting transcription",
+        "tags": [
+          "estimations"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

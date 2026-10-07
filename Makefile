@@ -14,8 +14,8 @@ test:
 	uv run pytest -q
 
 lint:
-	uv run ruff check .
-	uv run ruff format --check .
+	uv run ruff check --no-cache .
+	uv run ruff format --no-cache --check .
 
 typecheck:
 	uv run mypy
@@ -45,3 +45,8 @@ openspec-sync:
 # Branch close gate (see docs/catch-up/): make gate BRANCH=pre-session-03
 gate:
 	bash scripts/gate.sh $(BRANCH)
+
+# Regenerate the committed API contract (contracts/openapi.json); `make check` fails when stale
+.PHONY: openapi
+openapi:
+	uv run python -m scripts.export_openapi

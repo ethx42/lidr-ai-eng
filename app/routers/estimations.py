@@ -7,10 +7,11 @@ from fastapi.exceptions import RequestValidationError
 from app.config import Settings
 from app.context.examples import DENTAL_CLINIC
 from app.prompts.loader import PROMPT_VERSION
-from app.schemas.estimation import EstimateRequest, EstimateResponse, Usage
+from app.schemas.estimation import CallMetrics, EstimateRequest, EstimateResponse, Usage
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
 from app.services.llm_service import EstimationService
+from app.services.pricing import cost_usd
 from app.services.rendering import render_markdown
 
 router = APIRouter(prefix="/api/v1", tags=["estimations"])
@@ -33,8 +34,12 @@ SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 @cache
 def example_response() -> dict[str, Any]:
     ref = DENTAL_CLINIC
-    breakdown = enrich(ref.estimation, weekly_capacity_hours=30, hourly_rate=None)
+    # Non-null values throughout: FastAPI drops None from examples, which would hide required keys.
+    breakdown = enrich(ref.estimation, weekly_capacity_hours=30, hourly_rate=95)
     grounding = check_grounding(ref.estimation, ref.meeting_summary)
+    usage = Usage(
+        input_tokens=5600, output_tokens=1400, cached_input_tokens=5120, cache_write_tokens=0
+    )
     return EstimateResponse(
         estimation=render_markdown(breakdown, grounding),
         breakdown=breakdown,
@@ -42,9 +47,8 @@ def example_response() -> dict[str, Any]:
         model="gpt-4o-mini",
         provider="openai",
         prompt_version=PROMPT_VERSION,
-        usage=Usage(
-            input_tokens=5600, output_tokens=1400, cached_input_tokens=5120, cache_write_tokens=0
-        ),
+        usage=usage,
+        metrics=CallMetrics(latency_ms=9800, ttft_ms=1150, cost_usd=cost_usd("gpt-4o-mini", usage)),
     ).model_dump(mode="json")
 
 

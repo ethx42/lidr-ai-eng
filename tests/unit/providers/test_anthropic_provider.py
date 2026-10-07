@@ -14,6 +14,7 @@ from app.services.errors import (
     UpstreamUnavailable,
 )
 from app.services.providers.anthropic_provider import AnthropicProvider, output_format
+from app.services.providers.base import LLMResult, TextDelta
 from app.services.providers.profiles import get_profile
 from tests.factories import breakdown
 
@@ -154,3 +155,18 @@ async def test_opus_adaptive_thinking_without_temperature() -> None:
         "effort": "high",
         "format": output_format(EstimationBreakdown),
     }
+
+
+async def test_interim_stream_yields_one_delta_then_the_result() -> None:
+    provider, _ = make(return_value=message(breakdown()))
+    events = [
+        e
+        async for e in provider.stream(
+            system="s", user="u", schema=EstimationBreakdown, cache_key="k"
+        )
+    ]
+    delta, result = events
+    assert isinstance(delta, TextDelta)
+    assert delta.text == delta.snapshot == breakdown().model_dump_json()
+    assert isinstance(result, LLMResult) and result.parsed == breakdown()
+    assert (result.provider, result.model) == ("anthropic", "claude-haiku-4-5")

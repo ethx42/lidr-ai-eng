@@ -147,6 +147,7 @@ async def evaluate_case(service: EstimationService, case: GoldenCase) -> dict[st
         },
         "grounding": response.grounding.model_dump() if response else None,
         "usage": response.usage.model_dump() if response else None,
+        "cost_usd": response.metrics.cost_usd if response else None,
         "confidence": response.breakdown.confidence if response else None,
         "open_questions": len(response.breakdown.open_questions) if response else None,
         "tasks": len(response.breakdown.tasks) if response else None,
@@ -230,7 +231,7 @@ async def main(
     finally:
         await provider.aclose()
     if ledger:
-        cost = sum((r["usage"] or {}).get("cost_usd", 0.0) for r in report["cases"])
+        cost = sum(r["cost_usd"] or 0.0 for r in report["cases"])
         live_budget.record_spend("eval", cost, ledger=ledger)
     path = write_report(report, args.report)
     print(summary_table(report))

@@ -1,4 +1,5 @@
 import time
+from collections.abc import AsyncIterator
 from functools import cache
 from typing import Any
 
@@ -10,7 +11,7 @@ from pydantic import BaseModel, TypeAdapter
 from app.config import Provider, ReasoningEffort
 from app.schemas.estimation import Usage
 from app.services.errors import InvalidModelOutput, LLMError, UpstreamUnavailable, from_status
-from app.services.providers.base import LLMResult, T
+from app.services.providers.base import LLMResult, StreamEvent, T, TextDelta
 from app.services.providers.profiles import ModelProfile, request_params
 
 INVALID_STOP_REASONS = {"refusal", "max_tokens", "model_context_window_exceeded"}
@@ -96,7 +97,18 @@ class AnthropicProvider:
                 cache_write_tokens=cache_write,
             ),
             latency_ms=round((time.perf_counter() - start) * 1000),
+            provider=self.name,
+            model=self.model,
         )
+
+    async def stream(
+        self, *, system: str, user: str, schema: type[T], cache_key: str
+    ) -> AsyncIterator[StreamEvent[T]]:
+        # Interim: the blocking call as a single delta until native streaming lands.
+        result = await self.generate(system=system, user=user, schema=schema, cache_key=cache_key)
+        text = result.parsed.model_dump_json()
+        yield TextDelta(text=text, snapshot=text)
+        yield result
 
     async def aclose(self) -> None:
         await self.client.close()

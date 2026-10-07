@@ -6,15 +6,16 @@ import time
 from app.observability import log_llm_call
 from app.prompts.loader import PromptBundle, build_user_message
 from app.schemas.estimation import (
+    CallMetrics,
     EstimateRequest,
     EstimateResponse,
     EstimationBreakdown,
-    Usage,
 )
 from app.services.errors import LLMError
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
-from app.services.providers.base import LLMProvider
+from app.services.pricing import cost_usd
+from app.services.providers.base import LLMProvider, LLMResult
 from app.services.rendering import render_markdown
 
 logger = logging.getLogger(__name__)
@@ -35,13 +36,16 @@ class EstimationService:
         self.hourly_rate = hourly_rate
 
     def _log_call(
-        self, usage: Usage | None, latency_ms: int, error: LLMError | None = None
+        self,
+        result: LLMResult[EstimationBreakdown] | None,
+        latency_ms: int,
+        error: LLMError | None = None,
     ) -> None:
         log_llm_call(
-            provider=self.provider.name,
-            model=self.provider.model,
+            provider=result.provider if result else self.provider.name,
+            model=result.model if result else self.provider.model,
             prompt_version=self.prompt.version,
-            usage=usage,
+            usage=result.usage if result else None,
             latency_ms=latency_ms,
             outcome=error.code if error else "ok",
             cause=error.cause if error else None,
@@ -61,7 +65,7 @@ class EstimationService:
             latency_ms = round((time.perf_counter() - start) * 1000)
             self._log_call(None, latency_ms, exc)
             raise
-        self._log_call(result.usage, result.latency_ms)
+        self._log_call(result, result.latency_ms)
 
         breakdown = enrich(
             result.parsed,
@@ -78,8 +82,14 @@ class EstimationService:
             estimation=render_markdown(breakdown, grounding),
             breakdown=breakdown,
             grounding=grounding,
-            model=self.provider.model,
-            provider=self.provider.name,
+            model=result.model,
+            provider=result.provider,
             prompt_version=self.prompt.version,
             usage=result.usage,
+            metrics=CallMetrics(
+                latency_ms=result.latency_ms,
+                cost_usd=cost_usd(result.model, result.usage),
+                attempts=result.attempts,
+                fallback_used=result.fallback_used,
+            ),
         )

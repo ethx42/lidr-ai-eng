@@ -7,7 +7,8 @@ from app.prompts.loader import load_prompt
 from app.schemas.estimation import EstimateRequest
 from app.services.errors import UpstreamUnavailable
 from app.services.llm_service import EstimationService
-from tests.factories import TRANSCRIPT, breakdown
+from app.services.providers.base import LLMResult, T
+from tests.factories import TRANSCRIPT, breakdown, request
 from tests.fakes import FakeProvider
 
 
@@ -90,3 +91,36 @@ async def test_provider_error_logged_and_raised(caplog: pytest.LogCaptureFixture
         )
     [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
     assert record.fields["outcome"] == "upstream_unavailable"  # type: ignore[attr-defined]
+
+
+async def test_blocking_response_carries_metrics(service_with_fake: EstimationService) -> None:
+    response = await service_with_fake.estimate(request())
+    assert response.metrics.cache_hit is False
+    assert response.metrics.attempts == 1
+    assert response.metrics.ttft_ms is None
+    assert response.provider == "openai" and response.model == "fake-model"
+
+
+class ServedByFallback(FakeProvider):
+    """Configured as openai/fake-model; the result comes from the fallback, as Task 14 does."""
+
+    def _result(self, schema: type[T]) -> LLMResult[T]:
+        served = super()._result(schema)
+        return replace(
+            served, provider="anthropic", model="claude-haiku-4-5", attempts=2, fallback_used=True
+        )
+
+
+async def test_response_reports_the_provider_that_served(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.INFO):
+        response = await service(ServedByFallback()).estimate(request())
+    assert (response.provider, response.model) == ("anthropic", "claude-haiku-4-5")
+    assert response.metrics.latency_ms == 42
+    # Haiku 4.5: 1024 cached * 0.10 + 176 written * 1.25 + 800 out * 5.00 (per 1M tokens)
+    assert response.metrics.cost_usd == pytest.approx(0.004322)
+    assert (response.metrics.attempts, response.metrics.fallback_used) == (2, True)
+    [record] = [r for r in caplog.records if r.getMessage() == "llm_call"]
+    fields = record.fields  # type: ignore[attr-defined]
+    assert (fields["provider"], fields["model"]) == ("anthropic", "claude-haiku-4-5")
