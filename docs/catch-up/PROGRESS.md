@@ -22,7 +22,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.00
 - [x] Task 13: Anthropic streaming and mid-stream error mapping (780db0c)
 - [x] Task 14: Fallback router with cooldown (af9a0a2)
 - [x] Task 15: Exact-match response cache (e23222f)
-- [ ] Task 16: Cassette recorder and live smoke test
+- [x] Task 16: Cassette recorder and live smoke test (97ecb2b, d78d6a4, 74cfd38)
 - [ ] Task 17: Docker and Compose
 - [ ] Task 18: End-to-end tests, accessibility and media
 - [ ] Task 19: CI
