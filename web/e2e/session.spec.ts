@@ -205,6 +205,11 @@ const expectResult = async (scope: Locator, { timeout }: { timeout?: number } = 
 
 const expectTechnologies = (page: Page, names: string[]) => expect(fact(page, "Technologies").getByRole("listitem")).toHaveText(names);
 
+// px from the turn's top to its estimate: the same while it streams and once the result arrives, because the rows above
+// it (the result bar, the progress steps, and the actions row with Stop, then the copy actions) keep their size.
+const estimateOffset = (scope: Locator) =>
+  estimate(scope).evaluate((article) => article.getBoundingClientRect().top - (article.closest("li")?.getBoundingClientRect().top ?? 0));
+
 const openInspector = async (page: Page, tab: "Context" | "Last call") => {
   await page.getByRole("button", { name: "Inspector" }).click();
   const sheet = page.getByRole("dialog", { name: "Inspector" });
@@ -270,15 +275,14 @@ test.describe("session", () => {
     const progress = one.getByRole("list", { name: "Progress" });
     await expect(progress.getByRole("listitem")).toHaveText(["Contacting the model", "Drafting the estimate", "Checking the estimate"].map((step) => new RegExp(step)));
     await expect(stopButton(page)).toBeVisible();
+    await expect(one.getByRole("heading", { level: 2 })).toHaveText("Turn 1");
     await expectPartial(page);
-    // The Structured | Document toggle arrives with the result in a bar held at its size while the turn streams, so
-    // nothing below the bar moves.
-    const belowBar = () =>
-      one.locator("[data-slot=turn-result-bar] + div").evaluate((message) => message.getBoundingClientRect().top - (message.closest("li")?.getBoundingClientRect().top ?? 0));
-    const streamingOffset = await belowBar();
+    // The view toggle and the copy actions arrive with the result in rows held at their size while the turn streams.
+    const streamingOffset = await estimateOffset(one);
     await expectResult(one);
     await expect(one.getByRole("radiogroup", { name: "Result view" })).toBeVisible();
-    expect(await belowBar(), "px from the turn's top to the content below the result bar, once the result arrived").toBe(streamingOffset);
+    await expect(one.getByRole("button", { name: "Copy as markdown" })).toBeVisible();
+    expect(await estimateOffset(one), "px from the turn's top to its estimate, once the result arrived").toBe(streamingOffset);
     await expect(projectName(one)).toHaveText(FREIGHT.name);
     // Tasks grouped by phase: one row group per phase, each with its tasks.
     const tasks = estimate(one).getByRole("table");
@@ -635,7 +639,10 @@ test.describe("375 px wide", () => {
     await sendText(page, FREIGHT_KICKOFF);
     await expectPartial(page);
     await expectNoHorizontalScroll(page);
+    const streamingOffset = await estimateOffset(one);
     await expectResult(one);
+    await expect(one.getByRole("button", { name: "Copy as markdown" })).toBeVisible();
+    expect(await estimateOffset(one), "px from the turn's top to its estimate, once the result arrived").toBe(streamingOffset);
     await expectNoHorizontalScroll(page);
     await shot(page, "mobile");
 

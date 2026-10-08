@@ -99,6 +99,22 @@ describe("AssistantMessage when done", () => {
     );
   });
 
+  // The estimate must not move when the stream ends (the e2e test measures it): the actions row sits below the progress
+  // and holds a button's height from the stream's start, so the copy actions take Stop's place on one line.
+  it("puts the copy actions in Stop's row, a row of its own below the progress", () => {
+    const { rerender } = setup(streaming);
+    const row = button("Stop").parentElement;
+    expect(row).toHaveAttribute("data-slot", "message-actions");
+    expect(row).toHaveClass("min-h-7");
+    expect(row).not.toContainElement(screen.getByRole("list", { name: "Progress" }));
+    rerender(done);
+    expect(button("Copy as markdown").parentElement).toBe(row);
+    expect(button("Copy questions for the client").parentElement).toBe(row);
+    // Below 640 px the labels shorten to fit one line ("Copy", "Copy questions"); the names stay whole.
+    expect(within(button("Copy as markdown")).getByText("as markdown")).toHaveClass("sr-only", "sm:not-sr-only");
+    expect(within(button("Copy questions for the client")).getByText("for the client")).toHaveClass("sr-only", "sm:not-sr-only");
+  });
+
   it("offers no question copy when the estimate has no open questions", () => {
     setup({ ...done, result: { ...fullResponse, breakdown: { ...fullEstimate, open_questions: [] } } });
     noButton("Copy questions for the client");
