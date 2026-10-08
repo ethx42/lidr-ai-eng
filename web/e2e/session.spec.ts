@@ -14,7 +14,7 @@ const SPEC_PDF = path.join(__dirname, "..", "..", "tests", "fixtures", "attachme
 // Session turns render prompt v3 with the project memory, so no recorded cassette matches them: the replay provider
 // streams a canned reference estimate (app/context/examples.py) picked by a hash of the prompt (the memory and the
 // attachment's text included; their content is never read). Each transcript below was chosen for the reference it picks
-// after the turns before it, with LF or CRLF line ends (a browser may send either in a multipart field): when the
+// after the turns before it (the AI service turns the CRLF line ends of a multipart field into LF first): when the
 // prompt changes, change the text, never the assertions. Freight marketplace streams for about 6 s, Dental clinic
 // website for about 3 s.
 const FREIGHT_MEETING = [
@@ -33,14 +33,14 @@ const FREIGHT_KICKOFF = [...FREIGHT_MEETING, "Ops: We expect around 800 loads a 
 // in no message.
 const PAYMENTS_FOLLOW_UP = [
   "CFO: Following up on payments: the attached spec covers checkout, card payments and refunds.",
-  "CTO: Settlement runs nightly, and we want refunds of up to 120 euros approved from the backoffice.",
+  "CTO: Settlement runs nightly, and we want refunds of up to 100 euros approved from the backoffice.",
 ].join("\n");
 const SCOPE = "CEO: To close the scope: the marketplace, the driver app and the admin backoffice stay as agreed.";
 // After those two turns: Freight marketplace again, whose quotes are now only in the first message.
-const SCOPE_CLOSE = [SCOPE, "CTO: The SAP integration covers our two biggest shippers first, about 200 loads a week."].join("\n");
-// After one Freight marketplace turn (FREIGHT_KICKOFF, or the "Clinic portal" sample): Freight marketplace again.
-const SCOPE_FOLLOW_UP = [SCOPE, "CTO: The SAP integration covers our two biggest shippers first, about 330 loads a week."].join("\n");
-// In a new session, with or without spec.pdf: Freight marketplace, whose quotes are not in the sample.
+const SCOPE_CLOSE = [SCOPE, "CTO: The SAP integration covers our two biggest shippers first, about 210 loads a week."].join("\n");
+// After one Freight marketplace turn: Freight marketplace again.
+const SCOPE_FOLLOW_UP = [SCOPE, "CTO: The SAP integration covers our two biggest shippers first, about 310 loads a week."].join("\n");
+// In a new session: Inventario Panaderías, or Freight marketplace with spec.pdf; neither quotes the sample.
 const SAMPLE = "Clinic portal";
 
 const FREIGHT = { name: "Freight marketplace", technologies: ["iOS", "Android", "GPS", "SAP"] };
@@ -402,7 +402,7 @@ test.describe("session", () => {
 
   test("a reload keeps the session; New conversation asks first while a turn streams, then resets the memory and the thread", async ({ page }) => {
     await ready(page);
-    await sendSample(page);
+    await sendText(page, FREIGHT_KICKOFF);
     await expectResult(turn(page, 1));
     await expect(fact(page, "Project name")).toHaveText(FREIGHT.name);
     await expectMeter(page, 1);
