@@ -13,6 +13,7 @@ type Props = {
   onChange: (files: File[]) => void;
 };
 
+const NO_FILES: File[] = []; // a stable default: a new [] each render would read as a new list
 const sameFile = (a: File, b: File) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 
 // Checks a choice against what is attached and the AI service's limits; the reasons name each refused file.
@@ -32,8 +33,15 @@ const sort = (picked: File[], attached: File[], maxFiles: number, maxBytes: numb
 
 // Documents for this turn (spec §7.3): picked or dropped, checked here as the server would, each shown as a chip with
 // its size and a remove button. Refused files are listed with the reason in a polite status region.
-export const Dropzone = ({ maxFiles, maxBytes, files = [], onChange }: Props) => {
+export const Dropzone = ({ maxFiles, maxBytes, files = NO_FILES, onChange }: Props) => {
   const [reasons, setReasons] = useState<string[]>([]);
+  // The reasons are about the files they were checked against: when the parent empties the list (the turn was sent, or
+  // put back without files), they go too (React's "adjusting state when a prop changes").
+  const [listed, setListed] = useState(files);
+  if (listed !== files) {
+    setListed(files);
+    if (files.length === 0) setReasons([]);
+  }
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLButtonElement>(null);
@@ -51,6 +59,7 @@ export const Dropzone = ({ maxFiles, maxBytes, files = [], onChange }: Props) =>
     const buttons = [...(listRef.current?.querySelectorAll("button") ?? [])];
     const next = buttons[index + 1] ?? buttons[index - 1] ?? attachRef.current;
     next?.focus();
+    setReasons([]);
     onChange(files.filter((_, i) => i !== index));
   };
 

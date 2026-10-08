@@ -85,6 +85,39 @@ describe("Dropzone", () => {
     expect(input).toHaveValue(""); // the same file can be chosen again
   });
 
+  // A refusal is about the files it was checked against: once those are sent or removed, it would point at nothing.
+  it("clears the reasons when the parent empties the list (the turn was sent) and when a chip is removed", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    const Composer = () => {
+      const [files, setFiles] = useState<File[]>([]);
+      return (
+        <>
+          <Dropzone maxFiles={5} maxBytes={1024} files={files} onChange={setFiles} />
+          <button type="button" onClick={() => setFiles([])}>
+            Send
+          </button>
+        </>
+      );
+    };
+    render(<Composer />);
+    const input = screen.getByLabelText(/attach documents/i);
+    const reasons = screen.getByRole("status");
+    await user.upload(input, [pdf("spec.pdf"), pdf("big.pdf", 2048)]);
+    expect(reasons).toHaveTextContent("big.pdf is too large");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(reasons).toBeEmptyDOMElement();
+
+    await user.upload(input, [new File(["x"], "virus.exe")]); // nothing attached, then sent without files
+    expect(reasons).toHaveTextContent("virus.exe is not supported");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(reasons).toBeEmptyDOMElement();
+
+    await user.upload(input, [pdf("a.pdf"), pdf("b.pdf"), pdf("big.pdf", 2048)]);
+    expect(reasons).toHaveTextContent("big.pdf is too large");
+    await user.click(screen.getByRole("button", { name: "Remove a.pdf" }));
+    expect(reasons).toBeEmptyDOMElement();
+  });
+
   it("takes dropped files, highlighting while they are dragged over", () => {
     const onChange = vi.fn();
     render(<Dropzone maxFiles={5} maxBytes={1024} onChange={onChange} />);
