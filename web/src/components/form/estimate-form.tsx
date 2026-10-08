@@ -21,8 +21,9 @@ import { DEFAULT_VALUES, DETAIL_LEVEL_LABELS, type EstimateParams, estimateFormS
 import { Segmented } from "./segmented";
 
 // `edit` puts text back for editing (asking first when it would replace a different draft); `what` completes "Replace
-// your draft with …?". `clear` empties the transcript once it has been sent, keeping the choices.
-export type EstimateFormHandle = { edit: (text: string, what?: string) => void; clear: () => void };
+// your draft with …?". `clear` empties the transcript once it has been sent, keeping the choices. `focus` moves focus to
+// the transcript where typing is the next step without covering the page (a fine pointer); false on a touch screen.
+export type EstimateFormHandle = { edit: (text: string, what?: string) => void; clear: () => void; focus: () => boolean };
 type Props = {
   onSubmit: (body: components["schemas"]["EstimateRequest"], opts: { promptVersion: string }) => void;
   versions?: string[]; // absent: no prompt-version choice (a conversation's endpoints take none)
@@ -100,6 +101,7 @@ export const EstimateForm = ({
       if (draft.replace({ text, what })) inputRef.current?.focus();
     },
     clear: () => resetField("transcription"), // also clears its error and dirty state, so no "empty" message shows
+    focus: () => focusForTyping(inputRef.current),
   }));
 
   const paramsChanged = () => {

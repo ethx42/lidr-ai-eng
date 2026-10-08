@@ -114,6 +114,8 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const formRef = useRef<EstimateFormHandle>(null);
   const stopRef = useRef<HTMLButtonElement>(null);
   const latestRef = useRef<HTMLLIElement>(null);
+  const newConversationRef = useRef<HTMLButtonElement>(null);
+  const startedOver = useRef(false); // how the confirmation closed: Start new, or Cancel / Esc
   const ids = useRef(0);
   // The prompt sessions send: the composer's choices on the session's version (v3), not the service default (S5-R4).
   const promptContext = usePromptContext({ ...params, prompt_version: view?.prompt_version ?? "" });
@@ -190,10 +192,21 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
 
   const startOver = () => {
     stop();
-    setConfirming(false);
     void session.reset().then(() => toast("Started a new conversation."));
   };
-  const newConversation = () => (answering() ? setConfirming(true) : startOver());
+  // Managed focus after a new conversation starts: with a mouse the transcript, for the new conversation's first turn;
+  // on a touch screen New conversation itself, since focusing the transcript would open the keyboard over the page.
+  const focusAfterStart = () => {
+    if (!formRef.current?.focus()) newConversationRef.current?.focus();
+  };
+  const newConversation = () => {
+    if (answering()) {
+      startedOver.current = false;
+      return setConfirming(true);
+    }
+    startOver();
+    focusAfterStart();
+  };
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -201,7 +214,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
         <AppHeader
           actions={
             <>
-              <Button type="button" variant="secondary" onClick={newConversation}>
+              <Button ref={newConversationRef} type="button" variant="secondary" onClick={newConversation}>
                 <MessageSquarePlus />
                 <span className="sr-only sm:not-sr-only">New conversation</span>
               </Button>
@@ -265,14 +278,29 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
         </main>
       </div>
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
+        {/* Opened from state, so Radix has no trigger to give focus back to (it would fall to the page): Cancel returns
+            it to New conversation, and Start new moves it as above. */}
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (startedOver.current) focusAfterStart();
+            else newConversationRef.current?.focus();
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Start a new conversation?</AlertDialogTitle>
             <AlertDialogDescription>The answer in progress stops, and the new conversation starts without this one&apos;s history and memory.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startOver}>Start new</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                startedOver.current = true;
+                startOver();
+              }}
+            >
+              Start new
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

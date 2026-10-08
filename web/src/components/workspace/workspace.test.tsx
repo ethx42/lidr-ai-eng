@@ -307,10 +307,13 @@ describe("Workspace", () => {
       await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
       expect(turnCalls()[0][1]?.signal?.aborted).toBe(false);
       expect(turns()).toHaveLength(1);
+      // the dialog opens from state, with no trigger to return to: focus goes back to the button that asked
+      await waitFor(() => expect(screen.getByRole("button", { name: "New conversation" })).toHaveFocus());
 
       await user.click(screen.getByRole("button", { name: "New conversation" }));
       await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Start new" }));
       expect(turnCalls()[0][1]?.signal?.aborted).toBe(true);
+      await waitFor(() => expect(input).toHaveFocus()); // with a mouse, ready for the new conversation's first turn
       await waitFor(() => expect(sessionStorage.getItem("estimator.sessionId")).toBe(SESSIONS[1]));
       expect(screen.getByText("Start the conversation")).toBeInTheDocument();
       expect(await screen.findByText("History 0 / 6 turns")).toBeInTheDocument();
@@ -326,6 +329,7 @@ describe("Workspace", () => {
       await finish(0);
       await user.click(screen.getByRole("button", { name: "New conversation" }));
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(input).toHaveFocus();
       expect(await screen.findByText("History 0 / 6 turns")).toBeInTheDocument();
       expect(fact("Project name")).toHaveTextContent("Not mentioned yet");
       expect(screen.queryByRole("list", { name: "Conversation" })).not.toBeInTheDocument();
@@ -470,6 +474,19 @@ describe("Workspace", () => {
       await user.click(evidence("R1"));
       expect(mark("R1")).toHaveAttribute("data-active");
       expect(mark("R2")).not.toHaveAttribute("data-active");
+
+      // a pin made while a turn streams ends with that attempt: a Retry numbers its own requirements
+      await run(user, input);
+      const partial = frame("partial", { seq: 1, breakdown: { requirements: [{ id: "R1", statement: "Log in", evidence: "patients log in, see their" }], assumptions: [] } });
+      streams[1].push(partial);
+      await user.click(await within(turn(2)).findByRole("button", { name: "Evidence for R1" }));
+      expect(mark("R1", 2)).toHaveAttribute("data-active");
+      await user.click(within(turn(2)).getByRole("button", { name: "Stop" }));
+      expect(mark("R1", 2)).toHaveAttribute("data-active"); // the stopped attempt keeps its pin
+      await user.click(within(turn(2)).getByRole("button", { name: "Retry" }));
+      streams[2].push(partial);
+      await waitFor(() => expect(mark("R1", 2)).toBeInTheDocument());
+      expect(transcriptPane(2).querySelector("mark[data-active]")).toBeNull();
     });
 
     it("leaves the evidence card closed after a tap pins its requirement, also once the viewport widens", async () => {
@@ -513,6 +530,15 @@ describe("Workspace", () => {
 
   describe("composer and turn controls", () => {
     // §8 managed focus on a touch screen: never the composer (the keyboard would cover the result), but the new Stop.
+    it("on a touch screen, Start new in the confirmation returns focus to New conversation, never into the composer", async () => {
+      stubPointer("coarse");
+      const { user, input } = setup();
+      await run(user, input, "First");
+      await user.click(screen.getByRole("button", { name: "New conversation" }));
+      await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Start new" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "New conversation" })).toHaveFocus());
+    });
+
     it("on a touch screen, moves focus from Estimate to the new Stop without scrolling, never into the composer", async () => {
       stubPointer("coarse");
       const { user, input, estimate } = setup();

@@ -394,6 +394,23 @@ describe("EstimateForm as a conversation composer", () => {
     expect(input).not.toHaveAttribute("aria-invalid");
   });
 
+  it("focuses the transcript on focus() with a mouse, and not on a touch screen, saying which it did", () => {
+    const { handle, input } = setup();
+    let focused: boolean | undefined;
+    act(() => {
+      focused = handle.current?.focus();
+    });
+    expect(focused).toBe(true);
+    expect(input).toHaveFocus();
+    act(() => input.blur());
+    stubPointer("coarse");
+    act(() => {
+      focused = handle.current?.focus();
+    });
+    expect(focused).toBe(false);
+    expect(input).not.toHaveFocus();
+  });
+
   it("puts an unsent message back with edit(), naming it when it would replace a draft", async () => {
     const { handle, user, input } = setup();
     act(() => handle.current?.edit("The unsent turn", "your unsent message"));
