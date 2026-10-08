@@ -1,8 +1,8 @@
 """Live three-turn session check (`make smoke-live-session`, budget-guarded): one in-process
 session against the real provider chain, the second turn with a PDF attached. Prints what the
-session learned after each turn, never the transcripts or the attachment text. Exits 1 if the
-project name is not kept across turns or Redsys (named only in the PDF) is missing from the
-technologies after turn 2."""
+session learned after each turn (the scope as its length only), never the transcripts or the
+attachment text. Exits 1 if a turn fails, the project name is not kept across turns, or Redsys
+(named only in the PDF) is missing from the technologies after turn 2."""
 
 import asyncio
 import json
@@ -12,18 +12,17 @@ from contextlib import aclosing
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.attachments.extractor import Attachment
+from app.attachments.extractor import Attachment, AttachmentError, ExtractedAttachment
 from app.config import Settings
+from app.main import build_services
 from app.observability import configure_logging
 from app.schemas.estimation import DetailLevel, EstimateRequest, OutputFormat, ProjectType
 from app.schemas.session import TurnResponse
-from app.services.cache import NullCache, cache_scope
+from app.services.cache import NullCache
 from app.services.conversation import ConversationService
 from app.services.errors import LLMError
-from app.services.llm_service import EstimationService
 from app.services.providers.base import LLMProvider
 from app.services.providers.factory import build_provider
-from app.sessions import InMemorySessionStore
 from scripts.live_budget import LEDGER, call_bound_usd, ensure_budget, record_spend
 
 OPENAI_MODEL = "gpt-4o-mini"
@@ -84,36 +83,25 @@ def guard_usd(settings: Settings) -> float:
     return max(ESTIMATE_USD, len(TURNS) * turn_bound_usd(settings))
 
 
-def conversation_for(settings: Settings, provider: LLMProvider) -> ConversationService:
-    estimation = EstimationService(
-        provider=provider,
-        prompt_version=settings.prompt_version,
-        weekly_capacity_hours=settings.weekly_capacity_hours,
-        hourly_rate=settings.blended_hourly_rate,
-        cache=NullCache(),  # session turns bypass the cache anyway
-        cache_scope=cache_scope(settings),
-    )
-    store = InMemorySessionStore(
-        max_turns=settings.max_turns,
-        max_history_chars=settings.max_history_chars,
-        ttl_seconds=settings.session_ttl_seconds,
-        max_sessions=settings.max_sessions,
-    )
-    return ConversationService(
-        estimation=estimation, store=store, limits=settings.attachment_limits
-    )
-
-
-async def take_turn(conversation: ConversationService, session_id: str, turn: Turn) -> TurnResponse:
+async def extract(conversation: ConversationService, turn: Turn) -> list[ExtractedAttachment]:
+    """Raises AttachmentError, before any provider call."""
     files = [Attachment(path.name, path.read_bytes()) for path in turn.attachments]
-    extracted = await conversation.extract(files) if files else []
+    return await conversation.extract(files) if files else []
+
+
+async def take_turn(
+    conversation: ConversationService,
+    session_id: str,
+    turn: Turn,
+    attachments: Sequence[ExtractedAttachment],
+) -> TurnResponse:
     request = EstimateRequest(
         transcription=turn.transcript,
         project_type=ProjectType.WEB_SAAS,
         detail_level=DetailLevel.MEDIUM,
         output_format=OutputFormat.PHASES_TABLE,
     )
-    async with aclosing(conversation.turn_stream(session_id, request, extracted)) as items:
+    async with aclosing(conversation.turn_stream(session_id, request, attachments)) as items:
         [response] = [item async for item in items if isinstance(item, TurnResponse)]
     return response
 
@@ -132,8 +120,11 @@ def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
         f"history {response.history_turns}",
         f"changes: {', '.join(response.metadata_changes) or '-'}",
     ]
-    metadata = json.dumps(response.project_metadata.model_dump())
-    return f"{' | '.join(cells)}\n  metadata: {metadata}"
+    facts = response.project_metadata.model_dump()
+    scope = response.project_metadata.agreed_scope
+    # The scope is the model's summary, and it can quote an attachment: its length only.
+    facts["agreed_scope"] = None if scope is None else f"{len(scope)} chars"
+    return f"{' | '.join(cells)}\n  metadata: {json.dumps(facts)}"
 
 
 def problems(responses: Sequence[TurnResponse]) -> list[str]:
@@ -145,6 +136,14 @@ def problems(responses: Sequence[TurnResponse]) -> list[str]:
     if not any(ATTACHMENT_ONLY_TECHNOLOGY.casefold() in t.casefold() for t in after_pdf):
         found.append(f"{ATTACHMENT_ONLY_TECHNOLOGY} missing from the technologies after turn 2")
     return found
+
+
+def failed_turn(number: int, exc: LLMError | AttachmentError) -> str:
+    if isinstance(exc, AttachmentError):  # its message names the file and the reason only
+        code = "attachments_busy" if exc.reason == "busy" else "invalid_attachment"
+        return f"turn {number}: {code} ({exc})"
+    cause = f" ({exc.cause})" if exc.cause else ""
+    return f"turn {number}: {exc.code}{cause}"
 
 
 def summary(responses: Sequence[TurnResponse], spent: float, failures: Sequence[str]) -> str:
@@ -163,20 +162,20 @@ async def main(
     ensure_budget(guard_usd(resolved), ledger=ledger)
     bound = turn_bound_usd(resolved)
     provider = provider_factory(resolved)
-    conversation = conversation_for(resolved, provider)
-    session_id = conversation.start().id
     costs: list[float] = []
     responses: list[TurnResponse] = []
     try:
+        _, conversation = build_services(resolved, provider, NullCache())  # turns bypass it anyway
+        session_id = conversation.start().id
         for number, turn in enumerate(TURNS, start=1):
+            attachments = await extract(conversation, turn)  # no provider call yet: no charge
             costs.append(bound)  # until the turn reports its cost
-            response = await take_turn(conversation, session_id, turn)
+            response = await take_turn(conversation, session_id, turn, attachments)
             costs[-1] = bound if response.metrics.cost_usd is None else response.metrics.cost_usd
             responses.append(response)
             print(format_turn(number, turn, response))
-    except LLMError as exc:
-        cause = f" ({exc.cause})" if exc.cause else ""
-        failures = [f"turn {len(costs)}: {exc.code}{cause}"]
+    except (LLMError, AttachmentError) as exc:
+        failures = [failed_turn(len(responses) + 1, exc)]
     else:
         failures = problems(responses)
     finally:
