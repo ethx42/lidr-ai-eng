@@ -575,6 +575,43 @@ test.describe("session", () => {
     await expect(stopped(page)).toBeVisible();
     await expect(stopButton(page)).toHaveCount(0);
   });
+
+  // The transcript sits in the turn's header, far above most requirements: Evidence brings the quote to the reader.
+  test("Evidence (a click, or Enter) opens the turn's transcript at its quote; hovering a requirement never scrolls the page", async ({ page }) => {
+    await ready(page);
+    const one = turn(page, 1);
+    await sendText(page, FREIGHT_KICKOFF);
+    await expectResult(one);
+    const toggle = one.getByRole("button", { name: /^Transcript/ });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const last = requirements(one).last();
+    const evidence = last.getByRole("button", { name: /^Evidence for / });
+    const id = await idOf(evidence);
+    await evidence.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const pane = turnTranscript(page, 1);
+    await expect(pane).toBeFocused();
+    await expectHighlighted(pane, id);
+    await expect(pane.locator("mark[data-active]").first()).toBeInViewport();
+    await expect(evidenceCard(page)).toHaveCount(0);
+
+    // Hovering a requirement highlights its quote inside the transcript region only: the page stays where it is.
+    const first = requirements(one).first();
+    await first.scrollIntoViewIfNeeded();
+    const scrollTop = await page.evaluate(() => document.scrollingElement?.scrollTop);
+    await first.locator("p").first().hover();
+    await expectHighlighted(pane, await idOf(first.getByRole("button", { name: /^Evidence for / })));
+    expect(await page.evaluate(() => document.scrollingElement?.scrollTop), "the page's scroll after hovering a requirement").toBe(scrollTop);
+    await page.mouse.move(0, 0);
+
+    const second = requirements(one).nth(1).getByRole("button", { name: /^Evidence for / });
+    await second.focus();
+    await page.keyboard.press("Enter");
+    await expect(pane).toBeFocused();
+    await expectHighlighted(pane, await idOf(second));
+    await expect(pane.locator("mark[data-active]").first()).toBeInViewport();
+  });
 });
 
 for (const colorScheme of ["light", "dark"] as const) {

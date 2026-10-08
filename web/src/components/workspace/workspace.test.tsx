@@ -182,7 +182,7 @@ describe("Workspace", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     return text;
   };
-  // A viewport whose width the test changes mid-run: the turn card's query answers `wide`, change listeners fire.
+  // A viewport whose width the test changes mid-run (Tailwind's `md`), change listeners fire: Evidence must not care.
   const viewport = (initiallyWide: boolean) => {
     let wide = initiallyWide;
     const listeners = new Set<() => void>();
@@ -585,7 +585,7 @@ describe("Workspace", () => {
       expect(within(turn(1)).getByRole("button", { name: /^Transcript/ })).toHaveAttribute("aria-expanded", "true");
       expect(transcriptPane()).toHaveFocus();
       expect(mark("R2")).toHaveAttribute("data-active");
-      // the page, not the pane, scrolls below 768 px, so the quote is brought into view through every scrolling ancestor
+      // the transcript sits far above the requirement, so the quote is brought into view through every scrolling ancestor
       expect(scrolled.mock.contexts).toEqual([mark("R2")]);
       expect(scrolled).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
       expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull(); // the quote shows in the transcript instead
@@ -635,7 +635,9 @@ describe("Workspace", () => {
       await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote given by the model, not found in the transcript"));
     });
 
-    it("ignores a pin side by side, where hover and focus link requirements to quotes", async () => {
+    // The transcript sits in the turn's header at every width, far above most requirements: a pin is how the quote
+    // reaches the reader, so it holds when the window widens.
+    it("keeps a pin once the viewport widens", async () => {
       const resize = viewport(false);
       const { user, input } = setup();
       await run(user, input);
@@ -643,8 +645,33 @@ describe("Workspace", () => {
       await user.click(screen.getByRole("button", { name: "Evidence for R2" }));
       expect(mark("R2")).toHaveAttribute("data-active");
       resize(true);
-      expect(transcriptPane().querySelector("mark[data-active]")).toBeNull();
-      expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).not.toHaveAttribute("data-active");
+      expect(mark("R2")).toHaveAttribute("data-active");
+      expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).toHaveAttribute("data-active");
+    });
+
+    it("from 768 px too, Evidence opens the turn's transcript at its quote and brings it into view; hover and focus still show its card", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      const card = () => document.querySelector('[data-slot="hover-card-content"]');
+      const evidence = within(turn(1)).getByRole("button", { name: "Evidence for R2" });
+      act(() => evidence.focus());
+      await waitFor(() => expect(card()).toHaveTextContent("Quote from the transcript"));
+      const scrolled = vi.mocked(Element.prototype.scrollIntoView);
+      scrolled.mockClear();
+
+      await user.click(evidence);
+      expect(within(turn(1)).getByRole("button", { name: /^Transcript/ })).toHaveAttribute("aria-expanded", "true");
+      expect(transcriptPane()).toHaveFocus();
+      expect(mark("R2")).toHaveAttribute("data-active");
+      expect(scrolled.mock.contexts).toEqual([mark("R2")]); // through every scrolling ancestor: the page too
+      await waitFor(() => expect(card()).toBeNull());
+      await act(() => new Promise((resolve) => setTimeout(resolve, 300))); // past the open delay: Radix's leaked timer fires
+      expect(card()).toBeNull();
+
+      await user.unhover(evidence);
+      await user.hover(evidence); // the next hover shows the card again
+      await waitFor(() => expect(card()).toHaveTextContent("Quote from the transcript"));
     });
   });
 
