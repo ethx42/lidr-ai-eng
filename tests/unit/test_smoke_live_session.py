@@ -75,6 +75,7 @@ async def test_three_turns_pass_and_record_their_summed_cost(
     assert total_spent(ledger) == pytest.approx(3 * TURN_USD)
     out = capsys.readouterr().out
     assert out.count("metadata:") == 3
+    assert out.count("| mentions Stripe yes |") == 3  # where turn 1's scope was kept, or lost
     assert out.splitlines()[-1].endswith(": pass")
     # Prints what the session learned, never what the client sent.
     for turn in smoke_live_session.TURNS:

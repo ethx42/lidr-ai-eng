@@ -109,8 +109,18 @@ async def take_turn(
     return response
 
 
+def mentions(response: TurnResponse, fact: str) -> bool:
+    b = response.breakdown
+    texts = [
+        *(f"{r.statement} {r.evidence}" for r in b.requirements),
+        *(f"{t.name} {t.rationale}" for t in b.tasks),
+    ]
+    return any(fact.casefold() in text.casefold() for text in texts)
+
+
 def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
     usage, metrics, grounding = response.usage, response.metrics, response.grounding
+    kept = mentions(response, TURN_ONE_ONLY_FACT)  # where turn 1's scope was kept, or lost
     attached = f" + {', '.join(p.name for p in turn.attachments)}" if turn.attachments else ""
     cost = "-" if metrics.cost_usd is None else f"{metrics.cost_usd:.6f}"
     cells = [
@@ -120,6 +130,7 @@ def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
         f"out {usage.output_tokens}",
         f"cost {cost}",
         f"grounded {grounding.requirements_grounded}/{grounding.requirements_total}",
+        f"mentions {TURN_ONE_ONLY_FACT} {'yes' if kept else 'no'}",
         f"history {response.history_turns}",
         f"changes: {', '.join(response.metadata_changes) or '-'}",
     ]
@@ -128,15 +139,6 @@ def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
     # The scope is the model's summary, and it can quote an attachment: its length only.
     facts["agreed_scope"] = None if scope is None else f"{len(scope)} chars"
     return f"{' | '.join(cells)}\n  metadata: {json.dumps(facts)}"
-
-
-def mentions(response: TurnResponse, fact: str) -> bool:
-    b = response.breakdown
-    texts = [
-        *(f"{r.statement} {r.evidence}" for r in b.requirements),
-        *(f"{t.name} {t.rationale}" for t in b.tasks),
-    ]
-    return any(fact.casefold() in text.casefold() for text in texts)
 
 
 def problems(responses: Sequence[TurnResponse]) -> list[str]:
