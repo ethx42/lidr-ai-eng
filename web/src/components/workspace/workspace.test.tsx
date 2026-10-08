@@ -182,6 +182,25 @@ describe("Workspace", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     return text;
   };
+  // A viewport whose width the test changes mid-run (Tailwind's `md`), change listeners fire: Evidence must not care.
+  const viewport = (initiallyWide: boolean) => {
+    let wide = initiallyWide;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches: query === "(pointer: fine)" || (query === "(min-width: 48rem)" && wide),
+        media: query,
+        addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+        removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+      })),
+    );
+    return (next: boolean) =>
+      act(() => {
+        wide = next;
+        for (const listener of listeners) listener();
+      });
+  };
 
   describe("a conversation", () => {
     it("starts a session on load and invites a first turn", async () => {
@@ -568,7 +587,8 @@ describe("Workspace", () => {
       await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote from an attachment or an earlier message"));
     });
 
-    it("Evidence opens the turn's transcript at its quote and pins it, until the next pin or attempt", async () => {
+    it("below 768 px, Evidence opens the turn's transcript at its quote and pins it, until the next pin or attempt", async () => {
+      stubPointer("fine", { wide: false });
       const { user, input } = setup();
       await run(user, input);
       await finish(0);
@@ -604,7 +624,8 @@ describe("Workspace", () => {
       expect(transcriptPane(2).querySelector("mark[data-active]")).toBeNull();
     });
 
-    it("leaves the evidence card closed after a tap pins its requirement", async () => {
+    it("leaves the evidence card closed after a tap pins its requirement, also once the viewport widens", async () => {
+      const resize = viewport(false);
       const { user, input } = setup();
       await run(user, input);
       await finish(0);
@@ -612,11 +633,15 @@ describe("Workspace", () => {
       fireEvent.pointerDown(evidence, { pointerType: "touch" }); // a tap: Radix ignores touch, so the button opens the card itself
       await user.click(evidence);
       expect(mark("R2")).toHaveAttribute("data-active");
-      await act(() => new Promise((resolve) => setTimeout(resolve, 300))); // past the open delay: Radix's leaked timer fires
+      const pastOpenDelay = () => act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+      await pastOpenDelay();
+      resize(true); // later, the phone turns to landscape
+      await pastOpenDelay();
       expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull();
     });
 
-    it("Evidence for a quote not found in the transcript shows the model's quote instead of pinning", async () => {
+    it("below 768 px, Evidence for a quote not found in the transcript shows the model's quote instead of pinning", async () => {
+      stubPointer("fine", { wide: false });
       const { user, input } = setup();
       await run(user, input);
       await finish(0); // the grounding report flags R3: no mark to show
@@ -625,7 +650,21 @@ describe("Workspace", () => {
       await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote given by the model, not found in the transcript"));
     });
 
-    it("Evidence shows its card on hover and focus; a click opens the turn's transcript at its quote and shuts the card until the next hover", async () => {
+    // The transcript sits in the turn's header at every width, far above most requirements: a pin is how the quote
+    // reaches the reader, so it holds when the window widens.
+    it("keeps a pin once the viewport widens", async () => {
+      const resize = viewport(false);
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      await user.click(screen.getByRole("button", { name: "Evidence for R2" }));
+      expect(mark("R2")).toHaveAttribute("data-active");
+      resize(true);
+      expect(mark("R2")).toHaveAttribute("data-active");
+      expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).toHaveAttribute("data-active");
+    });
+
+    it("from 768 px too, Evidence opens the turn's transcript at its quote and brings it into view; hover and focus still show its card", async () => {
       const { user, input } = setup();
       await run(user, input);
       await finish(0);
