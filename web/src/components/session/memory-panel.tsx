@@ -72,7 +72,8 @@ export const MemoryPanel = ({ metadata, changed = [] }: Props) => {
               <ul role="list" className="flex flex-wrap gap-1.5">
                 {technologies.map((technology, i) => (
                   <li key={i}>
-                    <Badge variant="secondary" className="font-normal">
+                    {/* A name can be 80 characters long: it wraps (anywhere, as the fact does) instead of overflowing. */}
+                    <Badge variant="secondary" className="h-auto max-w-full justify-start font-normal whitespace-normal wrap-anywhere">
                       {technology}
                     </Badge>
                   </li>

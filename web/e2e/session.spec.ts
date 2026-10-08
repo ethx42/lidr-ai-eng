@@ -45,6 +45,11 @@ const SAMPLE = "Clinic portal";
 
 const FREIGHT = { name: "Freight marketplace", technologies: ["iOS", "Android", "GPS", "SAP"] };
 const DENTAL = { name: "Dental clinic website", technologies: ["email"] };
+// The longest technology names the AI service keeps (80 characters, app/sessions.py), with spaces and without.
+const LONG_TECHNOLOGIES = [
+  "Microsoft Dynamics 365 Finance and Operations (on-premises) with Azure Data Lake",
+  "SalesforceToSAPS4HANABidirectionalSyncConnectorForEnterpriseResourcePlanning2026",
+];
 
 // WCAG 2.2 AA plus axe's best practices; only serious and critical findings fail the run.
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
@@ -665,6 +670,29 @@ test.describe("375 px wide", () => {
     await requirements(two).first().getByRole("button", { name: /^Evidence for / }).click();
     await expect(evidenceCard(page)).toContainText("Quote from an earlier message");
     await expect(two.getByRole("button", { name: /^Transcript/ })).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+test.describe("360 px wide", () => {
+  test.use({ viewport: { width: 360, height: 780 } });
+
+  test("an 80-character technology wraps in the memory: nothing scrolls sideways, nor does the memory column from 1024 px", async ({ page }) => {
+    for (const name of LONG_TECHNOLOGIES) expect(name).toHaveLength(80);
+    // The session's view as if earlier turns had named them: the memory shows it before any turn.
+    await page.route("**/api/sessions/*", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      const response = await route.fetch();
+      const view = await response.json();
+      await route.fulfill({ response, json: { ...view, project_metadata: { ...view.project_metadata, mentioned_technologies: ["SAP", ...LONG_TECHNOLOGIES] } } });
+    });
+    await ready(page);
+    await expectTechnologies(page, ["SAP", ...LONG_TECHNOLOGIES]);
+    await expectNoHorizontalScroll(page);
+    // From 1024 px the memory is a sticky column that scrolls on its own.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(memory(page)).toHaveCSS("position", "sticky");
+    expect(await memory(page).evaluate((aside) => aside.scrollWidth - aside.clientWidth), "horizontal overflow of the memory column, in px").toBe(0);
+    await expectNoHorizontalScroll(page);
   });
 });
 
