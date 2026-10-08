@@ -206,8 +206,9 @@ export const EstimateForm = ({
               aria-invalid={fieldState.invalid || over || undefined}
               aria-describedby={[counterId, over && overId, over && overById, fieldState.invalid && errorId].filter(Boolean).join(" ")}
               // Grows with the text up to the window less the header and the composer's other rows (45% of a short window at
-              // least), so a transcript that fits the window shows in full instead of scrolling in a fixed box.
-              className={cn("max-h-[max(45dvh,calc(100dvh-24rem))] bg-card", compact ? "min-h-12" : "min-h-28")}
+              // least), so a transcript that fits the window shows in full instead of scrolling in a fixed box (svh: steady
+              // while a mobile URL bar shows or hides).
+              className={cn("max-h-[max(45svh,calc(100svh-24rem))] bg-card", compact ? "min-h-12" : "min-h-28")}
             />
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">

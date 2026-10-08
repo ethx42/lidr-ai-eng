@@ -125,8 +125,9 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
                 quotes={quotes}
                 active={activeRequirement}
                 pinned={pinned}
-                // At most the window less the header and the turn's heading, so a transcript that fits the window shows in full.
-                className="max-h-[calc(100dvh-8rem)]"
+                // At most the window less the header and the turn's heading (45% of a short window at least), so a transcript
+                // that fits the window shows in full; svh, so a mobile URL bar showing or hiding never resizes it mid-scroll.
+                className="max-h-[max(45svh,calc(100svh-8rem))]"
               />
             )}
           </div>

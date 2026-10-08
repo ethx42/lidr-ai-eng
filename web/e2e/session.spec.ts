@@ -791,6 +791,9 @@ test.describe("1920x1080", () => {
     const one = turn(page, 1);
     await send(page);
     await expectResult(one);
+    // After a turn the composer is the compact one, whose transcript was capped at 128 px.
+    await transcript(page).fill(meeting);
+    expect(await transcript(page).evaluate(scrollsInside), "the compact composer's transcript scrolls inside its box").toBe(false);
     expect(await page.locator("html").evaluate(scrollsInside), "the page scrolls").toBe(true);
     expect(await page.evaluate(innerScrollers), "elements that scroll on their own").toEqual([]);
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
