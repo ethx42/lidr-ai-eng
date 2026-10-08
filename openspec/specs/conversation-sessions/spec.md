@@ -152,7 +152,7 @@ Each session SHALL serialise its turns: a turn that arrives while another turn o
 - **THEN** the session's history and metadata are unchanged
 
 ### Requirement: Session store lifecycle
-Sessions SHALL live in process memory, behind a store interface (create a session; get one by id) that a shared store can replace; they are lost on restart and not shared between worker processes. A session idle for longer than `SESSION_TTL_SECONDS` since its last use SHALL expire, and every read of a session SHALL count as a use. The store SHALL hold at most `MAX_SESSIONS` sessions; at the cap, creating a session SHALL evict, in this order, an expired session, else the least recently used session with no turns, else the least recently used session without a turn in flight. A session with a turn in flight SHALL never be evicted; when every session has one, creation SHALL fail with `sessions_full`. An expired or evicted session SHALL be answered `404` `session_not_found`, and the client recovers by creating a new session.
+Sessions SHALL live in process memory, behind a store interface (create a session; get one by id) that a shared store can replace; they are lost on restart and not shared between worker processes. A session idle for longer than `SESSION_TTL_SECONDS` since its last use SHALL expire, and every read of a session SHALL count as a use. The store SHALL hold at most `MAX_SESSIONS` sessions; at the cap, creating a session SHALL evict, in this order, an expired session, else the least recently used session with no turns, else the least recently used session without a turn in flight. A session with a turn in flight SHALL never be evicted, including a turn whose attachments are still being read or extracted; when every session has one, creation SHALL fail with `sessions_full`. An expired or evicted session SHALL be answered `404` `session_not_found`, and the client recovers by creating a new session.
 
 #### Scenario: Idle session expires
 - **WHEN** a session is not used for longer than `SESSION_TTL_SECONDS`
@@ -165,6 +165,10 @@ Sessions SHALL live in process memory, behind a store interface (create a sessio
 #### Scenario: Expired before empty
 - **WHEN** the store is at its cap and holds an expired session and a live empty one
 - **THEN** creating a session evicts the expired one
+
+#### Scenario: A first turn being extracted is kept
+- **WHEN** the store is at its cap, a session with no turns is extracting its first turn's attachments, and a client creates a session
+- **THEN** another session is evicted, and the extracting turn completes
 
 ### Requirement: Attachments
 The system SHALL accept PDF, DOCX and plain-text attachments, detecting the kind from the file's bytes, never from its name, extension or declared content type: a PDF starts with `%PDF-`, a DOCX is a ZIP archive containing `word/document.xml`, and plain text is UTF-8 without NUL bytes; anything else SHALL be rejected as unsupported. Text SHALL be extracted locally with `pypdf` and `python-docx` (PyMuPDF is excluded by its AGPL licence), within these per-turn budgets:

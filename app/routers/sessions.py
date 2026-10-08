@@ -42,6 +42,7 @@ from app.schemas.session import SessionCreated, SessionView, TurnResponse
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.conversation import ConversationService, SessionBusy, SessionNotFound
 from app.services.errors import LLMError
+from app.sessions import Session
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +102,11 @@ class PreparedTurn:
     attachments: list[ExtractedAttachment]
 
 
-def ensure_idle(conversation: ConversationService, session_id: str) -> None:
-    if conversation.get(session_id).lock.locked():
+def ensure_idle(conversation: ConversationService, session_id: str) -> Session:
+    session = conversation.get(session_id)
+    if session.lock.locked():
         raise SessionBusy(session_id)
+    return session
 
 
 def estimate_request(form: SessionEstimateForm, settings: Settings) -> EstimateRequest:
@@ -146,13 +149,19 @@ async def prepared_turn(
     form: Annotated[SessionEstimateForm, Form(media_type="multipart/form-data")],
     conversation: ConversationDep,
     settings: SettingsDep,
-) -> PreparedTurn:
-    ensure_idle(conversation, session_id)
+) -> AsyncIterator[PreparedTurn]:
+    """Request-scoped: from before its attachments are read until the request ends, the session
+    counts as pending, which the cap never evicts (the turn's lock covers only the model call)."""
+    session = ensure_idle(conversation, session_id)
     request = estimate_request(form, settings)
-    files = await read_attachments(form.attachments, conversation.limits)
-    extracted = await conversation.extract(files) if files else []
-    ensure_idle(conversation, session_id)  # extraction can take seconds
-    return PreparedTurn(session_id, request, extracted)
+    session.pending += 1
+    try:
+        files = await read_attachments(form.attachments, conversation.limits)
+        extracted = await conversation.extract(files) if files else []
+        ensure_idle(conversation, session_id)  # extraction can take seconds
+        yield PreparedTurn(session_id, request, extracted)
+    finally:
+        session.pending -= 1
 
 
 PreparedTurnDep = Annotated[PreparedTurn, Depends(prepared_turn)]

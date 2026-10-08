@@ -181,6 +181,29 @@ async def test_a_session_with_a_turn_in_flight_is_never_evicted() -> None:
     assert store.get(busy.id) is busy and store.get(other.id) is None
 
 
+def test_a_session_whose_turn_is_being_prepared_is_never_evicted() -> None:
+    store = capped_store(max_sessions=2)
+    preparing, other = store.create(), store.create()  # preparing: no turns yet
+    other.history.append("u", "a")
+    preparing.pending += 1  # its first turn's attachments are being extracted
+    third = store.create()
+    assert store.get(preparing.id) is preparing and store.get(other.id) is None
+    third.history.append("u", "a")
+    preparing.pending -= 1  # the turn's request has ended: evictable again
+    store.create()
+    assert store.get(preparing.id) is None and store.get(third.id) is third
+
+
+async def test_at_the_cap_with_every_turn_prepared_or_in_flight_create_raises() -> None:
+    store = capped_store(max_sessions=2)
+    a, b = store.create(), store.create()
+    a.pending += 1
+    async with b.lock:
+        with pytest.raises(SessionsFull):
+            store.create()
+    assert store.get(a.id) is a and store.get(b.id) is b
+
+
 async def test_at_the_cap_with_every_turn_in_flight_create_raises() -> None:
     store = capped_store(max_sessions=2)
     a, b = store.create(), store.create()

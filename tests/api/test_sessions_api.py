@@ -151,6 +151,47 @@ async def test_a_session_taken_during_extraction_is_409_json(
     assert fake_provider.calls == []
 
 
+@pytest.mark.parametrize("settings", [{"max_sessions": 2}], indirect=True)
+@pytest.mark.parametrize("endpoint", TURN_ENDPOINTS)
+async def test_a_first_turn_being_extracted_is_not_evicted_by_a_create(
+    app: FastAPI,
+    async_client: httpx2.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+) -> None:
+    conversation = app.state.conversation
+    first = await new_session(async_client)  # no turns yet
+    other = await new_session(async_client)
+    await async_client.post(f"/sessions/{other}/estimate", data=FORM)  # an idle conversation
+    extracting, release = asyncio.Event(), asyncio.Event()
+
+    async def parked(files: Sequence[Attachment]) -> list[ExtractedAttachment]:
+        extracting.set()
+        await release.wait()
+        return []
+
+    monkeypatch.setattr(conversation, "extract", parked)
+    turn = asyncio.create_task(
+        async_client.post(f"/sessions/{first}/{endpoint}", data=FORM, files=[NOTES])
+    )
+    await asyncio.wait_for(extracting.wait(), timeout=1)
+    created = await async_client.post("/sessions")  # at the cap: the idle conversation goes
+    release.set()
+    r = await turn
+    assert created.status_code == 201 and r.status_code == 200
+    assert (await async_client.get(f"/sessions/{other}")).status_code == 404
+    session = conversation.get(first)
+    assert session.history.turns == 1 and session.pending == 0
+
+
+async def test_a_turn_whose_extraction_fails_is_no_longer_pending(
+    app: FastAPI, async_client: httpx2.AsyncClient
+) -> None:
+    sid = await new_session(async_client)
+    r = await async_client.post(f"/sessions/{sid}/estimate", data=FORM, files=[EXE])
+    assert r.status_code == 422 and app.state.conversation.get(sid).pending == 0
+
+
 @pytest.mark.parametrize(
     ("error", "code", "retryable"),
     [(SessionBusy, "session_busy", True), (SessionNotFound, "session_not_found", False)],
