@@ -196,7 +196,7 @@ Password-protected PDFs, unreadable files and files without extractable text SHA
 - **THEN** the user message still contains exactly one `</transcript>`, the prompt's own
 
 ### Requirement: Attachment isolation
-Attachment text SHALL be extracted in a short-lived child process, so a hostile file can at worst take down that process. The child SHALL be killed after `ATTACHMENT_TIMEOUT_SECONDS` (the file is then rejected as too slow to read), SHALL have its address space capped at `ATTACHMENT_MAX_MEMORY_BYTES` where the operating system enforces it (Linux), and SHALL have a CPU-time limit one second above the timeout as a backstop. A child that dies, runs out of memory, or crashes SHALL make the turn fail with `422` `invalid_attachment`, never crash the worker. At most `ATTACHMENT_MAX_CONCURRENT` children SHALL run at once per process; a turn SHALL wait up to `ATTACHMENT_TIMEOUT_SECONDS` for a free one and then fail with `503` `attachments_busy`. A rejection SHALL log its reason only, never the document's text, a parser's message, or a traceback.
+Attachment text SHALL be extracted in a short-lived child process, so a hostile file can at worst take down that process. The child SHALL be killed after `ATTACHMENT_TIMEOUT_SECONDS` (the file is then rejected as too slow to read), SHALL have its address space capped at `ATTACHMENT_MAX_MEMORY_BYTES` where the operating system enforces it (Linux), and SHALL have a CPU-time limit one second above the timeout as a backstop. A child that dies, runs out of memory, or crashes SHALL make the turn fail with `422` `invalid_attachment`, never crash the worker. At most `ATTACHMENT_MAX_CONCURRENT` children SHALL run at once per process; a turn SHALL wait up to `ATTACHMENT_TIMEOUT_SECONDS` for a free one and then fail with `503` `attachments_busy`. A waiting turn SHALL hold no worker thread, so that bound holds however many turns wait, and a turn that is cancelled SHALL free its slot only once its child is gone. A rejection SHALL log its reason only, never the document's text, a parser's message, or a traceback.
 
 #### Scenario: Slow file killed
 - **WHEN** a file keeps its reader busy past `ATTACHMENT_TIMEOUT_SECONDS`
@@ -205,6 +205,10 @@ Attachment text SHALL be extracted in a short-lived child process, so a hostile 
 #### Scenario: Readers bounded
 - **WHEN** `ATTACHMENT_MAX_CONCURRENT` is 1 and a second extraction starts while the first runs
 - **THEN** the second waits for the slot, and fails with `attachments_busy` only if none frees up within the timeout
+
+#### Scenario: Busy within the timeout under load
+- **WHEN** more turns wait for a reader than the server has worker threads
+- **THEN** each turn that gets no reader fails with `attachments_busy` within `ATTACHMENT_TIMEOUT_SECONDS`, and no more than `ATTACHMENT_MAX_CONCURRENT` threads are taken by extraction
 
 #### Scenario: Rejection logged without content
 - **WHEN** an attachment fails to parse

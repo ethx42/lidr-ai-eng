@@ -1,5 +1,6 @@
 """Run `extract_all` in a short-lived child process with a hard timeout and a memory cap, so a
-hostile upload can at worst take down its own process. Blocking: call it via `asyncio.to_thread`."""
+hostile upload can at worst take down its own process. Blocking: the service waits for a slot in
+its event loop first, then runs it in a thread (`ConversationService.extract`)."""
 
 import contextlib
 import logging
@@ -25,11 +26,12 @@ parse_logger = logging.getLogger("app.attachments.extractor")
 CONTEXT = multiprocessing.get_context("forkserver")
 CONTEXT.set_forkserver_preload([__name__])
 
-# At most `max_concurrent` children at once, process-wide. Callers wait in worker threads
-# (asyncio.to_thread), so a thread semaphore fits. Sized from the limits on first use: the
-# settings do not change while the service runs.
+# At most `max_concurrent` children at once, process-wide. The service never waits here: it takes
+# one of as many event-loop slots before it calls in, so this only bounds other (sync) callers.
+# Sized from the limits on first use: the settings do not change while the service runs.
 slot_pool: threading.BoundedSemaphore | None = None
 slot_pool_lock = threading.Lock()
+BUSY = "the server is busy reading other attachments, try again"
 
 
 class Extractor(Protocol):
@@ -110,9 +112,7 @@ def run_isolated(
 ) -> list[ExtractedAttachment]:
     slot = slots(limits.max_concurrent)
     if not slot.acquire(timeout=limits.timeout_seconds):
-        raise AttachmentError(
-            "the server is busy reading other attachments, try again", reason="busy"
-        )
+        raise AttachmentError(BUSY, reason="busy")
     try:
         return run_child(extract, files, limits)
     finally:

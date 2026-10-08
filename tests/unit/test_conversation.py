@@ -1,11 +1,13 @@
 import asyncio
 import logging
 import threading
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
 
+from app.attachments import isolation
 from app.attachments.extractor import Attachment, AttachmentError, ExtractedAttachment
 from app.attachments.limits import AttachmentLimits
 from app.schemas.session import TurnResponse
@@ -399,3 +401,129 @@ async def test_an_unreadable_attachment_fails_extraction(
     with pytest.raises(AttachmentError) as caught:
         await conversation.extract([Attachment("spec.pdf", b"MZ\x90\x00\x03\x00\x00\x00")])
     assert caught.value.reason == "invalid"
+
+
+# Extraction slots are waited for in the event loop: only an extraction that has one holds a
+# thread, so waiting callers never fill a thread pool and a busy answer keeps to the timeout.
+
+NOTES = [Attachment("notes.txt", b"x")]
+
+
+class Children:
+    """Replaces the extraction child process with a wait for `release`, and counts the threads
+    inside the isolated extractor (waiting for a slot or running a child) and the children run."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.release = threading.Event()
+        self.lock = threading.Lock()
+        self.inside = self.peak = self.runs = 0
+        self.threads: set[str] = set()
+        real = conversation_module.extract_all_isolated
+
+        def counted(
+            files: Sequence[Attachment], limits: AttachmentLimits
+        ) -> list[ExtractedAttachment]:
+            with self.lock:
+                self.inside += 1
+                self.peak = max(self.peak, self.inside)
+                self.threads.add(threading.current_thread().name)
+            try:
+                return real(files, limits)
+            finally:
+                with self.lock:
+                    self.inside -= 1
+
+        def child(
+            extract: object, files: Sequence[Attachment], limits: AttachmentLimits
+        ) -> list[ExtractedAttachment]:
+            with self.lock:
+                self.runs += 1
+            self.release.wait(5)
+            return [ExtractedAttachment(f.filename, "text", "x", None) for f in files]
+
+        monkeypatch.setattr(isolation, "slot_pool", None)  # sized from these limits on first use
+        monkeypatch.setattr(isolation, "run_child", child)
+        monkeypatch.setattr(conversation_module, "extract_all_isolated", counted)
+
+
+def with_limits(
+    conversation: ConversationService, *, max_concurrent: int, timeout_seconds: float
+) -> ConversationService:
+    limits = AttachmentLimits(max_concurrent=max_concurrent, timeout_seconds=timeout_seconds)
+    return ConversationService(
+        estimation=conversation.estimation, store=conversation.store, limits=limits
+    )
+
+
+async def test_waiting_for_an_extraction_slot_holds_no_thread(
+    conversation: ConversationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    children = Children(monkeypatch)
+    service = with_limits(conversation, max_concurrent=2, timeout_seconds=5)
+    # More callers than the default executor has workers (at most 32).
+    calls = [asyncio.create_task(service.extract(NOTES)) for _ in range(40)]
+    try:
+        await asyncio.sleep(0.2)
+        assert (children.inside, children.runs) == (2, 2)
+        loop = asyncio.get_running_loop()
+        await asyncio.wait_for(loop.run_in_executor(None, lambda: None), 0.5)  # still free
+    finally:
+        children.release.set()
+    assert all(len(extracted) == 1 for extracted in await asyncio.gather(*calls))
+    assert children.peak == 2 and children.runs == 40
+    assert len(children.threads) <= 2  # the default executor ran none of them
+    assert all(name.startswith("attachment-reader") for name in children.threads)
+
+
+async def test_busy_comes_within_the_timeout_however_many_callers_wait(
+    conversation: ConversationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    children = Children(monkeypatch)
+    service = with_limits(conversation, max_concurrent=2, timeout_seconds=0.3)
+
+    async def busy_after() -> float:
+        started = time.monotonic()
+        with pytest.raises(AttachmentError, match="server is busy") as caught:
+            await service.extract(NOTES)
+        assert caught.value.reason == "busy"
+        return time.monotonic() - started
+
+    holders = [asyncio.create_task(service.extract(NOTES)) for _ in range(2)]
+    try:
+        await asyncio.sleep(0.05)
+        waits = await asyncio.gather(*(busy_after() for _ in range(40)))
+    finally:
+        children.release.set()
+    await asyncio.gather(*holders)
+    assert min(waits) >= 0.25 and max(waits) < 0.5
+
+
+async def test_a_cancelled_caller_frees_only_the_slot_it_held_once_its_child_is_gone(
+    conversation: ConversationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    children = Children(monkeypatch)
+    service = with_limits(conversation, max_concurrent=1, timeout_seconds=5)
+    running = asyncio.create_task(service.extract(NOTES))
+    await asyncio.sleep(0.05)
+    waiting = asyncio.create_task(service.extract(NOTES))
+    await asyncio.sleep(0.05)
+    waiting.cancel()  # held no slot: frees none, and never runs an extraction
+    running.cancel()  # its child still runs: the slot stays taken until it is gone
+    later = asyncio.create_task(service.extract(NOTES))
+    await asyncio.sleep(0.1)
+    try:
+        assert children.runs == 1 and children.inside == 1 and not later.done()
+    finally:
+        children.release.set()
+    assert len(await later) == 1
+    assert children.runs == 2 and running.cancelled() and waiting.cancelled()
+
+    # Still exactly one slot: a second caller waits while the first runs.
+    children.release.clear()
+    first, second = (asyncio.create_task(service.extract(NOTES)) for _ in range(2))
+    await asyncio.sleep(0.1)
+    try:
+        assert children.inside == 1
+    finally:
+        children.release.set()
+    await asyncio.gather(first, second)
