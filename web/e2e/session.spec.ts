@@ -745,6 +745,27 @@ test.describe("360 px wide", () => {
   });
 });
 
+// Mid widths, where the header shows both models of the chain and every action's label: a long chain truncates in its
+// chip (the whole chain stays in its title), so the actions keep their width and the page never scrolls sideways.
+test.describe("700 px wide", () => {
+  test.use({ viewport: { width: 700, height: 900 } });
+
+  test("a long model chain truncates in the header: the actions stay in the window and nothing scrolls sideways", async ({ page }) => {
+    await page.route(/\/api\/context(\?|$)/, async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), chain: ["openai:gpt-4o-mini", "anthropic:claude-haiku-4-5"] } });
+    });
+    await ready(page);
+    const chain = page.getByText("Model:").locator("..");
+    await expect(chain).toHaveAttribute("title", "OpenAI gpt-4o-mini → Anthropic claude-haiku-4-5");
+    for (const width of [700, 640, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole("button", { name: "Theme" }), `the theme menu at ${width} px`).toBeInViewport({ ratio: 1 });
+      await expectNoHorizontalScroll(page);
+    }
+  });
+});
+
 // A large window: the conversation and the memory take its width and the page scrolls as a whole. A text that fits the
 // window is never boxed in a pane that scrolls on its own (the composer's transcript was capped at 384 px, a turn's at
 // 320 px, whatever the window's height).

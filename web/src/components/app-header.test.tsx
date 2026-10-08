@@ -24,3 +24,8 @@ it("names a provider once when its model is the provider itself (replay)", async
   renderWithChain(["replay:replay"]);
   expect((await chip())?.textContent).toBe("Model:Replay");
 });
+
+it("keeps the whole chain in the chip's title, since a narrow header truncates it", async () => {
+  renderWithChain(["openai:gpt-4o-mini", "anthropic:claude-haiku-4-5"]);
+  expect(await chip()).toHaveAttribute("title", "OpenAI gpt-4o-mini → Anthropic claude-haiku-4-5");
+});
