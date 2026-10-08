@@ -55,7 +55,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - [x] Task 5: Prompt estimation/v3 with project metadata and attachments (bae6464, d9047db, 45cbb2f, 112506d, 1252428)
 - [x] Task 6: Conversation service (4a117d7, aa57299, 33eab70, ebe0f2a)
 - [x] Task 7: Session endpoints and the brief's integration tests (7eb2340, df63522, b3c4844, ea988e8, 0b9aa48, bbb7f4b)
-- [ ] Task 8: Web — session workspace
+- [x] Task 8: Web — session workspace (0cdfeab, 417b1fd, 0ba2548, 8f7d4c8, 9b1def1; merged aedbd56)
 - [ ] Task 9: E2E, live check and branch close-out
 - [ ] Review panel findings resolved
 - Gate:
