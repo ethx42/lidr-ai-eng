@@ -25,3 +25,4 @@
 {"ts": "2026-10-07T21:34:03+00:00", "command": "record-cassettes", "cost_usd": 0.0012}
 {"ts": "2026-10-07T21:35:50+00:00", "command": "eval", "cost_usd": 0.006395}
 {"ts": "2026-10-07T21:40:24+00:00", "command": "eval", "cost_usd": 0.006363}
+{"ts": "2026-10-08T00:05:52+00:00", "command": "smoke-live-session", "cost_usd": 0.003844}
