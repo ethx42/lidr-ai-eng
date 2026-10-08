@@ -15,11 +15,9 @@ import { ErrorCard } from "./error-card";
 type Done = Extract<StreamState, { status: "done" }>;
 type Props = {
   state: StreamState;
-  kept?: Done;
   onStop: () => void;
-  // Single-shot: a completed or stopped run can run again, keeping the last estimate until the new one completes.
-  onRegenerate?: () => void;
-  // A conversation turn (S5-R3): only a stopped or failed one runs again, as "Retry" (absent once a later turn exists).
+  // A conversation turn (S5-R3): a completed one never runs again (that would fork the history); a stopped or failed
+  // one does, as "Retry", while it is the latest turn (absent otherwise).
   onRetry?: () => void;
   onEditTranscript: () => void;
   stopRef?: Ref<HTMLButtonElement>;
@@ -30,20 +28,10 @@ type Props = {
   evidenceNote?: (id: string) => string | undefined; // where a quote comes from, when not from the transcript shown
 };
 
-// A regenerate that was stopped or failed shows the estimate it would have replaced.
-export const keptFor = (state: StreamState, kept?: Done) => (state.status === "cancelled" || state.status === "error" ? kept : undefined);
-
 // Plain text, so the questions paste cleanly into an email to the client.
 const numbered = (items: string[]) => items.map((item, i) => `${i + 1}. ${item}`).join("\n");
 
-const RunAgainButton = ({ label, onClick }: { label: "Regenerate" | "Retry"; onClick: () => void }) => (
-  <Button type="button" variant="ghost" size="sm" onClick={onClick}>
-    <RotateCcw />
-    {label}
-  </Button>
-);
-
-const DoneActions = ({ state, onRegenerate }: { state: Done; onRegenerate?: () => void }) => {
+const DoneActions = ({ state }: { state: Done }) => {
   const markdown = readText(state.result.estimation);
   const questions = readEstimate(state.result.breakdown).open_questions ?? [];
   return (
@@ -61,7 +49,6 @@ const DoneActions = ({ state, onRegenerate }: { state: Done; onRegenerate?: () =
           <span className="sr-only sm:not-sr-only">for the client</span>
         </Button>
       )}
-      {onRegenerate && <RunAgainButton label="Regenerate" onClick={onRegenerate} />}
     </>
   );
 };
@@ -70,9 +57,7 @@ const isComposing = (event: KeyboardEvent) => event.isComposing || event.keyCode
 
 export const AssistantMessage = ({
   state,
-  kept: keptResult,
   onStop,
-  onRegenerate,
   onRetry,
   onEditTranscript,
   stopRef,
@@ -87,13 +72,10 @@ export const AssistantMessage = ({
   const focusWithin = useRef(false); // focus was last inside this message, or one of its actions was used
   const streaming = state.status === "streaming";
   const stop = useEffectEvent(onStop);
-  const kept = keptFor(state, keptResult);
-  const shown: StreamState = kept ?? state;
   const own = (action: () => void) => () => {
     focusWithin.current = true; // Safari does not focus a clicked button
     action();
   };
-  const runAgain = onRetry ?? onRegenerate;
 
   useEffect(() => {
     if (!streaming) return;
@@ -105,7 +87,7 @@ export const AssistantMessage = ({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [streaming]);
 
-  // The focused control can disappear with a status change (Stop when the stream ends, Regenerate when it starts).
+  // The focused control can disappear with a status change (Stop when the stream ends, Retry when it starts).
   // If focus was in this message and fell to the page, it moves to this message's first action, without scrolling.
   useEffect(() => {
     if (previous.current === state.status) return;
@@ -115,7 +97,7 @@ export const AssistantMessage = ({
   }, [state.status]);
 
   const content =
-    shown.status === "done" ? shown.result.breakdown : shown.status === "idle" ? null : (shown.partial ?? (streaming ? {} : null));
+    state.status === "done" ? state.result.breakdown : state.status === "idle" ? null : (state.partial ?? (streaming ? {} : null));
 
   return (
     <div
@@ -127,25 +109,23 @@ export const AssistantMessage = ({
       }}
       className="flex min-w-0 flex-col gap-6"
     >
-      {state.status === "error" && (
-        <ErrorCard error={state.error} keptPrevious={Boolean(kept)} onRetry={runAgain && own(runAgain)} onEditTranscript={onEditTranscript} />
-      )}
-      {shown.status !== "error" && (
+      {state.status === "error" && <ErrorCard error={state.error} onRetry={onRetry && own(onRetry)} onEditTranscript={onEditTranscript} />}
+      {state.status !== "error" && (
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
           <div className="flex min-w-0 items-center">
-            {!kept && <StatusSteps state={shown} />}
+            <StatusSteps state={state} />
             {/* Rendered from the stream's start, so "Stopped" is announced when it appears. */}
             <p role="status" className="flex items-center gap-1.5 text-xs font-medium empty:sr-only">
               {state.status === "cancelled" && (
                 <>
                   <CircleStop className="size-3.5 text-muted-foreground" />
-                  {kept ? "Stopped — kept the previous estimate" : "Stopped"}
+                  Stopped
                 </>
               )}
             </p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            {shown.status === "streaming" && (
+            {state.status === "streaming" && (
               <Button ref={stopRef} type="button" variant="outline" size="sm" onClick={own(onStop)} aria-keyshortcuts="Escape">
                 <Square />
                 Stop
@@ -154,20 +134,24 @@ export const AssistantMessage = ({
                 </kbd>
               </Button>
             )}
-            {/* after a failure the error card's Try again is the one way to run it again */}
-            {shown.status === "done" && <DoneActions state={shown} onRegenerate={state.status === "error" || !onRegenerate ? undefined : own(onRegenerate)} />}
-            {shown.status === "cancelled" && runAgain && <RunAgainButton label={onRetry ? "Retry" : "Regenerate"} onClick={own(runAgain)} />}
+            {state.status === "done" && <DoneActions state={state} />}
+            {state.status === "cancelled" && onRetry && (
+              <Button type="button" variant="ghost" size="sm" onClick={own(onRetry)}>
+                <RotateCcw />
+                Retry
+              </Button>
+            )}
           </div>
         </div>
       )}
       {content && (
         <>
-          {view === "document" && shown.status === "done" ? (
-            <EstimateDocument markdown={readText(shown.result.estimation) ?? ""} />
+          {view === "document" && state.status === "done" ? (
+            <EstimateDocument markdown={readText(state.result.estimation) ?? ""} />
           ) : (
             <EstimateView
               data={content}
-              grounding={shown.status === "done" ? shown.result.grounding : undefined}
+              grounding={state.status === "done" ? state.result.grounding : undefined}
               streaming={streaming}
               completed={state.status === "done"}
               activeRequirement={activeRequirement}

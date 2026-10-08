@@ -8,11 +8,11 @@ import { toUserMessage } from "@/lib/errors";
 import type { StreamError } from "@/lib/estimate/types";
 
 // `onRetry` absent: this attempt can no longer run again (a later turn of the conversation exists).
-type Props = { error: StreamError; keptPrevious?: boolean; onRetry?: () => void; onEditTranscript: () => void };
+type Props = { error: StreamError; onRetry?: () => void; onEditTranscript: () => void };
 type Action = { label: string; run: () => void };
 
 // What the user can do next, mapped from the error taxonomy; `role="alert"` announces it once.
-export const ErrorCard = ({ error, keptPrevious = false, onRetry, onEditTranscript }: Props) => {
+export const ErrorCard = ({ error, onRetry, onEditTranscript }: Props) => {
   const { title, action } = toUserMessage(error);
   const { requestId } = error;
   const retry: Action[] = onRetry ? [{ label: "Try again", run: onRetry }] : [];
@@ -30,7 +30,6 @@ export const ErrorCard = ({ error, keptPrevious = false, onRetry, onEditTranscri
       <CircleAlert className="text-destructive" />
       <AlertTitle className="text-foreground">{title}</AlertTitle>
       <AlertDescription className="flex flex-col items-start gap-3 text-foreground">
-        {keptPrevious && <div>The previous estimate is kept below.</div>}
         {requestId && (
           <div className="text-xs text-muted-foreground">
             Request ID <code className="font-mono text-foreground">{requestId}</code>

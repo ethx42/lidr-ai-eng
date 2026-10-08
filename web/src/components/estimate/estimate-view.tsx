@@ -16,7 +16,7 @@ type Props = {
   data: PartialBreakdown | Schemas["EnrichedBreakdown"];
   grounding?: Schemas["GroundingReport"];
   streaming: boolean;
-  // this snapshot is the result of a stream that just completed (not an earlier estimate kept after a stop or failure)
+  // this snapshot is the result of a stream that just completed: only then is "Estimate ready" announced
   completed?: boolean;
   activeRequirement?: string;
   onRequirementFocus?: (id: string | null) => void;
