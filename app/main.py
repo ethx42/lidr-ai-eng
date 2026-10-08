@@ -151,6 +151,32 @@ class BodyLimitMiddleware:
         await RequestBodyLimitMiddleware(self.app, max_body_size=limit)(scope, receive, send)
 
 
+def build_services(
+    settings: Settings, provider: LLMProvider, cache: ResponseCache
+) -> tuple[EstimationService, ConversationService]:
+    """The single-shot and the session services as the API wires them; the live session check
+    (`scripts/smoke_live_session.py`) builds its session the same way."""
+    estimation = EstimationService(
+        provider=provider,
+        prompt_version=settings.prompt_version,
+        weekly_capacity_hours=settings.weekly_capacity_hours,
+        hourly_rate=settings.blended_hourly_rate,
+        cache=cache,
+        cache_scope=cache_scope(settings),
+    )
+    conversation = ConversationService(
+        estimation=estimation,
+        store=InMemorySessionStore(
+            max_turns=settings.max_turns,
+            max_history_chars=settings.max_history_chars,
+            ttl_seconds=settings.session_ttl_seconds,
+            max_sessions=settings.max_sessions,
+        ),
+        limits=settings.attachment_limits,
+    )
+    return estimation, conversation
+
+
 def create_app(
     settings: Settings | None = None,
     provider_factory: Callable[[Settings], LLMProvider] = build_provider,
@@ -164,24 +190,7 @@ def create_app(
         provider = provider_factory(resolved)
         cache = cache_factory(resolved)
         app.state.settings = resolved
-        app.state.service = EstimationService(
-            provider=provider,
-            prompt_version=resolved.prompt_version,
-            weekly_capacity_hours=resolved.weekly_capacity_hours,
-            hourly_rate=resolved.blended_hourly_rate,
-            cache=cache,
-            cache_scope=cache_scope(resolved),
-        )
-        app.state.conversation = ConversationService(
-            estimation=app.state.service,
-            store=InMemorySessionStore(
-                max_turns=resolved.max_turns,
-                max_history_chars=resolved.max_history_chars,
-                ttl_seconds=resolved.session_ttl_seconds,
-                max_sessions=resolved.max_sessions,
-            ),
-            limits=resolved.attachment_limits,
-        )
+        app.state.service, app.state.conversation = build_services(resolved, provider, cache)
         try:
             yield
         finally:

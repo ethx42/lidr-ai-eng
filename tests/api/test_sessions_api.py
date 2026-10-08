@@ -8,7 +8,6 @@ from fastapi import FastAPI
 
 from app.attachments.extractor import Attachment, AttachmentError, ExtractedAttachment
 from app.attachments.limits import AttachmentLimits
-from app.config import Settings
 from app.services import conversation as conversation_module
 from app.services.conversation import SessionBusy, SessionNotFound
 from tests.api.conftest import ClientFactory
@@ -91,10 +90,7 @@ def test_a_session_evicted_by_the_cap_is_404(make_client: ClientFactory) -> None
     assert r.status_code == 404 and r.json()["error"]["code"] == "session_not_found"
 
 
-ONE_SESSION = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="", max_sessions=1)
-
-
-@pytest.mark.parametrize("settings", [pytest.param(ONE_SESSION, id="max_sessions=1")])
+@pytest.mark.parametrize("settings", [{"max_sessions": 1}], indirect=True)
 async def test_at_the_cap_with_every_turn_in_flight_create_is_503(
     app: FastAPI, async_client: httpx2.AsyncClient
 ) -> None:
@@ -281,7 +277,13 @@ def test_the_transcript_limit_applies_before_extraction(
     assert r.status_code == status
     if status == 422:
         assert r.json()["error"]["code"] == "invalid_request"
-        assert r.json()["error"]["details"][0]["loc"] == ["body", "transcript"]
+        assert r.json()["error"]["details"] == [
+            {
+                "loc": ["body", "transcript"],
+                "msg": "Transcription exceeds 10 characters.",
+                "type": "string_too_long",
+            }
+        ]
         assert extractions == [] and client.fake.calls == []
 
 
@@ -312,13 +314,28 @@ async def test_invalid_fields_are_422_json(
     assert fake_provider.calls == []
 
 
+@pytest.mark.parametrize("language", ["", "   "])
 async def test_an_empty_output_language_means_none(
+    async_client: httpx2.AsyncClient, fake_provider: FakeProvider, language: str
+) -> None:
+    sid = await new_session(async_client)
+    r = await async_client.post(
+        f"/sessions/{sid}/estimate", data=FORM | {"output_language": language}
+    )
+    assert r.status_code == 200
+    assert "do not translate quotes" not in fake_provider.calls[0]["messages"][-1].content
+
+
+async def test_the_output_language_limit_counts_after_stripping(
     async_client: httpx2.AsyncClient, fake_provider: FakeProvider
 ) -> None:
     sid = await new_session(async_client)
-    r = await async_client.post(f"/sessions/{sid}/estimate", data=FORM | {"output_language": ""})
+    language = "  " + "x" * 40 + "  "  # 44 characters, 40 once stripped: accepted, as single-shot
+    r = await async_client.post(
+        f"/sessions/{sid}/estimate", data=FORM | {"output_language": language}
+    )
     assert r.status_code == 200
-    assert "do not translate quotes" not in fake_provider.calls[0]["messages"][-1].content
+    assert "x" * 40 in fake_provider.calls[0]["messages"][-1].content
 
 
 def test_a_body_over_the_upload_limit_is_413(make_client: ClientFactory) -> None:

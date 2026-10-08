@@ -1,7 +1,7 @@
 # response-cache Specification
 
 ## Purpose
-Serves repeated identical estimate requests from a shared exact-match cache of validated responses, so a repeat costs no LLM call, while a cache outage or slowdown never fails a request and adds only a bounded delay.
+Serves repeated identical single-shot estimate requests from a shared exact-match cache of validated responses, so a repeat costs no LLM call, while a cache outage or slowdown never fails a request and adds only a bounded delay. Conversational session turns never use it.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ When `REDIS_URL` is set, the system SHALL store each successful estimate respons
 - **THEN** every lookup reports the cache status `bypass` and nothing is stored
 
 ### Requirement: Cache key
-The cache key SHALL be a SHA-256 over canonical JSON of: a cache schema version, bumped whenever what an entry stores changes (the response's shape or its rendered markdown), the prompt version, a SHA-256 of the rendered system prompt and user message kept as separate values, the provider chain, the generation parameters (temperature, reasoning effort, maximum output tokens), the blended hourly rate and weekly capacity hours (both are computed into the stored totals), and the output schema name. A change to any of them SHALL produce a different key. The request's project type, detail level, and output format reach the key through the rendered prompt, so every combination of them SHALL have its own key for each prompt version, and a response cached for one combination or version SHALL never be served for another.
+The cache key SHALL be a SHA-256 over canonical JSON of: a cache schema version, bumped whenever what an entry stores changes (the response's shape or its rendered markdown; it is 3 since the estimation gained the required `technologies` field), the prompt version, a SHA-256 of the rendered system prompt and user message kept as separate values, the provider chain, the generation parameters (temperature, reasoning effort, maximum output tokens), the blended hourly rate and weekly capacity hours (both are computed into the stored totals), and the output schema name. A change to any of them SHALL produce a different key. The request's project type, detail level, and output format reach the key through the rendered prompt, so every combination of them SHALL have its own key for each prompt version, and a response cached for one combination or version SHALL never be served for another.
 
 #### Scenario: Every input changes the key
 - **WHEN** any one of the prompt version, system prompt, user message, chain and parameters, or output schema name changes
@@ -41,9 +41,20 @@ The cache key SHALL be a SHA-256 over canonical JSON of: a cache schema version,
 - **WHEN** two requests split the same text differently between system prompt and user message
 - **THEN** their cache keys differ
 
+#### Scenario: Entries of an older schema never served
+- **WHEN** an entry was stored before the cache schema version changed
+- **THEN** an identical request after the change computes a different key and reaches the provider
+
 #### Scenario: Configuration that shapes the stored response
 - **WHEN** the model, the fallback chain, the temperature, the reasoning effort, the maximum output tokens, the blended hourly rate, or the weekly capacity hours changes
 - **THEN** the cache key changes
+
+### Requirement: Conversation turns bypass the cache
+Session turns, blocking or streamed, SHALL never read or write the response cache, whatever their content, because the same message means something else in another conversation, and the stored response would carry another session's history and metadata. Their `llm_call` records SHALL report cache status `bypass`. Sessions are specified in `conversation-sessions`.
+
+#### Scenario: Session turn with the cache configured
+- **WHEN** `REDIS_URL` is set and a session turn is estimated twice with the same transcript in two sessions
+- **THEN** the cache is neither read nor written, the provider is called for both turns, and both `llm_call` records report cache status `bypass`
 
 ### Requirement: Cache-hit response
 A response served from the cache SHALL be the stored response with this request's metrics: `cache_hit` true, `cost_usd` 0, `attempts` 0, `fallback_used` false, no `ttft_ms`, and `latency_ms` equal to the lookup's duration. A cache hit SHALL log one `estimate_cache_hit` record with provider, model, prompt version, latency, and whether it streamed, and SHALL log no `llm_call` record.

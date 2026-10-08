@@ -809,13 +809,14 @@
           "output_language": {
             "anyOf": [
               {
+                "maxLength": 40,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Empty means not given: the transcription's language.",
+            "description": "At most 40 characters. Empty means not given: the transcription's language.",
             "title": "Output Language"
           },
           "project_type": {

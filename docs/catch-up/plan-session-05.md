@@ -779,6 +779,7 @@ Complete the two short tests in the same style (every request carries `host: loc
 - [ ] **Step 3: `pnpm -C web test && pnpm -C web typecheck && pnpm -C web lint`, `make check`; commit** `feat(web): conversational session workspace with attachments and project memory`
 
 **Orchestrator notes (from Task 6):** grounding for a turn covers the windowed conversation the model saw (earlier user turns still in the window + the current transcript and attachments). A grounded requirement whose quote comes from an earlier turn has no `<mark>` in the current turn's transcript disclosure: its Evidence opens the hover card with the quote and a short "from an earlier message" note instead of pinning (same rule as S4's ungrounded case below 768 px: pin only when a mark exists).
+- Error codes the session API returns (Task 7): 404 `session_not_found` (also an SSE error event if the session vanishes mid-turn), 409 `session_busy`, 422 `invalid_attachment` / validation, 503 `attachments_busy` and `sessions_full`, 413 for oversized bodies (plain text when Content-Length is set). The UI maps each to a clear, recoverable message; 404 recovers by creating a new session (Review Focus 4).
 
 ---
 

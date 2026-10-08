@@ -77,6 +77,12 @@ record-cassettes:
 smoke-live:
 	uv run python -m scripts.smoke_live
 
+# Live, budget-guarded: a three-turn session on gpt-4o-mini (Haiku fallback), the second turn with
+# a PDF; exit 1 if the project name is not kept or Redsys (only in the PDF) is missing after turn 2
+.PHONY: smoke-live-session
+smoke-live-session:
+	uv run python -m scripts.smoke_live_session
+
 # Docker Compose: the production-like stack (web on http://localhost:3000 only; waits for every
 # healthcheck), the dev stack with reload and watch (AI service also on :8000), teardown and logs
 .PHONY: up dev down logs

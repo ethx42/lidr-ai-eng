@@ -41,8 +41,11 @@ def make_client() -> ClientFactory:
 
 
 @pytest.fixture
-def settings() -> Settings:
-    return Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
+def settings(request: pytest.FixtureRequest) -> Settings:
+    """Override fields with indirect parametrization: `parametrize("settings", [{...}],
+    indirect=True)`."""
+    base = Settings(_env_file=None, openai_api_key="test-key", llm_fallbacks="")
+    return base.model_copy(update=getattr(request, "param", {}))
 
 
 @pytest.fixture

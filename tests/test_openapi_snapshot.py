@@ -84,6 +84,14 @@ def test_create_session_documents_a_full_store() -> None:
     assert {"201", "503"} <= set(operation["responses"])
 
 
+def test_the_session_form_advertises_the_output_language_limit() -> None:
+    field = create_app().openapi()["components"]["schemas"]["SessionEstimateForm"]["properties"][
+        "output_language"
+    ]
+    [string] = [branch for branch in field["anyOf"] if branch["type"] == "string"]
+    assert string["maxLength"] == 40 and "40 characters" in field["description"]
+
+
 def test_session_stream_operation_documents_every_event_payload() -> None:
     operation = create_app().openapi()["paths"][SESSION_TURN_PATHS[1]]["post"]
     content = operation["responses"]["200"]["content"]["text/event-stream"]

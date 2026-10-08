@@ -21,9 +21,16 @@ from app.attachments.extractor import (
     sanitise_name,
 )
 from app.attachments.limits import AttachmentLimits
+from app.config import Settings
 from app.observability import request_id_var
-from app.routers.estimations import SettingsDep, error_response
-from app.schemas.estimation import DetailLevel, EstimateRequest, OutputFormat, ProjectType
+from app.routers.estimations import SettingsDep, check_transcript_length, error_response
+from app.schemas.estimation import (
+    MAX_LANGUAGE_CHARS,
+    DetailLevel,
+    EstimateRequest,
+    OutputFormat,
+    ProjectType,
+)
 from app.schemas.session import SessionCreated, SessionView, TurnResponse
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.conversation import ConversationService, SessionBusy, SessionNotFound
@@ -55,8 +62,15 @@ class SessionEstimateForm(BaseModel):
     project_type: ProjectType
     detail_level: DetailLevel
     output_format: OutputFormat
-    output_language: str | None = Field(
-        default=None, description="Empty means not given: the transcription's language."
+    output_language: (
+        Annotated[str, StringConstraints(strip_whitespace=True, max_length=MAX_LANGUAGE_CHARS)]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            f"At most {MAX_LANGUAGE_CHARS} characters. Empty means not given: the "
+            "transcription's language."
+        ),
     )
     attachments: list[UploadFile] = Field(
         default=[], description="PDF, DOCX or plain text. Empty file inputs are ignored."
@@ -75,18 +89,9 @@ def ensure_idle(conversation: ConversationService, session_id: str) -> None:
         raise SessionBusy(session_id)
 
 
-def estimate_request(form: SessionEstimateForm, max_chars: int) -> EstimateRequest:
-    """The single-shot request and length limit, so both paths accept the same transcripts."""
-    if len(form.transcript) > max_chars:
-        raise RequestValidationError(
-            [
-                {
-                    "loc": ("body", "transcript"),
-                    "msg": f"Transcription exceeds {max_chars} characters.",
-                    "type": "string_too_long",
-                }
-            ]
-        )
+def estimate_request(form: SessionEstimateForm, settings: Settings) -> EstimateRequest:
+    """The single-shot request and length check, so both paths accept the same transcripts."""
+    check_transcript_length(form.transcript, "transcript", settings)
     try:
         return EstimateRequest(
             transcription=form.transcript,
@@ -95,7 +100,7 @@ def estimate_request(form: SessionEstimateForm, max_chars: int) -> EstimateReque
             output_format=form.output_format,
             output_language=form.output_language or None,
         )
-    except ValidationError as exc:  # e.g. an over-long output_language: the client's fault
+    except ValidationError as exc:  # the form mirrors these constraints; a drift is still a 422
         raise RequestValidationError(
             [{**error, "loc": ("body", *error["loc"])} for error in exc.errors()]
         ) from exc
@@ -126,7 +131,7 @@ async def prepared_turn(
     settings: SettingsDep,
 ) -> PreparedTurn:
     ensure_idle(conversation, session_id)
-    request = estimate_request(form, settings.max_transcription_chars)
+    request = estimate_request(form, settings)
     files = await read_attachments(form.attachments, conversation.limits)
     extracted = await conversation.extract(files) if files else []
     ensure_idle(conversation, session_id)  # extraction can take seconds

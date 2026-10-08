@@ -173,11 +173,13 @@ class SlowFakeProvider(FakeProvider):
 
 
 class TickingFakeProvider(SlowFakeProvider):
-    """Streams a changed snapshot every `interval` seconds and never finishes: a long answer."""
+    """Streams a changed snapshot every `interval` seconds and never finishes: a long answer.
+    `ticked` is set each time the stream is pulled for its next snapshot."""
 
     def __init__(self, interval: float = 0.11) -> None:
         super().__init__()
         self.interval = interval
+        self.ticked = asyncio.Event()
 
     async def stream(
         self, *, system: str, messages: Sequence[ChatMessage], schema: type[T], cache_key: str
@@ -186,6 +188,7 @@ class TickingFakeProvider(SlowFakeProvider):
         snapshot = self.first_delta
         try:
             while True:
+                self.ticked.set()
                 yield TextDelta(text=snapshot[-1], snapshot=snapshot)
                 await asyncio.sleep(self.interval)
                 snapshot += "o"
