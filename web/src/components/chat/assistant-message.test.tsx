@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fullEstimate, fullResponse } from "@/lib/estimate/fixtures";
@@ -17,14 +17,12 @@ const failed = (code: string, extra: { retryable?: boolean; requestId?: string; 
   partial,
 });
 
-type Done = Extract<StreamState, { status: "done" }>;
-const previous: Done = { status: "done", result: { ...fullResponse, estimation: "# Previous estimate" }, requestId: "req-1" };
-
-const setup = (state: StreamState, kept?: Done) => {
-  const handlers = { onStop: vi.fn(), onRegenerate: vi.fn(), onEditTranscript: vi.fn() };
+// The latest turn of a conversation: `onRetry` is given (S5-R3: only a stopped or failed turn uses it).
+const setup = (state: StreamState) => {
+  const handlers = { onStop: vi.fn(), onRetry: vi.fn(), onEditTranscript: vi.fn() };
   const user = userEvent.setup();
-  const view = render(<AssistantMessage state={state} kept={kept} {...handlers} />);
-  const rerender = (next: StreamState, nextKept = kept) => view.rerender(<AssistantMessage state={next} kept={nextKept} {...handlers} />);
+  const view = render(<AssistantMessage state={state} {...handlers} />);
+  const rerender = (next: StreamState) => view.rerender(<AssistantMessage state={next} {...handlers} />);
   return { ...handlers, user, rerender };
 };
 const button = (name: string | RegExp) => screen.getByRole("button", { name });
@@ -37,7 +35,7 @@ describe("AssistantMessage while streaming", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Physiotherapy portal" })).toBeInTheDocument();
     expect(screen.getByRole("article")).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText(DISCLOSURE)).toBeInTheDocument();
-    noButton("Regenerate");
+    noButton("Retry");
     noButton("Copy as markdown");
 
     await user.click(button("Stop"));
@@ -79,18 +77,18 @@ describe("AssistantMessage while streaming", () => {
 });
 
 describe("AssistantMessage when done", () => {
-  it("renders the final estimate with the AI disclosure, Copy as markdown and Regenerate", async () => {
-    const { user, onRegenerate } = setup(done);
+  // S5-R3: running a completed turn again would fork the conversation's history.
+  it("renders the final estimate with the AI disclosure and Copy as markdown, and no way to run it again", async () => {
+    const { user } = setup(done);
     expect(screen.getByRole("heading", { level: 2, name: fullEstimate.project_name })).toBeInTheDocument();
     expect(screen.getByRole("article")).toHaveAttribute("aria-busy", "false");
     expect(screen.getByText(DISCLOSURE)).toBeInTheDocument();
     noButton("Stop");
+    noButton("Retry");
+    noButton("Regenerate");
 
     await user.click(button("Copy as markdown"));
     expect(await navigator.clipboard.readText()).toBe(fullResponse.estimation);
-
-    await user.click(button("Regenerate"));
-    expect(onRegenerate).toHaveBeenCalledTimes(1);
   });
 
   it("copies the open questions for the client as a plain numbered list", async () => {
@@ -110,7 +108,7 @@ describe("AssistantMessage when done", () => {
 
 describe("AssistantMessage on error", () => {
   it("shows the mapped message with Try again, keeping the partial content", async () => {
-    const { user, onRegenerate } = setup(failed("upstream_unavailable", { retryable: true }));
+    const { user, onRetry } = setup(failed("upstream_unavailable", { retryable: true }));
     const card = screen.getByRole("alert");
     expect(card).toHaveTextContent("The AI service is unavailable right now. Try again in a moment.");
     expect(screen.getByRole("heading", { level: 2, name: "Physiotherapy portal" })).toBeInTheDocument();
@@ -118,7 +116,7 @@ describe("AssistantMessage on error", () => {
     noButton("Stop");
 
     await user.click(within(card).getByRole("button", { name: "Try again" }));
-    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   it("asks to shorten an over-long transcript and puts it back in the form", async () => {
@@ -145,8 +143,8 @@ describe("AssistantMessage on error", () => {
 });
 
 describe("AssistantMessage when stopped", () => {
-  it("says Stopped in a live region that was already there, keeps the partial content and offers Regenerate", async () => {
-    const { user, onRegenerate, rerender } = setup(streaming);
+  it("says Stopped in a live region that was already there, keeps the partial content and offers Retry", async () => {
+    const { user, onRetry, rerender } = setup(streaming);
     const regions = screen.getAllByRole("status");
     rerender(cancelled);
     expect(regions).toContain(screen.getByText("Stopped").closest('[role="status"]')); // so the change is announced
@@ -154,45 +152,18 @@ describe("AssistantMessage when stopped", () => {
     expect(screen.getByRole("article")).toHaveAttribute("aria-busy", "false");
     noButton("Copy as markdown");
 
-    await user.click(button("Regenerate"));
-    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    await user.click(button("Retry"));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("AssistantMessage after a regenerate that did not finish", () => {
-  it("shows the kept estimate when the regenerate was stopped, with its actions", async () => {
-    const { user, onRegenerate } = setup(cancelled, previous);
-    expect(screen.getByText("Stopped — kept the previous estimate").closest('[role="status"]')).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: fullEstimate.project_name })).toBeInTheDocument();
-    expect(screen.queryByText("Patients book sessions.")).not.toBeInTheDocument(); // not the stopped attempt's partial
-    expect(screen.getByText(DISCLOSURE)).toBeInTheDocument();
-
-    await user.click(button("Copy as markdown"));
-    expect(await navigator.clipboard.readText()).toBe("# Previous estimate");
-    await user.click(button("Regenerate"));
-    expect(onRegenerate).toHaveBeenCalledTimes(1);
-  });
-
-  it("shows the error card above the kept estimate when the regenerate failed", async () => {
-    const { user, onRegenerate } = setup(failed("upstream_unavailable", { retryable: true }), previous);
-    const card = screen.getByRole("alert");
-    expect(card).toHaveTextContent("The AI service is unavailable right now. Try again in a moment.");
-    expect(card).toHaveTextContent("The previous estimate is kept below.");
-    const heading = screen.getByRole("heading", { level: 2, name: fullEstimate.project_name });
-    expect(card.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(button("Copy as markdown")).toBeInTheDocument();
-    noButton("Regenerate"); // the card's Try again is the one way to run it again
-
-    await user.click(within(card).getByRole("button", { name: "Try again" }));
-    expect(onRegenerate).toHaveBeenCalledTimes(1);
-  });
-
-  // The kept estimate is complete, but this attempt is not: "Estimate ready" would claim the regenerate succeeded.
+// One polite region announces completion: a stream that stops or fails never claims it is ready.
+describe("AssistantMessage completion announcement", () => {
   it.each([
     ["stopped", cancelled],
     ["failed", failed("upstream_unavailable", { retryable: true })],
-  ])("never announces 'Estimate ready' when the regenerate %s", (_, end) => {
-    const { rerender } = setup(streaming, previous);
+  ])("never announces 'Estimate ready' when the stream %s", (_, end) => {
+    const { rerender } = setup(streaming);
     const ready = within(screen.getByRole("article")).getByRole("status");
     expect(ready).toBeEmptyDOMElement();
     rerender(end);
@@ -200,30 +171,26 @@ describe("AssistantMessage after a regenerate that did not finish", () => {
     expect(ready).toBeEmptyDOMElement();
   });
 
-  it("announces 'Estimate ready' when the regenerate completes", () => {
-    const { rerender } = setup(streaming, previous);
+  it("announces 'Estimate ready' in the same region when the stream completes", () => {
+    const { rerender } = setup(streaming);
+    const ready = within(screen.getByRole("article")).getByRole("status");
     rerender(done);
-    expect(within(screen.getByRole("article")).getByRole("status")).toHaveTextContent("Estimate ready");
-  });
-
-  it("shows the new attempt, not the kept estimate, while it streams", () => {
-    setup(streaming, previous);
-    expect(screen.getByRole("heading", { level: 2, name: "Physiotherapy portal" })).toBeInTheDocument();
-    expect(button("Stop")).toBeInTheDocument();
+    expect(within(screen.getByRole("article")).getByRole("status")).toBe(ready);
+    expect(ready).toHaveTextContent("Estimate ready");
   });
 });
 
 describe("AssistantMessage focus management", () => {
-  it("moves focus to Regenerate after Stop, and to Stop after Regenerate, without scrolling", async () => {
+  it("moves focus to Retry after Stop, and to Stop after Retry, without scrolling", async () => {
     const { user, rerender } = setup(streaming);
     const focus = vi.spyOn(HTMLElement.prototype, "focus");
     await user.click(button("Stop"));
     rerender(cancelled);
-    expect(button("Regenerate")).toHaveFocus();
+    expect(button("Retry")).toHaveFocus();
     expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     focus.mockRestore();
 
-    await user.click(button("Regenerate"));
+    await user.click(button("Retry"));
     rerender(streaming);
     expect(button("Stop")).toHaveFocus();
   });
@@ -247,11 +214,11 @@ describe("AssistantMessage focus management", () => {
     fireEvent.click(button("Stop")); // no focus change, as Safari does for buttons
     expect(document.body).toHaveFocus();
     rerender(cancelled);
-    expect(button("Regenerate")).toHaveFocus();
+    expect(button("Retry")).toHaveFocus();
   });
 
   it("never takes focus that was last in another message", () => {
-    const handlers = { onStop: vi.fn(), onRegenerate: vi.fn(), onEditTranscript: vi.fn() };
+    const handlers = { onStop: vi.fn(), onRetry: vi.fn(), onEditTranscript: vi.fn() };
     const Two = ({ second }: { second: StreamState }) => (
       <>
         <AssistantMessage state={done} {...handlers} />
@@ -276,5 +243,41 @@ describe("AssistantMessage focus management", () => {
 
     setup(done);
     expect(document.body).toHaveFocus();
+  });
+});
+
+// A conversation turn (S5-R3): running a completed turn again would fork the history, so only a stopped or failed one
+// can be retried, and only while it is the latest turn (the workspace passes `onRetry` then).
+describe("AssistantMessage as a conversation turn", () => {
+  // An earlier turn: a later one exists, so the workspace passes no `onRetry`.
+  const earlier = (state: StreamState) => render(<AssistantMessage state={state} onStop={vi.fn()} onEditTranscript={vi.fn()} />);
+
+  it("offers no way to run an earlier stopped or failed turn again", () => {
+    earlier(cancelled);
+    noButton("Retry");
+    cleanup();
+    earlier(failed("upstream_unavailable", { retryable: true }));
+    expect(screen.getByRole("alert")).toHaveTextContent("The AI service is unavailable right now.");
+    noButton("Try again");
+  });
+
+  it("puts a turn whose attachment was rejected back in the composer", async () => {
+    const { user, onEditTranscript } = setup({
+      status: "error",
+      error: { code: "invalid_attachment", message: "virus.exe: unsupported file type (PDF, DOCX or plain text only)", retryable: false },
+      partial: null,
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("An attachment was rejected: virus.exe: unsupported file type (PDF, DOCX or plain text only).");
+    await user.click(button("Edit attachments"));
+    expect(onEditTranscript).toHaveBeenCalledTimes(1);
+    noButton("Try again"); // the same files would be rejected again
+  });
+
+  it("captions a grounded quote that is not in this turn's transcript with where it came from", async () => {
+    render(<AssistantMessage state={done} onStop={vi.fn()} onEditTranscript={vi.fn()} evidenceNote={(id) => (id === "R2" ? "Quote from an earlier message" : undefined)} />);
+    act(() => button("Evidence for R2").focus());
+    expect(await screen.findByText("Quote from an earlier message")).toBeInTheDocument();
+    act(() => button("Evidence for R1").focus());
+    expect(await screen.findByText("Quote from the transcript")).toBeInTheDocument();
   });
 });

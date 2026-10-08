@@ -235,7 +235,7 @@ A response served from the response cache SHALL report the metrics of the lookup
 - **THEN** `metrics.cost_usd` is null
 
 ### Requirement: Context endpoint
-The system SHALL expose `GET /api/v1/context` returning, without calling any LLM provider: `prompt_version`, the version it rendered; `available_versions`, every available prompt version in numeric order; `system_prompt`, the exact system prompt an estimate request with the same choices and version would send to the provider; `references`, each reference estimation in that prompt with its `size`, `meeting_summary`, and `estimation`; `chain`, the configured providers as `provider:model`, primary first; and `max_transcription_chars`, the configured maximum transcription length. Because the system prompt depends on the request's choices, the endpoint SHALL accept the optional query parameters `project_type`, `detail_level`, and `output_format` (defaults `web_saas`, `medium`, `phases_table`) and `prompt_version` (see `Prompt version selection`), and SHALL answer an unknown value of any of them with `422` and error code `invalid_request`, with `error.details` locating the parameter.
+The system SHALL expose `GET /api/v1/context` returning, without calling any LLM provider: `prompt_version`, the version it rendered; `available_versions`, every available prompt version in numeric order; `system_prompt`, the exact system prompt an estimate request with the same choices and version would send to the provider; `references`, each reference estimation in that prompt with its `size`, `meeting_summary`, and `estimation`; `chain`, the configured providers as `provider:model`, primary first; `max_transcription_chars`, the configured maximum transcription length; and `max_attachments` and `max_attachment_bytes`, the configured per-turn attachment count and per-file size (`ATTACHMENT_MAX_FILES`, `ATTACHMENT_MAX_BYTES`), which the web client's dropzone checks before an upload. Because the system prompt depends on the request's choices, the endpoint SHALL accept the optional query parameters `project_type`, `detail_level`, and `output_format` (defaults `web_saas`, `medium`, `phases_table`) and `prompt_version` (see `Prompt version selection`), and SHALL answer an unknown value of any of them with `422` and error code `invalid_request`, with `error.details` locating the parameter.
 
 #### Scenario: Prompt and references exposed
 - **WHEN** a client calls `GET /api/v1/context`
@@ -258,3 +258,8 @@ The system SHALL expose `GET /api/v1/context` returning, without calling any LLM
 - **WHEN** the service runs with a maximum transcription length of 10 and no fallback
 - **THEN** `GET /api/v1/context` reports `max_transcription_chars` 10 and chain `["openai:gpt-4o-mini"]`
 - **AND** no LLM provider is called
+
+#### Scenario: Attachment limits reported
+- **WHEN** the service runs with `ATTACHMENT_MAX_FILES=3` and `ATTACHMENT_MAX_BYTES=2048`
+- **THEN** `GET /api/v1/context` reports `max_attachments` 3 and `max_attachment_bytes` 2048
+- **AND** with neither set it reports 5 and 10485760

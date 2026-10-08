@@ -359,3 +359,65 @@ describe("EstimateForm in detail", () => {
     expect(input).toHaveValue("Something else");
   });
 });
+
+// The session workspace's composer: one turn of a conversation, which the session endpoints run on their own prompt.
+describe("EstimateForm as a conversation composer", () => {
+  beforeEach(() => stubPointer("fine"));
+  afterEach(() => vi.unstubAllGlobals());
+
+  const setup = () => {
+    const onSubmit = vi.fn();
+    const handle = createRef<EstimateFormHandle>();
+    const user = userEvent.setup();
+    render(<EstimateForm onSubmit={onSubmit} handle={handle} transcriptLabel="Transcript for this turn" attachments={<p>Attachments go here</p>} />);
+    return { onSubmit, handle, user, input: screen.getByRole("textbox", { name: "Transcript for this turn" }) };
+  };
+
+  it("labels the transcript for this turn, offers no prompt version and shows the attachments slot", async () => {
+    const { onSubmit, user, input } = setup();
+    expect(screen.queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Prompt version" })).not.toBeInTheDocument();
+    expect(screen.getByText("Attachments go here")).toBeInTheDocument();
+    await user.type(input, "Second call: payments go through Redsys.");
+    await user.click(screen.getByRole("button", { name: "Estimate" }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ transcription: "Second call: payments go through Redsys." }), { promptVersion: "" });
+  });
+
+  it("empties the transcript on clear(), keeping the choices and showing no error", async () => {
+    const { handle, user, input } = setup();
+    await user.type(input, "Sent already");
+    await user.click(screen.getByRole("radio", { name: "Mobile app" }));
+    act(() => handle.current?.clear());
+    expect(input).toHaveValue("");
+    expect(screen.getByRole("radio", { name: "Mobile app" })).toBeChecked();
+    expect(screen.queryByText(EMPTY)).not.toBeInTheDocument();
+    expect(input).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("focuses the transcript on focus() with a mouse, and not on a touch screen, saying which it did", () => {
+    const { handle, input } = setup();
+    let focused: boolean | undefined;
+    act(() => {
+      focused = handle.current?.focus();
+    });
+    expect(focused).toBe(true);
+    expect(input).toHaveFocus();
+    act(() => input.blur());
+    stubPointer("coarse");
+    act(() => {
+      focused = handle.current?.focus();
+    });
+    expect(focused).toBe(false);
+    expect(input).not.toHaveFocus();
+  });
+
+  it("puts an unsent message back with edit(), naming it when it would replace a draft", async () => {
+    const { handle, user, input } = setup();
+    act(() => handle.current?.edit("The unsent turn", "your unsent message"));
+    expect(input).toHaveValue("The unsent turn");
+    await user.clear(input);
+    await user.type(input, "A new draft");
+    act(() => handle.current?.edit("The unsent turn", "your unsent message"));
+    expect(screen.getByRole("group", { name: "Replace your draft with your unsent message?" })).toBeInTheDocument();
+  });
+});

@@ -100,6 +100,14 @@
             "title": "Chain",
             "type": "array"
           },
+          "max_attachment_bytes": {
+            "title": "Max Attachment Bytes",
+            "type": "integer"
+          },
+          "max_attachments": {
+            "title": "Max Attachments",
+            "type": "integer"
+          },
           "max_transcription_chars": {
             "title": "Max Transcription Chars",
             "type": "integer"
@@ -126,7 +134,9 @@
           "system_prompt",
           "references",
           "chain",
-          "max_transcription_chars"
+          "max_transcription_chars",
+          "max_attachments",
+          "max_attachment_bytes"
         ],
         "title": "ContextResponse",
         "type": "object"

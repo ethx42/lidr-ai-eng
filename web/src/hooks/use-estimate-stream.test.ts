@@ -79,6 +79,46 @@ describe("useEstimateStream", () => {
     ]);
   });
 
+  it("posts a FormData body as it is, without a content-type header (the browser writes the boundary), to the given URL", () => {
+    const { result } = renderStream();
+    const form = new FormData();
+    form.set("transcript", "We need a booking portal.");
+    form.append("attachments", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
+    act(() => result.current.start(form, { url: "/api/sessions/s1/estimate/stream" }));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/sessions/s1/estimate/stream");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(form);
+    const headers = new Headers(init?.headers);
+    expect(headers.has("content-type")).toBe(false);
+    expect(headers.get("accept")).toBe("text/event-stream");
+  });
+
+  it("calls onEnd once with how the stream ended, but not when it was stopped or superseded", async () => {
+    const { result } = renderStream();
+    const ends: StreamState[] = [];
+    act(() => result.current.start(request, { onEnd: (end) => ends.push(end) }));
+    stream.push(frame("result", response));
+    stream.close();
+    await waitFor(() => expect(ends).toEqual([{ status: "done", result: response, requestId: "req-1" }]));
+
+    act(() => result.current.start(request, { onEnd: (end) => ends.push(end) }));
+    stream.push(frame("error", { code: "session_busy", message: "busy", retryable: true, request_id: "req-2" }));
+    await waitFor(() => expect(ends).toHaveLength(2));
+    expect(ends[1]).toMatchObject({ status: "error", error: { code: "session_busy" } });
+
+    fetchMock.mockResolvedValueOnce(Response.json({ error: { code: "session_not_found", message: "gone" } }, { status: 404 }));
+    act(() => result.current.start(request, { onEnd: (end) => ends.push(end) }));
+    await waitFor(() => expect(ends).toHaveLength(3));
+    expect(ends[2]).toMatchObject({ status: "error", error: { code: "session_not_found" } });
+
+    act(() => result.current.start(request, { onEnd: (end) => ends.push(end) }));
+    act(() => result.current.start(request, { onEnd: (end) => ends.push(end) })); // supersedes the first
+    act(() => result.current.stop());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(ends).toHaveLength(3);
+  });
+
   it("streams status and partials split across chunks, then ends done with the response request id", async () => {
     const { result, states } = renderStream();
     act(() => result.current.start(request));

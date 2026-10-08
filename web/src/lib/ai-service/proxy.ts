@@ -1,8 +1,9 @@
 import "server-only";
 import { serverEnv } from "./env";
 
-// Fixed paths only: the upstream URL is AI_SERVICE_URL plus code-owned paths, never client input (SSRF guard).
-type UpstreamPath = `/api/v1/${string}`;
+// Fixed paths only: the upstream URL is AI_SERVICE_URL plus code-owned paths, never client input (SSRF guard). A session
+// path carries an id, which the route checks with `sessionPath` first.
+type UpstreamPath = `/api/v1/${string}` | `/sessions${string}`;
 type Allowlist = Record<string, (value: string) => boolean>;
 
 // The upstream query is rebuilt from allowlisted keys only, each value re-encoded, so a value cannot smuggle in another
@@ -100,39 +101,23 @@ const sse = (upstream: Response, requestId: string) =>
       })
     : passThrough(upstream, requestId);
 
-// The upstream method is fixed per helper, never the incoming one; a GET forwards no body.
-const proxy = async (
-  request: Request,
-  { method, path, maxBodyBytes }: { method: "GET" | "POST"; path: UpstreamPath; maxBodyBytes: number },
-  respond: (upstream: Response, requestId: string) => Response,
-) => {
+type Env = ReturnType<typeof serverEnv>;
+type Upstream = { method: "GET" | "POST"; path: UpstreamPath; headers: Headers; body?: BodyInit };
+
+// Every helper starts here: a request id, and the Host and cross-site guard before anything is read.
+const guarded = async (request: Request, method: "GET" | "POST", handle: (requestId: string, env: Env) => Promise<Response>) => {
   const requestId = requestIdOf(request);
   const env = serverEnv();
   const rejected = rejection(request, method, env.ALLOWED_HOSTS);
-  if (rejected) {
-    console.warn(JSON.stringify({ event: "request_forbidden", request_id: requestId, reason: rejected, host: request.headers.get("host") }));
-    return errorResponse(403, "forbidden", "This API only answers the app's own pages.", requestId);
-  }
-  const tooLarge = () => errorResponse(413, "payload_too_large", `Request body exceeds ${maxBodyBytes} bytes.`, requestId);
-  if (method === "POST" && Number(request.headers.get("content-length")) > maxBodyBytes) return tooLarge();
-  const body =
-    method === "POST" && request.body
-      ? await readCapped(request.body, maxBodyBytes, request.signal).catch((error: unknown) => {
-          if (request.signal.aborted) return undefined;
-          throw error;
-        })
-      : undefined;
-  if (request.signal.aborted) return clientLeft();
-  if (body === null) return tooLarge();
-  // request.signal aborts when the browser disconnects, which cancels the upstream call and stream.
-  // A redirect would leave the fixed upstream path, so it fails like an unreachable upstream.
-  return fetch(`${env.AI_SERVICE_URL}${path}`, {
-    method,
-    headers: forwardedHeaders(request, requestId),
-    body,
-    signal: request.signal,
-    redirect: "error",
-  }).then(
+  if (!rejected) return handle(requestId, env);
+  console.warn(JSON.stringify({ event: "request_forbidden", request_id: requestId, reason: rejected, host: request.headers.get("host") }));
+  return errorResponse(403, "forbidden", "This API only answers the app's own pages.", requestId);
+};
+
+// request.signal aborts when the browser disconnects, which cancels the upstream call and stream.
+// A redirect would leave the fixed upstream path, so it fails like an unreachable upstream.
+const send = (request: Request, requestId: string, env: Env, { method, path, headers, body }: Upstream, respond: (upstream: Response, requestId: string) => Response) =>
+  fetch(`${env.AI_SERVICE_URL}${path}`, { method, headers, body, signal: request.signal, redirect: "error" }).then(
     (upstream) => respond(upstream, upstream.headers.get("x-request-id") ?? requestId),
     // fetch failures only; errors thrown by respond are not caught here
     (error: unknown) => {
@@ -142,9 +127,84 @@ const proxy = async (
       return errorResponse(503, "upstream_unavailable", "The AI service is unreachable. Try again later.", requestId);
     },
   );
-};
 
+const tooLarge = (maxBodyBytes: number, requestId: string) => errorResponse(413, "payload_too_large", `Request body exceeds ${maxBodyBytes} bytes.`, requestId);
+const declaredTooLarge = (request: Request, maxBodyBytes: number) => Number(request.headers.get("content-length")) > maxBodyBytes;
+
+// The upstream method is fixed per helper, never the incoming one; a GET forwards no body.
 export const proxySse = (request: Request, path: UpstreamPath, { maxBodyBytes = DEFAULT_MAX_BODY_BYTES }: { maxBodyBytes?: number } = {}) =>
-  proxy(request, { method: "POST", path, maxBodyBytes }, sse);
+  guarded(request, "POST", async (requestId, env) => {
+    if (declaredTooLarge(request, maxBodyBytes)) return tooLarge(maxBodyBytes, requestId);
+    const body = request.body
+      ? await readCapped(request.body, maxBodyBytes, request.signal).catch((error: unknown) => {
+          if (request.signal.aborted) return undefined;
+          throw error;
+        })
+      : undefined;
+    if (request.signal.aborted) return clientLeft();
+    if (body === null) return tooLarge(maxBodyBytes, requestId);
+    return send(request, requestId, env, { method: "POST", path, headers: forwardedHeaders(request, requestId), body }, sse);
+  });
 
-export const proxyJson = (request: Request, path: UpstreamPath) => proxy(request, { method: "GET", path, maxBodyBytes: 0 }, passThrough);
+export const proxyJson = (request: Request, path: UpstreamPath) =>
+  guarded(request, "GET", (requestId, env) => send(request, requestId, env, { method: "GET", path, headers: forwardedHeaders(request, requestId) }, passThrough));
+
+// A POST that takes no input (starting a session): nothing the client sends is read or forwarded, and the JSON answer
+// passes through with its status (201).
+export const proxyPost = (request: Request, path: UpstreamPath) =>
+  guarded(request, "POST", (requestId, env) =>
+    send(request, requestId, env, { method: "POST", path, headers: new Headers({ "x-request-id": requestId, accept: "application/json" }) }, passThrough),
+  );
+
+// Canonical dashed UUIDs, as the AI service issues them (`str(uuid4())`). Anything else is answered 404 here, like an
+// unknown session, so the page recovers the same way, and never reaches the upstream path (path-injection guard).
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export const sessionPath = (id: string) => (SESSION_ID.test(id) ? (`/sessions/${id}` as const) : null);
+
+export const sessionNotFound = (request: Request, method: "GET" | "POST") =>
+  guarded(request, method, async (requestId) => errorResponse(404, "session_not_found", "Session not found or expired. Start a new session.", requestId));
+
+export type FormCheck = (form: FormData) => FormData | { status: number; code: string; message: string };
+
+// Multipart in, multipart out: the body is parsed here (counted against `maxBodyBytes` as it arrives, and dropped the
+// moment the client leaves), `check` validates it and rebuilds the form from the fields the AI service accepts, and that
+// form is sent without a content-type header, so undici writes the boundary. Parsing buffers the upload in memory, which
+// per-field validation needs; the cap bounds it.
+export const proxyMultipartSse = (request: Request, path: UpstreamPath, { maxBodyBytes, check }: { maxBodyBytes: number; check: FormCheck }) =>
+  guarded(request, "POST", async (requestId, env) => {
+    if (declaredTooLarge(request, maxBodyBytes)) return tooLarge(maxBodyBytes, requestId);
+    const type = request.headers.get("content-type") ?? "";
+    if (!/^multipart\/form-data;/i.test(type) || !request.body) return errorResponse(422, "invalid_request", "Expected a multipart/form-data body.", requestId);
+    const parsed = await parseCapped(request.body, type, maxBodyBytes, request.signal);
+    if (parsed === "aborted" || request.signal.aborted) return clientLeft();
+    if (parsed === "too_large") return tooLarge(maxBodyBytes, requestId);
+    if (parsed === "malformed") return errorResponse(422, "invalid_request", "The multipart body could not be parsed.", requestId);
+    const checked = check(parsed);
+    if (!(checked instanceof FormData)) return errorResponse(checked.status, checked.code, checked.message, requestId);
+    const headers = new Headers({ "x-request-id": requestId, accept: "text/event-stream" });
+    return send(request, requestId, env, { method: "POST", path, headers, body: checked }, sse);
+  });
+
+class TooLarge extends Error {}
+
+// The parsed form, or why there is none: the client left, the body went over `limit`, or it is not valid multipart.
+const parseCapped = async (body: ReadableStream<Uint8Array>, type: string, limit: number, signal: AbortSignal) => {
+  let size = 0;
+  const counted = new TransformStream<Uint8Array, Uint8Array>({
+    transform: (chunk, controller) => {
+      size += chunk.byteLength;
+      if (size > limit) controller.error(new TooLarge());
+      else controller.enqueue(chunk);
+    },
+  });
+  try {
+    // the signal cancels the incoming body when the client leaves, which a pending read would otherwise wait out
+    return await new Response(body.pipeThrough(counted, { signal }), { headers: { "content-type": type } }).formData();
+  } catch (error) {
+    if (signal.aborted) return "aborted" as const;
+    if (error instanceof TooLarge) return "too_large" as const;
+    if (error instanceof TypeError) return "malformed" as const;
+    throw error;
+  }
+};

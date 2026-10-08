@@ -1,11 +1,10 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/lib/ai-service/schema";
 import { breakdown, fullResponse } from "@/lib/estimate/fixtures";
 import type { StreamState } from "@/lib/estimate/types";
-import { InspectorPanel, InspectorSheet } from "./inspector";
+import { InspectorSheet } from "./inspector";
 import { type ContextParams, usePromptContext } from "./use-prompt-context";
 
 type Done = Extract<StreamState, { status: "done" }>;
@@ -31,11 +30,17 @@ const withMetrics = (metrics: Partial<components["schemas"]["CallMetrics"]>, pro
 });
 
 const serve = (respond: () => Promise<Response>) => vi.stubGlobal("fetch", vi.fn(respond));
-// The panel as the workspace renders it: the Context tab shows the prompt for the form's current choices.
-const Panel = ({ call, params = PARAMS }: { call?: Done; params?: ContextParams }) => <InspectorPanel call={call} context={usePromptContext(params)} />;
-const renderPanel = (call?: Done) => {
+// The inspector as the workspace renders it: a header button opens it as a sheet at every width, and its Context tab
+// shows the prompt for the given choices.
+const Panel = ({ call, params = PARAMS }: { call?: Done; params?: ContextParams }) => <InspectorSheet call={call} context={usePromptContext(params)} />;
+const open = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole("button", { name: "Inspector" }));
+  return screen.getByRole("dialog", { name: "Inspector" });
+};
+const renderPanel = async (call?: Done) => {
   const user = userEvent.setup();
   render(<Panel call={call} />);
+  await open(user);
   return user;
 };
 const showLastCall = async (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole("tab", { name: "Last call" }));
@@ -57,8 +62,8 @@ describe("Inspector, Context tab", () => {
 
   it("shows the prompt version and the system prompt, read-only and scrollable, with a Copy button", async () => {
     serve(async () => Response.json(context));
-    const user = renderPanel();
-    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeInTheDocument();
+    const user = await renderPanel();
+    expect(screen.getByRole("dialog", { name: "Inspector" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Context", selected: true })).toBeInTheDocument();
 
     const prompt = await screen.findByRole("region", { name: "System prompt" });
@@ -73,7 +78,7 @@ describe("Inspector, Context tab", () => {
 
   it("lists the three reference estimations with their size and meeting summary, each estimation collapsed", async () => {
     serve(async () => Response.json(context));
-    renderPanel();
+    await renderPanel();
     const items = within(await screen.findByRole("list", { name: "Reference estimations" })).getAllByRole("listitem");
     expect(items).toHaveLength(3);
     expect(items.map((item) => within(item).getByRole("heading", { level: 4 }).textContent)).toEqual(["Dental clinic website", "Gym class booking", "Freight marketplace"]);
@@ -90,7 +95,7 @@ describe("Inspector, Context tab", () => {
 
   it("gives each tab panel, a focusable scroll container, an inset focus ring", async () => {
     serve(async () => Response.json(context));
-    const user = renderPanel();
+    const user = await renderPanel();
     const inset = "focus-visible:-outline-offset-2!";
     expect(screen.getByRole("tabpanel", { name: "Context" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByRole("tabpanel", { name: "Context" })).toHaveClass(inset);
@@ -99,8 +104,9 @@ describe("Inspector, Context tab", () => {
   });
 
   // Dimmed to 60 %, muted text fell to 2.6:1 (WCAG 1.4.3 asks 4.5:1).
-  it("keeps the shown prompt, busy but at full contrast, while the prompt for new choices loads, saying it is updating", () => {
-    render(<InspectorPanel context={{ context, loading: true, failed: false, retry: () => {} }} />);
+  it("keeps the shown prompt, busy but at full contrast, while the prompt for new choices loads, saying it is updating", async () => {
+    render(<InspectorSheet context={{ context, loading: true, failed: false, retry: () => {} }} />);
+    await open(userEvent.setup());
     const busy = screen.getByRole("region", { name: "System prompt" }).closest('[aria-busy="true"]');
     if (!(busy instanceof HTMLElement)) throw new Error("the shown prompt is not marked busy");
     const dimmed = [busy, ...busy.querySelectorAll("*")].filter((element) => [...element.classList].some((name) => name.startsWith("opacity-")));
@@ -109,9 +115,9 @@ describe("Inspector, Context tab", () => {
     expect(valueOf("Prompt version")).not.toHaveTextContent("v4"); // the version for the new choices is not known yet
   });
 
-  it("shows skeletons while the context loads", () => {
+  it("shows skeletons while the context loads", async () => {
     serve(() => new Promise<Response>(() => {}));
-    renderPanel();
+    await renderPanel();
     const panel = screen.getByRole("tabpanel", { name: "Context" });
     expect(panel.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
@@ -121,7 +127,7 @@ describe("Inspector, Context tab", () => {
   it("says so when the AI service cannot provide its context, and offers to try again", async () => {
     const answers = [Response.json({ error: { code: "upstream_unavailable" } }, { status: 503 }), Response.json(context)];
     serve(async () => answers.shift() ?? Response.error());
-    const user = renderPanel();
+    const user = await renderPanel();
     const error = await contextError("The prompt and references could not be loaded from the AI service.");
     expect(error).not.toHaveAttribute("role");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -138,6 +144,7 @@ describe("Inspector, Context tab", () => {
     serve(async () => answers.shift() ?? Response.error());
     const user = userEvent.setup();
     const { rerender } = render(<Panel />);
+    await open(user);
     await screen.findByRole("region", { name: "System prompt" });
 
     rerender(<Panel params={{ ...PARAMS, detail_level: "detailed" }} />);
@@ -159,7 +166,7 @@ describe("Inspector, Context tab", () => {
     let answer!: (res: Response) => void;
     const answers = [Promise.resolve(unreadable()), new Promise<Response>((resolve) => (answer = resolve))];
     serve(() => answers.shift() ?? Promise.resolve(Response.error()));
-    const user = renderPanel();
+    const user = await renderPanel();
     const error = await contextError("The prompt and references could not be loaded from the AI service.");
     expect(error).not.toHaveAttribute("aria-busy", "true");
 
@@ -177,7 +184,7 @@ describe("Inspector, Context tab", () => {
   it("skips malformed references and shows n/a for an unreadable prompt version", async () => {
     const references = [null, { size: 3, meeting_summary: "Kept: a summary without size or estimation." }, "nope", { size: "small" }];
     serve(async () => Response.json({ ...context, prompt_version: null, references }));
-    renderPanel();
+    await renderPanel();
     const items = within(await screen.findByRole("list", { name: "Reference estimations" })).getAllByRole("listitem");
     expect(items).toHaveLength(1);
     expect(items[0]).toHaveTextContent("Kept: a summary without size or estimation.");
@@ -191,14 +198,14 @@ describe("Inspector, Last call tab", () => {
 
   it("invites the user to run an estimate until one completes", async () => {
     serve(async () => Response.json(context));
-    const user = renderPanel();
+    const user = await renderPanel();
     await showLastCall(user);
     expect(screen.getByRole("tabpanel", { name: "Last call" })).toHaveTextContent("Run an estimate to see its metrics.");
   });
 
   it("shows how the last call ran: provider, model, prompt version, tokens, timing, cost, cache and request ID", async () => {
     serve(async () => Response.json(context));
-    const user = renderPanel(done);
+    const user = await renderPanel(done);
     await showLastCall(user);
     const panel = screen.getByRole("tabpanel", { name: "Last call" });
     expect(panel).toHaveTextContent("Physiotherapy patient portal");
@@ -225,7 +232,7 @@ describe("Inspector, Last call tab", () => {
   // A UUID next to its label and Copy did not fit the 352 px panel, and break-all split it mid-value.
   it("stacks the request ID under its label, full width and never broken mid-value when it fits", async () => {
     serve(async () => Response.json(context));
-    const user = renderPanel(done);
+    const user = await renderPanel(done);
     await showLastCall(user);
     const label = screen.getByText("Request ID", { selector: "dt" });
     expect(closest(label, "div")).toHaveClass("flex-col");
@@ -236,7 +243,7 @@ describe("Inspector, Last call tab", () => {
 
   it("flags a fallback and a cache hit, and shows n/a for an unknown cost and TTFT", async () => {
     serve(async () => Response.json(context));
-    const user = renderPanel(withMetrics({ fallback_used: true, cache_hit: true, cost_usd: null, ttft_ms: null }, "anthropic"));
+    const user = await renderPanel(withMetrics({ fallback_used: true, cache_hit: true, cost_usd: null, ttft_ms: null }, "anthropic"));
     await showLastCall(user);
     expect(valueOf("Provider")).toHaveTextContent(/^Anthropic\s*Fallback used$/); // provider first, in reading order
     expect(within(valueOf("Provider")).getByText("Fallback used")).toBeInTheDocument();
@@ -248,52 +255,23 @@ describe("Inspector, Last call tab", () => {
   it("never throws on a malformed result, showing n/a for what it cannot read", async () => {
     serve(async () => Response.json(context));
     const result: Done["result"] = JSON.parse('{"provider": 3, "metrics": "fast", "usage": {"input_tokens": "many"}, "breakdown": null}');
-    const user = renderPanel({ status: "done", result });
+    const user = await renderPanel({ status: "done", result });
     await showLastCall(user);
     for (const label of ["Provider", "Model", "Prompt version", "Input tokens", "Latency", "Cost", "Cache hit", "Request ID"]) expect(valueOf(label)).toHaveTextContent("n/a");
     expect(screen.queryByRole("button", { name: "Copy request ID" })).not.toBeInTheDocument();
   });
 });
 
-// jsdom has no matchMedia: each sheet test sets the viewport, and `resize` fires the query's change listeners.
-const viewport = (wide: boolean) => {
-  const listeners = new Set<() => void>();
-  const query = {
-    matches: wide,
-    addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
-    removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
-  };
-  const matchMedia = vi.fn(() => query);
-  vi.stubGlobal("matchMedia", matchMedia);
-  const resize = (next: boolean) => {
-    query.matches = next;
-    for (const listener of listeners) listener();
-  };
-  return { matchMedia, listeners, resize };
-};
-
-// The sheet and the panel as the workspace renders them; CSS shows one or the other, jsdom renders both.
-const Workspace = () => {
-  const panelRef = useRef<HTMLElement>(null);
-  const context = usePromptContext(PARAMS);
-  return (
-    <>
-      <InspectorSheet call={done} context={context} panelRef={panelRef} />
-      <InspectorPanel ref={panelRef} call={done} context={context} />
-    </>
-  );
-};
-
-describe("Inspector sheet (below 1024 px)", () => {
+describe("Inspector sheet", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("opens from a header button as a dialog that traps focus, and returns focus to the button on close", async () => {
     serve(async () => Response.json(context));
-    viewport(false);
     const user = userEvent.setup();
-    render(<Workspace />);
+    render(<Panel call={done} />);
     const trigger = screen.getByRole("button", { name: "Inspector" });
     expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    expect(trigger).not.toHaveClass("lg:hidden"); // the sheet is the inspector at every width: the right column holds the memory
     await user.click(trigger);
 
     const sheet = screen.getByRole("dialog", { name: "Inspector" });
@@ -312,23 +290,5 @@ describe("Inspector sheet (below 1024 px)", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
-  });
-
-  it("closes when the viewport widens to 1024 px and moves focus to the panel, not the hidden button", async () => {
-    serve(async () => Response.json(context));
-    const { matchMedia, listeners, resize } = viewport(false);
-    const user = userEvent.setup();
-    render(<Workspace />);
-    expect(listeners.size).toBe(0); // listens only while the sheet is open
-    await user.click(screen.getByRole("button", { name: "Inspector" }));
-    expect(matchMedia).toHaveBeenCalledWith("(min-width: 1024px)");
-
-    act(() => resize(false));
-    expect(screen.getByRole("dialog", { name: "Inspector" })).toBeInTheDocument();
-
-    act(() => resize(true));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await waitFor(() => expect(screen.getByRole("complementary", { name: "Inspector" })).toHaveFocus());
-    expect(listeners.size).toBe(0);
   });
 });

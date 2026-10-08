@@ -20,6 +20,19 @@ describe("usePromptContext", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("/api/context?project_type=mobile_app&detail_level=medium&output_format=phases_table&prompt_version=v2");
   });
 
+  it("waits without fetching while the choices are not known yet (null), then fetches them", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => Response.json(prompt("v3 prompt")));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, rerender } = renderHook((params: ContextParams | null) => usePromptContext(params), { initialProps: null as ContextParams | null });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({ context: undefined, loading: true, failed: false });
+
+    rerender({ ...PARAMS, prompt_version: "v3" });
+    await waitFor(() => expect(result.current).toMatchObject({ context: prompt("v3 prompt"), loading: false }));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/context?project_type=web_saas&detail_level=medium&output_format=phases_table&prompt_version=v3"]);
+  });
+
   it("keeps the previous context, marked loading, until the next arrives; an aborted, superseded answer never lands", async () => {
     const pending: { url: string; signal?: AbortSignal | null; resolve: (res: Response) => void }[] = [];
     vi.stubGlobal(
