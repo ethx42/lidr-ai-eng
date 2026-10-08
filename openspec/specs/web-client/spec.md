@@ -62,11 +62,11 @@ A session id SHALL reach the upstream path only when it is a canonical lowercase
 - **AND** the AI service is not called
 
 ### Requirement: BFF session turn
-`POST /api/sessions/{id}/estimate/stream` SHALL take a `multipart/form-data` body and check it before calling the AI service. Its body limit SHALL be the AI service's (see `Request body limit` in `estimation-api`) at that service's default settings: 5 files of 10 MiB plus 1 MiB, 53,477,376 bytes. The BFF SHALL refuse a declared `Content-Length` over the limit without reading the body, count the body against the limit while it arrives (chunked bodies included) and stop reading once it is over, and count the multipart parts while the body arrives, refusing a body with more parts than a turn form can need before it is parsed. A body that is not `multipart/form-data` SHALL be refused without being read. The BFF SHALL then rebuild the form from these fields only, and refuse it when one breaks its rule:
+`POST /api/sessions/{id}/estimate/stream` SHALL take a `multipart/form-data` body and check it before calling the AI service. Its body limit SHALL be the AI service's (see `Request body limit` in `estimation-api`) at that service's default settings: 5 files of 10 MiB plus 1 MiB, 53,477,376 bytes. The BFF SHALL refuse a declared `Content-Length` over the limit without reading the body, count the body against the limit while it arrives (chunked bodies included) and stop reading once it is over, and count the multipart parts while the body arrives, refusing a body with more than 13 parts (what a turn form can need: its five fields, five files, and three empty file inputs) before it is parsed. A body that is not `multipart/form-data` SHALL be refused without being read. The BFF SHALL then rebuild the form from these fields only, and refuse it when one breaks its rule:
 
 | Field | Rule |
 |---|---|
-| `transcript` | required, not blank |
+| `transcript` | required, not blank; its length is the AI service's check, which counts a line break once (see `Turn validation and errors` in `conversation-sessions`) |
 | `project_type`, `detail_level`, `output_format` | required, each one of its enum values (see `estimation-api`) |
 | `output_language` | optional, at most 40 characters; forwarded only when not empty |
 | `attachments` | each a file; file inputs without a name or without content are dropped, as the AI service drops them; at most 5; each at most 10 MiB, with a `.pdf`, `.docx`, or `.txt` name in any case |
@@ -89,8 +89,8 @@ Any other field SHALL NOT reach the AI service. A field problem SHALL be answere
 - **AND** the AI service is not called
 
 #### Scenario: Too many parts
-- **WHEN** a turn's body under the byte limit carries thousands of tiny file parts
-- **THEN** the BFF stops reading once the count passes what a turn form can need and answers `422` with error code `invalid_request`, before the form is parsed
+- **WHEN** a turn's body under the byte limit carries 14 parts, or thousands of tiny file parts
+- **THEN** the BFF stops reading once the count passes 13 and answers `422` with error code `invalid_request` and the message `The multipart body has too many parts (at most 13).`, before the form is parsed
 - **AND** the AI service is not called
 
 #### Scenario: Body that is not multipart
@@ -125,7 +125,7 @@ When the client disconnects while its body is read or before the AI service answ
 - **THEN** the BFF answers `499` with no body and does not call the AI service
 
 ### Requirement: Session workspace
-The page SHALL hold one conversation per browser tab. On load it SHALL check the session id kept in the tab's `sessionStorage` with `GET /api/sessions/{id}` and keep that session when the AI service knows it; when it answers `404`, or no id is kept, the page SHALL start a session with `POST /api/sessions`, keep its id, and load its view. A reload SHALL keep the session but not the answers shown: the empty thread SHALL say how many earlier turns the session holds, and new turns SHALL be numbered after them. Each turn SHALL be one multipart request to `POST /api/sessions/{id}/estimate/stream` with the composer's transcript, its three choices, and its attached files, after which the composer's transcript and files SHALL be emptied and its choices kept. Each turn SHALL appear in the thread with its choices, its attachments, its transcript behind a disclosure where each grounded quote is marked and linked to its requirement, its streamed estimate with a Structured / Document view, and, from the second completed turn on, the change in its totals from the previous completed turn. Beside the thread, or above it on narrow screens, the page SHALL show the session's four project facts, marking those the latest completed turn changed (its `metadata_changes`), and the history window as `History n / max turns`, both read from the latest completed turn's response, else from the session view. Only the latest turn streams: a new turn while it answers SHALL be refused with a message, without stopping it. Only a stopped or failed latest turn SHALL offer to run again, with its own transcript, choices, and files; a completed turn SHALL offer no way to run it again, because a second answer would also enter the session's history. "New conversation" SHALL start a new session and empty the thread, the facts, and the meter, asking first while a turn is answering. The inspector's Context tab SHALL show the system prompt for the composer's choices on the session's prompt version.
+The page SHALL hold one conversation per browser tab. On load it SHALL check the session id kept in the tab's `sessionStorage` with `GET /api/sessions/{id}` and keep that session when the AI service knows it; when it answers `404`, or no id is kept, the page SHALL start a session with `POST /api/sessions`, keep its id, and load its view. A reload SHALL keep the session but not the answers shown: the empty thread SHALL say how many earlier turns the session holds, and new turns SHALL be numbered after them. Each turn SHALL be one multipart request to `POST /api/sessions/{id}/estimate/stream` with the composer's transcript, its three choices, and its attached files, after which the composer's transcript and files SHALL be emptied and its choices kept. Each turn SHALL appear in the thread with its choices, its attachments, its transcript behind a disclosure where each grounded quote is marked and linked to its requirement, its streamed estimate with a Structured / Document view, and, from the second completed turn on, the change in its totals from the previous completed turn, naming that turn when a stopped or failed turn sits between (`vs turn n`). Each turn's label SHALL be a heading, with its estimate's headings one level below. At every width, Evidence on a requirement whose quote is marked in its turn's transcript SHALL open the disclosure at that quote and bring it into view; hovering or focusing a requirement SHALL only scroll the transcript, never the page. Beside the thread, or above it on narrow screens, the page SHALL show the session's four project facts, marking those the latest completed turn changed (its `metadata_changes`) with that turn's number (`Updated in turn n`), and the history window as `History n / max turns`, both read from the latest completed turn's response, else from the session view. Only the latest turn streams: a new turn while it answers SHALL be refused with a message, without stopping it. Only a stopped or failed latest turn SHALL offer to run again, with its own transcript, choices, and files; a completed turn SHALL offer no way to run it again, because a second answer would also enter the session's history. "New conversation" SHALL start a new session and empty the thread, the facts, and the meter, asking first while a turn is answering. The inspector's Context tab SHALL show the system prompt for the composer's choices on the session's prompt version.
 
 #### Scenario: Session kept across a reload
 - **WHEN** the page loads with a kept session id that the AI service reports with 3 history turns
@@ -136,8 +136,16 @@ The page SHALL hold one conversation per browser tab. On load it SHALL check the
 - **THEN** the page starts a new session, keeps its id, and sends the next turn to that session
 
 #### Scenario: Memory follows the latest turn
-- **WHEN** a turn completes with `metadata_changes` `["mentioned_technologies"]` and `history_turns` 2
-- **THEN** the Technologies fact is marked Updated and the meter reads `History 2 / 6 turns`
+- **WHEN** turn 2 completes with `metadata_changes` `["mentioned_technologies"]` and `history_turns` 2
+- **THEN** the Technologies fact is marked `Updated in turn 2` and the meter reads `History 2 / 6 turns`
+
+#### Scenario: Totals change across a stopped turn
+- **WHEN** turn 1 completes, turn 2 is stopped, and turn 3 completes
+- **THEN** turn 3's totals change is described against turn 1 (`vs turn 1`), and the facts turn 3 changed are marked `Updated in turn 3`
+
+#### Scenario: Evidence opens the transcript at its quote
+- **WHEN** the user clicks Evidence, or presses Enter on it, for a requirement whose quote is marked in its turn's transcript, at 1280 px or at 375 px
+- **THEN** the turn's transcript opens with that quote highlighted and in view, and focus moves to the transcript
 
 #### Scenario: Only a stopped or failed turn runs again
 - **WHEN** a turn completes
@@ -149,7 +157,7 @@ The page SHALL hold one conversation per browser tab. On load it SHALL check the
 - **THEN** the stream stops, a new session is kept, the thread is empty, every fact reads "Not mentioned yet", and the meter reads `History 0 / 6 turns`
 
 ### Requirement: Turn error recovery
-The page SHALL read an error from the shared error body, and, when a response has none (the AI service's plain-text or `{"detail"}` `413`, a proxy's error page), from its status: `404` as `session_not_found`, `409` as `session_busy`, `413` as `payload_too_large`. A turn refused because another turn holds the session (`session_busy`, as a response or as a stream `error` event) SHALL leave the thread, and its transcript and files SHALL go back to the composer, with a message. A turn whose session is unknown or expired (`session_not_found`) SHALL go back to the composer the same way, and the page SHALL start a new session and say so. A rejected attachment (`invalid_attachment`) SHALL show the AI service's message, which names the file, and offer to put the turn's transcript and files back in the composer. Files put back SHALL replace those the composer holds; the transcript SHALL replace a different draft only after asking. `session_busy`, `attachments_busy`, and `sessions_full` SHALL be offered as retryable.
+The page SHALL read an error from the shared error body, and, when a response has none (the AI service's plain-text or `{"detail"}` `413`, a proxy's error page), from its status: `404` as `session_not_found`, `409` as `session_busy`, `413` as `payload_too_large`. A turn refused because another turn holds the session (`session_busy`, as a response or as a stream `error` event) SHALL leave the thread, and its transcript and files SHALL go back to the composer, with a message. A turn whose session is unknown or expired (`session_not_found`) SHALL go back to the composer the same way, and the page SHALL start a new session and say so; the turns already shown SHALL stay on screen, read-only, above a note that the conversation expired, until New conversation. A rejected attachment (`invalid_attachment`) SHALL show the AI service's message, which names the file, and offer to put the turn's transcript and files back in the composer, marking the file the message names as rejected, with that message, and moving focus to it unless the transcript first asks before replacing a different draft. Files put back SHALL replace those the composer holds; the transcript SHALL replace a different draft only after asking. `session_busy`, `attachments_busy`, and `sessions_full` SHALL be offered as retryable.
 
 #### Scenario: Busy session
 - **WHEN** a turn is answered `409` with error code `session_busy`
@@ -158,6 +166,7 @@ The page SHALL read an error from the shared error body, and, when a response ha
 #### Scenario: Session lost mid-turn
 - **WHEN** a turn's stream ends with an `error` event `session_not_found`
 - **THEN** the page starts a new session, says the conversation expired, and puts the message back in the composer
+- **AND** the earlier turns stay on screen, read-only, above the note
 
 #### Scenario: Body limit answered in plain text
 - **WHEN** the AI service answers a turn `413` in plain text
