@@ -33,7 +33,7 @@ type Props = {
   transcriptLabel?: string;
   attachments?: ReactNode; // shown under the transcript (the conversation's dropzone)
   samples?: Sample[];
-  compact?: boolean; // a result sits below the form, so the transcript box stays short
+  compact?: boolean; // turns sit above the composer, so the empty transcript box starts short
   onParamsChange?: (params: EstimateParams) => void;
   handle?: Ref<EstimateFormHandle>;
 };
@@ -205,8 +205,10 @@ export const EstimateForm = ({
               placeholder="Paste the meeting transcript, load a sample or upload a .txt file"
               aria-invalid={fieldState.invalid || over || undefined}
               aria-describedby={[counterId, over && overId, over && overById, fieldState.invalid && errorId].filter(Boolean).join(" ")}
-              // grows with the text up to a cap; once a result sits below, the cap stays small so the result keeps the room
-              className={cn("bg-card", compact ? "max-h-32 min-h-12" : "max-h-[min(24rem,45dvh)] min-h-28")}
+              // Grows with the text up to the window less the header and the composer's other rows (45% of a short window at
+              // least), so a transcript that fits the window shows in full instead of scrolling in a fixed box (svh: steady
+              // while a mobile URL bar shows or hides).
+              className={cn("max-h-[max(45svh,calc(100svh-24rem))] bg-card", compact ? "min-h-12" : "min-h-28")}
             />
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
