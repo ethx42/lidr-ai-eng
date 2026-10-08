@@ -34,7 +34,7 @@ import { readEstimate } from "@/lib/estimate/read";
 import type { StreamState } from "@/lib/estimate/types";
 import { finePointer, scrollBehavior } from "@/lib/focus";
 import type { Sample } from "@/lib/samples";
-import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS } from "@/lib/session/attachments";
+import { limitOr, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS } from "@/lib/session/attachments";
 
 type Done = Extract<StreamState, { status: "done" }>;
 // `settled`: how the turn ended, kept once a newer turn owns the stream; the latest turn shows the stream's live state.
@@ -270,7 +270,14 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
               onParamsChange={setParams}
               maxChars={service?.max_transcription_chars}
               transcriptLabel="Transcript for this turn"
-              attachments={<Dropzone maxFiles={MAX_ATTACHMENTS} maxBytes={MAX_ATTACHMENT_BYTES} files={files} onChange={setFiles} />}
+              attachments={
+                <Dropzone
+                  maxFiles={limitOr(service?.max_attachments, MAX_ATTACHMENTS)}
+                  maxBytes={limitOr(service?.max_attachment_bytes, MAX_ATTACHMENT_BYTES)}
+                  files={files}
+                  onChange={setFiles}
+                />
+              }
               samples={samples}
               compact={turns.length > 0}
             />

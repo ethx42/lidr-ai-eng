@@ -620,6 +620,19 @@ describe("Workspace", () => {
       expect(within(turn(1)).getByRole("radio", { name: "Document" })).toBeChecked(); // each turn keeps its own view
     });
 
+    it("checks attachments against the service's limits once its context loads, against the defaults until then", async () => {
+      let load!: (res: Response) => void;
+      serviceContext = new Promise((resolve) => (load = resolve));
+      const { user } = setup();
+      expect(screen.getByText("PDF, DOCX or TXT, up to 5 files of 10 MB each")).toBeInTheDocument();
+      await act(async () => load(Response.json({ ...context, max_attachments: 2, max_attachment_bytes: 1024 })));
+      expect(await screen.findByText("PDF, DOCX or TXT, up to 2 files of 1 KB each")).toBeInTheDocument();
+      await attach(user, pdf("a.pdf"), pdf("b.pdf"), pdf("c.pdf"), new File([new Uint8Array(2048)], "big.txt", { type: "text/plain" }));
+      expect(within(screen.getByRole("list", { name: "Attached documents" })).getAllByRole("listitem")).toHaveLength(2);
+      expect(screen.getByText("c.pdf was not added: up to 2 files per message.")).toBeInTheDocument();
+      expect(screen.getByText("big.txt is too large: each file can be up to 1 KB.")).toBeInTheDocument();
+    });
+
     it("counts the transcript against 50,000 characters until the service context loads, then against its limit", async () => {
       let load!: (res: Response) => void;
       serviceContext = new Promise((resolve) => (load = resolve));

@@ -274,4 +274,6 @@ async def context(
         ],
         chain=[f"{provider}:{model}" for provider, model in settings.chain],
         max_transcription_chars=settings.max_transcription_chars,
+        max_attachments=settings.attachment_max_files,
+        max_attachment_bytes=settings.attachment_max_bytes,
     )

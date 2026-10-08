@@ -28,8 +28,8 @@ const isServiceContext = (value: unknown): value is ServiceContext =>
   typeof value.prompt_version === "string";
 
 // One browser read of GET /api/context per page load (never from a Server Component), shared by the shell: the header's
-// model chain, the form's character limit, its prompt versions and the default one. The inspector's Context tab reads
-// the prompt for the form's current choices on its own (`usePromptContext`).
+// model chain, the form's character limit, its prompt versions and the default one, and the dropzone's attachment
+// limits. The inspector's Context tab reads the prompt for the form's current choices on its own (`usePromptContext`).
 export const ServiceContextProvider = ({ children }: { children: ReactNode }) => {
   const [value, setValue] = useState<ServiceContext | null | undefined>(undefined);
   useEffect(() => {

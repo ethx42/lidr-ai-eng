@@ -19,6 +19,17 @@ def test_context_reports_the_chain_and_the_transcription_limit(
     assert client_with_limit_10.fake.calls == []
 
 
+def test_context_reports_the_attachment_limits(make_client: ClientFactory) -> None:
+    with make_client(attachment_max_files=3, attachment_max_bytes=2048) as client:
+        body = client.get("/api/v1/context").json()
+    assert (body["max_attachments"], body["max_attachment_bytes"]) == (3, 2048)
+
+
+def test_context_reports_the_default_attachment_limits(client: TestClient) -> None:
+    body = client.get("/api/v1/context").json()
+    assert (body["max_attachments"], body["max_attachment_bytes"]) == (5, 10 * 1024 * 1024)
+
+
 def test_context_chain_is_the_configured_chain(make_client: ClientFactory) -> None:
     with make_client(anthropic_api_key="k", llm_fallbacks="anthropic:claude-haiku-4-5") as client:
         body = client.get("/api/v1/context").json()

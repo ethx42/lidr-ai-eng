@@ -226,6 +226,10 @@ export interface components {
             available_versions: string[];
             /** Chain */
             chain: string[];
+            /** Max Attachment Bytes */
+            max_attachment_bytes: number;
+            /** Max Attachments */
+            max_attachments: number;
             /** Max Transcription Chars */
             max_transcription_chars: number;
             /** Prompt Version */

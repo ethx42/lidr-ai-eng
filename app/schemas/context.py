@@ -22,3 +22,5 @@ class ContextResponse(BaseModel):
     references: list[ReferenceView]
     chain: list[str]  # "provider:model", primary first
     max_transcription_chars: int
+    max_attachments: int  # per session turn (ATTACHMENT_MAX_FILES)
+    max_attachment_bytes: int  # per file (ATTACHMENT_MAX_BYTES)
