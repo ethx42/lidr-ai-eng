@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText, Paperclip, X } from "lucide-react";
-import { type DragEvent, useId, useRef, useState } from "react";
+import { type DragEvent, type Ref, useId, useImperativeHandle, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ATTACHMENT_ACCEPT, formatBytes, isSupported } from "@/lib/session/attachments";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,11 @@ type Props = {
   maxBytes: number;
   files?: File[]; // the attached files, owned by the parent
   onChange: (files: File[]) => void;
+  rejection?: string; // the AI service's reason for refusing one of these files, naming it ("scan.pdf: unreadable PDF")
+  handle?: Ref<DropzoneHandle>;
 };
+// `focus` moves focus where fixing a rejected turn starts: the rejected file's remove button, else the first chip's.
+export type DropzoneHandle = { focus: () => void };
 
 const NO_FILES: File[] = []; // a stable default: a new [] each render would read as a new list
 const sameFile = (a: File, b: File) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
@@ -32,8 +36,10 @@ const sort = (picked: File[], attached: File[], maxFiles: number, maxBytes: numb
 };
 
 // Documents for this turn (spec §7.3): picked or dropped, checked here as the server would, each shown as a chip with
-// its size and a remove button. Refused files are listed with the reason in a polite status region.
-export const Dropzone = ({ maxFiles, maxBytes, files = NO_FILES, onChange }: Props) => {
+// its size and a remove button. Refused files are listed with the reason in a polite status region. A file the AI
+// service rejected is marked on its chip, whose remove button is described by the service's reason (shown, not
+// announced again: the turn's error card already was).
+export const Dropzone = ({ maxFiles, maxBytes, files = NO_FILES, onChange, rejection, handle }: Props) => {
   const [reasons, setReasons] = useState<string[]>([]);
   // The reasons are about the files they were checked against: when the parent empties the list (the turn was sent, or
   // put back without files), they go too (React's "adjusting state when a prop changes").
@@ -47,6 +53,15 @@ export const Dropzone = ({ maxFiles, maxBytes, files = NO_FILES, onChange }: Pro
   const attachRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const hintId = useId();
+  const rejectionId = useId();
+  const rejected = rejection === undefined ? -1 : files.findIndex((file) => rejection.startsWith(`${file.name}: `));
+
+  useImperativeHandle(handle, () => ({
+    focus: () => {
+      const buttons = [...(listRef.current?.querySelectorAll("button") ?? [])];
+      (buttons[rejected] ?? buttons[0] ?? attachRef.current)?.focus();
+    },
+  }));
 
   const add = (picked: File[]) => {
     const { kept, reasons } = sort(picked, files, maxFiles, maxBytes);
@@ -116,13 +131,19 @@ export const Dropzone = ({ maxFiles, maxBytes, files = NO_FILES, onChange }: Pro
                 {file.name}
               </span>
               <span className="num shrink-0 text-muted-foreground">{formatBytes(file.size)}</span>
-              <Button type="button" variant="ghost" size="icon-xs" onClick={() => remove(i)}>
+              {i === rejected && <span className="shrink-0 font-medium text-destructive">Rejected</span>}
+              <Button type="button" variant="ghost" size="icon-xs" aria-describedby={i === rejected ? rejectionId : undefined} onClick={() => remove(i)}>
                 <X />
                 <span className="sr-only">{`Remove ${file.name}`}</span>
               </Button>
             </li>
           ))}
         </ul>
+      )}
+      {rejection && (
+        <p id={rejectionId} className="text-xs text-destructive">
+          {rejection}
+        </p>
       )}
       <div role="status" className={cn("flex flex-col gap-0.5 text-xs text-destructive", reasons.length === 0 && "sr-only")}>
         {reasons.map((reason, i) => (

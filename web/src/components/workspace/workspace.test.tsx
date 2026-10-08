@@ -434,18 +434,37 @@ describe("Workspace", () => {
       expect(sessionStorage.getItem("estimator.sessionId")).toBe(SESSIONS[0]); // the same conversation
     });
 
-    it("puts a turn whose attachment was rejected back in the composer, without the server's message lost", async () => {
+    // The fix is in the attachments: focus goes to the rejected file, which carries the service's reason.
+    it("puts a turn whose attachment was rejected back in the composer, with that file marked by the service's reason and focused", async () => {
       respond = () => Response.json({ error: { code: "invalid_attachment", message: "scan.pdf: unreadable PDF" }, request_id: "r" }, { status: 422 });
       const { user, input } = setup();
       await loaded();
       await user.type(input, "With a bad file");
-      await attach(user, pdf("scan.pdf"));
+      await attach(user, pdf("brief.pdf"), pdf("scan.pdf"));
       await user.click(screen.getByRole("button", { name: "Estimate" }));
       const card = await within(turn(1)).findByRole("alert");
       expect(card).toHaveTextContent("An attachment was rejected: scan.pdf: unreadable PDF.");
       await user.click(within(card).getByRole("button", { name: "Edit attachments" }));
       expect(input).toHaveValue("With a bad file");
-      expect(within(screen.getByRole("list", { name: "Attached documents" })).getByText("scan.pdf")).toBeInTheDocument();
+      const attached = screen.getByRole("list", { name: "Attached documents" });
+      const remove = within(attached).getByRole("button", { name: "Remove scan.pdf" });
+      expect(remove).toHaveFocus();
+      expect(remove).toHaveAccessibleDescription("scan.pdf: unreadable PDF");
+      expect(remove.closest("li")).toHaveTextContent("Rejected");
+      expect(within(attached).getByRole("button", { name: "Remove brief.pdf" }).closest("li")).not.toHaveTextContent("Rejected");
+      expect(screen.getByText("scan.pdf: unreadable PDF")).toBeVisible();
+
+      await user.click(remove); // the reason goes with the file
+      expect(screen.queryByText("scan.pdf: unreadable PDF")).not.toBeInTheDocument();
+      expect(screen.queryByText("Rejected")).not.toBeInTheDocument();
+
+      // A different draft in the composer is never replaced silently: its question takes focus first.
+      await user.clear(input);
+      await user.type(input, "Something else");
+      await user.click(within(card).getByRole("button", { name: "Edit attachments" }));
+      expect(screen.getByRole("group", { name: "Replace your draft with the message with the rejected attachment?" })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Keep my draft" })).toHaveFocus());
+      expect(within(screen.getByRole("list", { name: "Attached documents" })).getByRole("button", { name: "Remove scan.pdf" })).toHaveAccessibleDescription("scan.pdf: unreadable PDF");
     });
 
     it("says when no conversation can be started, and tries again", async () => {

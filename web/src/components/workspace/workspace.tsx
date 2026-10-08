@@ -11,7 +11,7 @@ import { InspectorSheet } from "@/components/inspector/inspector";
 import { usePromptContext } from "@/components/inspector/use-prompt-context";
 import { useServiceContext } from "@/components/service-context";
 import { ContextMeter } from "@/components/session/context-meter";
-import { Dropzone } from "@/components/session/dropzone";
+import { Dropzone, type DropzoneHandle } from "@/components/session/dropzone";
 import { MemoryPanel } from "@/components/session/memory-panel";
 import { computeTotalsDelta, type Sums } from "@/components/session/totals-delta";
 import { TurnCard, type TurnInput } from "@/components/session/turn-card";
@@ -56,10 +56,6 @@ const sumsOf = (state: StreamState): Sums | null => {
   const { expected_hours, estimated_cost } = readEstimate(state.result.breakdown).totals ?? {};
   return expected_hours === undefined ? null : { expected_hours, estimated_cost };
 };
-
-// What the error card's edit puts back, for the form's "Replace your draft with …?".
-const editing = (state: StreamState) =>
-  state.status === "error" && state.error.code === "invalid_attachment" ? "the message with the rejected attachment" : "the transcript to shorten";
 
 const toForm = ({ body, files }: TurnInput) => {
   const form = new FormData();
@@ -122,9 +118,12 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   if (thread.sessionId !== sessionId) setThread({ sessionId, turns: [] }); // a new session starts an empty thread
   const turns = thread.sessionId === sessionId ? thread.turns : [];
   const [files, setFiles] = useState<File[]>([]);
+  // The AI service's reason for a file it rejected, shown in the composer while the files put back are attached.
+  const [rejection, setRejection] = useState<{ files: File[]; reason: string } | null>(null);
   const [params, setParams] = useState<EstimateParams>(DEFAULT_PARAMS);
   const [confirming, setConfirming] = useState(false);
   const formRef = useRef<EstimateFormHandle>(null);
+  const dropzoneRef = useRef<DropzoneHandle>(null);
   const stopRef = useRef<HTMLButtonElement>(null);
   const latestRef = useRef<HTMLLIElement>(null);
   const newConversationRef = useRef<HTMLButtonElement>(null);
@@ -154,6 +153,18 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const restore = (input: TurnInput, what: string) => {
     setFiles(input.files);
     formRef.current?.edit(input.body.transcription, what);
+  };
+
+  // An error card's edit. A rejected attachment's turn goes back with that file marked by the service's reason, and focus
+  // moves to it, where the fix starts (unless the composer holds a different draft: its question takes focus first).
+  const edit = (input: TurnInput, turnState: StreamState) => {
+    if (turnState.status !== "error" || turnState.error.code !== "invalid_attachment") return restore(input, "the transcript to shorten");
+    const { message } = turnState.error;
+    flushSync(() => {
+      setFiles(input.files);
+      setRejection({ files: input.files, reason: message });
+    });
+    if (formRef.current?.edit(input.body.transcription, "the message with the rejected attachment", { focus: false })) dropzoneRef.current?.focus();
   };
 
   // How a turn's stream ended. A turn the session refused never happened: 409 (another turn holds the session) takes it
@@ -275,7 +286,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                       delta={delta && (before === i - 1 ? delta : { ...delta, since: earlier + before + 1 })}
                       onStop={stop}
                       onRetry={isLatest && (turnState.status === "cancelled" || turnState.status === "error") ? () => retry(turn) : undefined}
-                      onEdit={() => restore(turn.input, editing(turnState))}
+                      onEdit={() => edit(turn.input, turnState)}
                       stopRef={isLatest ? stopRef : undefined}
                     />
                   );
@@ -296,6 +307,8 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                   maxBytes={limitWithin(service?.max_attachment_bytes, MAX_ATTACHMENT_BYTES)}
                   files={files}
                   onChange={setFiles}
+                  rejection={rejection?.files === files ? rejection.reason : undefined}
+                  handle={dropzoneRef}
                 />
               }
               samples={samples}
