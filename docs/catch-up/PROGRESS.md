@@ -2,7 +2,7 @@
 
 Source of truth for the overnight run. Tick a task only after its commit exists; put the short SHA after it. Blocked tasks: replace `[ ]` with `[!]` and add a line below with the command, the last error lines and what was tried.
 
-Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.088722 (S3 US$0.048279, S4 US$0.040443)
+Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.128344 (S3 US$0.048279, S4 US$0.040443, S5 US$0.039622)
 
 ## pre-session-03
 
@@ -56,8 +56,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - [x] Task 6: Conversation service (4a117d7, aa57299, 33eab70, ebe0f2a)
 - [x] Task 7: Session endpoints and the brief's integration tests (7eb2340, df63522, b3c4844, ea988e8, 0b9aa48, bbb7f4b)
 - [x] Task 8: Web — session workspace (0cdfeab, 417b1fd, 0ba2548, 8f7d4c8, 9b1def1; merged aedbd56)
-- [ ] Task 9: E2E, live check and branch close-out
-- [ ] Review panel findings resolved
+- [x] Task 9: E2E, live check and branch close-out (live check f2c12e6, 076cec7; specs 2ac9aa2, 0b6e8f6, 34fa8df; e2e and media 9318fdd, baa7255, 14c99a3, 70c3def, 96c36bb; docs d912c46, 464f745, 4660050; test guard kept 47b367d, 3e8e7c9)
+- [x] Review panel findings resolved (code: 9 found, 6 confirmed, all fixed 177adaa..8a744c5, merged e9b8455; UI: 8 found, 8 confirmed, all fixed 56752bc..435f3b2, merged 2c83fa6)
 - Gate:
 
 ## Notes, plan corrections and findings
@@ -88,3 +88,8 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.0887
 - S5 Task 5: v3 also closes the S4 panel's ai-1 (the summary level keeps a medium breakdown's total and allows coarse tasks over 80 h) and ai-2 (Anthropic gets the static prefix and the variable tail as two system blocks, cache_control on the static one). Review finding fixed: model-echoed metadata in the system prompt is data (explicit rule), one line per value with < and > stripped, name and scope bounded.
 - S5 Task 6 ruling: each turn is grounded against the raw client text the model saw (the transcripts and attachments of the turns still in the window, current turn first), never against prompt scaffolding or the model-derived metadata.
 - S5 Task 7 ruling (after a background security review flagged session eviction as a DoS): at the session cap the store evicts expired sessions, then the least recently used session with no turns, then the least recently used idle one, never a session with a turn in flight; when every session is busy, POST /sessions answers 503 sessions_full. A flood of new sessions only churns empty ones.
+- S5 review panel (two Workflow runs: code with 3 reviewers + 3 verifiers, UI with 1 + 1 after the media existed): 17 findings, 14 confirmed, 3 refuted. Important: v3 estimated only the latest message (the live run's turn 3 kept 1 requirement); fixed with a complete-estimate rule, requirement lines in the compact assistant turn and a smoke check that fails on dropped scope, then re-run live: requirements 3 → 5 → 6, all grounded. Minor fixes: extraction slots wait in the event loop, a preparing session is not evictable, DOCX tag cap over every member, BFF part-count bound before parsing, CRLF counted once, long technology badges wrap, turn headings, steady layout on completion, turn-named "Updated"/delta, dropzone errors clear, Edit attachments focuses the rejected file, expired answers stay read-only, Evidence opens the transcript at every width.
+- S5 live spend: three-turn checks US$0.003844 (first run), US$0.004189 (failed on scope), US$0.003733 (passed after the fix); Task 3 re-record and two eval runs. The smoke guard now prices a turn with a session-sized prompt bound (US$0.876039 before a run).
+- S5 e2e: `web/e2e/session.spec.ts` (14 tests) replaces session 4's `estimate.spec.ts`; the five dropped single-shot checks and their reasons are in the body of baa7255.
+- Owner action (S5): apply `.superpowers/sdd/plan-session-05/env-example.proposed` to `.env.example` (session and attachment settings) and commit `docs(env): document session and attachment settings`; until then the configuration spec's "`.env.example` lists every variable" is not met and the README says so (S3 precedent).
+- Owner action (gates): `make gate` runs `docker compose up --build --wait`, whose ai-service needs the provider keys from `.env`, which exists only in the main checkout. Link it into each worktree before gating: `ln -s ~/Developer/personal/lidr-ai-eng/.env ~/Developer/personal/lidr-ai-eng-wt/s04/.env` (and `.../s05/.env`); agents may not touch `.env*`.
