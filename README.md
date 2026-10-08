@@ -136,7 +136,7 @@ The AI service reads environment variables and `.env` (pydantic-settings; enviro
 | `APP_ENV`, `LOG_LEVEL` | `development`, `DEBUG` | JSON logs on stderr; see Logging |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1,ai-service,testserver` | comma-separated host names, without a port (unlike the BFF's variable of the same name), whose `Host` the API answers; anything else gets `400 invalid_host`. Add the name you call the API by if it is not one of these; an entry with a port fails startup |
 
-Session 5 adds twelve settings for sessions and attachments (`MAX_TURNS`, `MAX_HISTORY_CHARS`, `SESSION_TTL_SECONDS`, `MAX_SESSIONS` and the `ATTACHMENT_*` settings), listed with their defaults in [Session 5: Settings](#settings). `.env.example` does not list them yet; their defaults apply unless you set them.
+Session 5 adds twelve settings for sessions and attachments (`MAX_TURNS`, `MAX_HISTORY_CHARS`, `SESSION_TTL_SECONDS`, `MAX_SESSIONS` and the `ATTACHMENT_*` settings), listed with their defaults in [Session 5: Settings](#settings) and in `.env.example`; their defaults apply unless you set them.
 
 Web (`web/`):
 
@@ -527,7 +527,7 @@ A turn's evidence quotes are checked against the client's own text: this turn's 
 
 ### Settings
 
-`.env.example` does not list the session 5 settings yet; their defaults (`app/config.py`, and the [`configuration` spec](openspec/specs/configuration/spec.md)) apply unless you set them:
+`.env.example` lists the session 5 settings; their defaults (`app/config.py`, and the [`configuration` spec](openspec/specs/configuration/spec.md)) apply unless you set them:
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -614,7 +614,6 @@ Service:
 - One turn with a large attachment can push every earlier pair out of the window at once: the attachment budget (50,000 characters) plus a long transcript can exceed the 60,000-character history cap, which never drops the latest pair. The metadata survives; the earlier turns' text doesn't.
 - The `413` for an oversized body is plain text (or FastAPI's `{"detail"}` for a chunked body), not the API's JSON error shape. The page reads it by its status.
 - With the `replay` provider every session turn is synthesised: `v3` with history matches no recorded cassette (they are recorded for `v2` single-shot calls), and the synthesised estimate ignores the transcript and the attachments.
-- `.env.example` does not list the session 5 settings yet (see [Settings](#settings)); as in session 3, the README names them and `app/config.py` holds the defaults.
 
 Prompt and memory:
 
