@@ -181,4 +181,4 @@ The composer SHALL check each chosen file before it is attached: a `.pdf`, `.doc
 
 #### Scenario: Raised service limit capped
 - **WHEN** the context reports `max_attachments` 8 and `max_attachment_bytes` of 20 MiB
-- **THEN** the composer offers up to 5 files of 10 MB each and refuses a sixth
+- **THEN** the composer offers up to 5 files of 10 MiB each and refuses a sixth

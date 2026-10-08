@@ -33,7 +33,7 @@ The difference shows when something leaves the window. `tests/unit/test_conversa
 
 The live run (`scripts/smoke_live_session.py`, commit f2c12e6) shows both at work. Turn 1 names the project "Lumen Checkout". Turn 2 attaches `tests/fixtures/attachments/spec.pdf`, whose second page is the only place that names Redsys. Turn 3 mentions neither. After turn 3 the project name is unchanged and Redsys is still in `mentioned_technologies`, because the technologies are a union (section 3). The model also still sees turn 2's PDF text, because six pairs fit in the window. From turn 9 on, turn 2 is no longer sent, and Redsys survives only as a name in the metadata block.
 
-The same run also had a problem nobody noticed until the review panel read the numbers. Turn 3 only added an admin page, and its answer came back with one requirement (grounded 1/1) and 668 output tokens, against three requirements and 993 and 961 tokens on turns 1 and 2. The model had turn 1 in its history. It estimated the latest message anyway, because every user message says "Estimate the project discussed in this meeting transcript", and v3's conversation block only said earlier turns were context. The memory made it worse: latest-wins replaced `agreed_scope` and the team size with that one-requirement answer's. If that summary covered only the new page, the checkout would be gone for good once turn 1 slid out of the window, because the next turns are told to keep the memory's scope. The script passed because it checked only the name and Redsys. The fix says what an answer is. v3 now asks for the complete, current estimate of the whole project on every turn, keeping what still holds with its earlier quote, and the compact assistant turn lists each requirement with its id and quote so the model can carry them forward. The smoke check now fails when turn 3 has fewer requirements than turn 2, or no longer mentions Stripe. It took two tries. The first re-run grew the requirements (3 → 4 → 5) but lost Stripe by turn 3; our guess, since the script never prints the outputs, is that it was folded into the bank gateway from turn 2's PDF. With "never merge an earlier requirement into a new one" and "something new is an addition" added to the rule, the second re-run kept it: 3 → 5 → 6 requirements, all grounded. History makes earlier turns visible to the model. Getting the model to use them took a sentence in the prompt and a check that would notice.
+The same run also had a problem nobody noticed until the review panel read the numbers. Turn 3 only added an admin page, and its answer came back with one requirement (grounded 1/1) and 668 output tokens, against three requirements and 993 and 961 tokens on turns 1 and 2. The model had turn 1 in its history. It estimated the latest message anyway, because every user message says "Estimate the project discussed in this meeting transcript", and v3's conversation block only said earlier turns were context. The memory made it worse: latest-wins replaced `agreed_scope` and the team size with that one-requirement answer's. If that summary covered only the new page, the checkout would be gone for good once turn 1 slid out of the window, because the next turns are told to keep the memory's scope. The script passed because it checked only the name and Redsys. The fix has three parts. v3 now asks for the complete, current estimate of the whole project on every turn, keeping what still holds with its earlier quote. The compact assistant turn lists each requirement with its id and quote, so the model can carry them forward. And the smoke check fails when turn 3 has fewer requirements than turn 2, or no longer mentions Stripe. The rule needed two additions. With the first, the complete-estimate sentence, a re-run grew the requirements (3 → 4 → 5) but lost Stripe by turn 3; our guess, since the script never prints the outputs, is that it was folded into the bank gateway from turn 2's PDF. The second added "never merge an earlier requirement into a new one" and "something new is an addition", and the next re-run kept Stripe: 3 → 5 → 6 requirements, all grounded.
 
 **Trade-offs.** History costs tokens on every call: input grew 6,646 → 7,154 → 7,479 tokens over the three turns of the first live run, and 6,752 → 7,346 → 7,885 in the re-run that passed, where each compact answer lists its requirements. Memory is cheap (a few hundred characters in the system prompt) but lossy: four fields, chosen in advance. A requirement such as "payments must work offline" lives only in the history and in the free-text scope.
 
@@ -88,7 +88,7 @@ Path A sends the file to a multimodal model, through the provider's Files API or
 
 | | Path A: file to the model | Path B: local extraction (this branch) |
 |---|---|---|
-| Code | little: upload, reference the file in the message | an extractor, budgets and a sandbox (`app/attachments/`, about 440 lines and 62 test cases) |
+| Code | little: upload, reference the file in the message | an extractor, budgets and a sandbox (`app/attachments/`, about 440 lines and 63 test cases) |
 | What the model sees | PDF pages as images plus their text (both providers' docs say so for PDFs), so diagrams, tables and scans count | text only; a scanned PDF is rejected with "no extractable text (scanned PDF?)" |
 | Provider coupling | a file id belongs to one provider; the fallback router, the `replay` provider and the offline e2e can't follow it | the same text goes to OpenAI, Anthropic and `replay` |
 | Grounding | quotes from page images can't be checked against text we hold | quotes are checked against the extracted text |
@@ -116,13 +116,16 @@ The working shape in FastAPI 0.141.1 is one Pydantic model that holds the fields
 
 The typed params are the same as single-shot: the form is turned into an `EstimateRequest`, and the transcript length check is shared with `/api/v1/estimate` (commit ea988e8, after a review found two copies). Unknown fields are a 422 (`extra="forbid"`).
 
-The order of the checks matters more than the parsing. Everything runs in the `prepared_turn` dependency, before the first SSE byte, so every rejection is a plain JSON error and not a 200 with an `error` event:
+The order of the checks matters more than the parsing. FastAPI validates the form model before the `prepared_turn` dependency runs, and the rest runs inside it, all before the first SSE byte, so every rejection is a plain JSON error and not a 200 with an `error` event:
 
-1. the session exists and is idle (404 `session_not_found`, 409 `session_busy`);
-2. the transcript length and the typed fields (422), after CR LF and CR become LF;
-3. the attachment count, then each file's size from `UploadFile.size`, then a read of at most `max_bytes + 1` bytes (422 `invalid_attachment`, naming the file);
-4. extraction (422 for a bad file, 503 `attachments_busy` when no reader is free);
-5. the session is still idle, because extraction can take seconds (409).
+1. the form model (422): a missing, blank or unknown field, a bad enum value, an output language over 40 characters, after CR LF and CR become LF;
+2. the session exists and is idle (404 `session_not_found`, 409 `session_busy`);
+3. the transcript length, shared with single-shot (422);
+4. the attachment count, then each file's size from `UploadFile.size`, then a read of at most `max_bytes + 1` bytes (422 `invalid_attachment`, naming the file);
+5. extraction (422 for a bad file, 503 `attachments_busy` when no reader is free);
+6. the session is still idle, because extraction can take seconds (409).
+
+So a bad enum on an unknown session is a 422, not a 404; only the length check comes after the idle check.
 
 A probe without the last check made `test_a_session_taken_during_extraction_is_409_json[estimate/stream]` fail with a 200. Above all of this, `BodyLimitMiddleware` in `app/main.py` caps the whole body at 5 × 10 MiB + 1 MiB from the settings, because Starlette limits non-file parts to 1 MB and file parts not at all. Over the cap the answer is a 413 in Starlette's plain text, not the API's JSON error shape (`test_a_body_over_the_upload_limit_is_413`).
 
@@ -182,7 +185,7 @@ Since M1, every requirement carries a quote, and the service checks the quote ag
 2. The windowed user messages (33eab70). Those are the rendered messages the model saw, and they include our own template text. From turn 2 on, a "quote" of the output-language line ("Spanish"), of `Project type: web_saas` or of the instruction not to translate quotes counted as grounded.
 3. The raw client text of each turn (ebe0f2a). Each pair now stores the turn's transcript and the attachments its prompt version shows, as the client sent them. A turn is grounded against its own client text first, then the client text of the pairs still in the window. Never the system prompt, the metadata or the assistant turns: those are ours or the model's. `test_prompt_scaffolding_from_earlier_turns_is_never_evidence[Spanish|Project type: web_saas|do not translate quotes]` pins the second failure, and `test_attachments_a_version_does_not_render_are_never_evidence` checks that an attachment counts only if the prompt version actually showed it to the model (`renders_attachments()` asks the version's `user.j2` whether it reads `attachments`).
 
-So evidence is what the client said, and only the part the model saw.
+A quote now counts as grounded only when it appears in client text that was sent to the model on that call.
 
 **Trade-offs.** Each turn's client text is stored twice (rendered for the model, raw for grounding), still bounded by the history cap since 7eb2340. A true quote from a turn that slid out of the window is reported as ungrounded, because the metadata keeps facts, not quotes.
 
