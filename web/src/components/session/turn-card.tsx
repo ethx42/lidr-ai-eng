@@ -125,7 +125,8 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
                 quotes={quotes}
                 active={activeRequirement}
                 pinned={pinned}
-                className="max-h-80"
+                // At most the window less the header and the turn's heading, so a transcript that fits the window shows in full.
+                className="max-h-[calc(100dvh-8rem)]"
               />
             )}
           </div>

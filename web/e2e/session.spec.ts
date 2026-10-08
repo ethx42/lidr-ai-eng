@@ -745,6 +745,43 @@ test.describe("360 px wide", () => {
   });
 });
 
+// A large window: the conversation and the memory take its width and the page scrolls as a whole. A text that fits the
+// window is never boxed in a pane that scrolls on its own (the composer's transcript was capped at 384 px, a turn's at
+// 320 px, whatever the window's height).
+test.describe("1920x1080", () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  const scrollsInside = (element: Element) => element.scrollHeight > element.clientHeight;
+  const innerScrollers = () =>
+    [...document.querySelectorAll("body *")]
+      .filter((element) => /auto|scroll/.test(getComputedStyle(element).overflowY) && element.scrollHeight - element.clientHeight > 1)
+      .map((element) => element.getAttribute("aria-label") ?? element.tagName.toLowerCase());
+
+  test("the workspace fills the window, the page is what scrolls, and a transcript that fits the window shows in full", async ({ page }) => {
+    await ready(page);
+    const widths = await page.evaluate(() => ["main", "aside"].map((tag) => document.querySelector(tag)?.getBoundingClientRect().width ?? 0));
+    expect(widths[0] + widths[1], "px wide the conversation and the memory take together").toBeGreaterThanOrEqual(1920 * 0.95);
+
+    // 24 short lines: about 500 px of text, more than the old caps and less than this window.
+    const meeting = Array.from({ length: 24 }, (_, i) => `${["CEO", "CTO", "Ops"][i % 3]}: point ${i + 1} of the freight marketplace meeting.`).join("\n");
+    await transcript(page).fill(meeting);
+    expect(await transcript(page).evaluate(scrollsInside), "the composer's transcript scrolls inside its box").toBe(false);
+
+    const one = turn(page, 1);
+    await send(page);
+    await expectResult(one);
+    expect(await page.locator("html").evaluate(scrollsInside), "the page scrolls").toBe(true);
+    expect(await page.evaluate(innerScrollers), "elements that scroll on their own").toEqual([]);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect(memory(page).getByRole("heading", { name: "Project memory" })).toBeInViewport(); // sticky beside the turns
+
+    const pane = await openTranscript(page, 1);
+    await expect(pane).toBeVisible();
+    expect(await pane.evaluate(scrollsInside), "the turn's transcript scrolls inside its box").toBe(false);
+    await expectNoHorizontalScroll(page);
+  });
+});
+
 // Short windows (the session layout has no height breakpoint): the page scrolls as a whole under a 48 px sticky header,
 // and the memory column is sticky beside the conversation from 1024 px. A mid-height laptop window, a landscape phone,
 // and 1280x1024 at 400% zoom (the WCAG 1.4.10 reference): a sent turn is brought into view below the header, its
