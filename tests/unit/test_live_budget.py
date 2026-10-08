@@ -1,6 +1,15 @@
 import pytest
 
-from scripts.live_budget import BudgetExceeded, ensure_budget, record_spend, total_spent
+from app.schemas.estimation import Usage
+from app.services.pricing import cost_usd
+from scripts.live_budget import (
+    PROMPT_TOKENS_BOUND,
+    BudgetExceeded,
+    call_bound_usd,
+    ensure_budget,
+    record_spend,
+    total_spent,
+)
 
 
 def test_records_and_sums(tmp_path) -> None:
@@ -26,3 +35,12 @@ def test_budget_defaults_to_env(tmp_path, monkeypatch) -> None:
 
 def test_missing_ledger_totals_zero(tmp_path) -> None:
     assert total_spent(tmp_path / "none.jsonl") == 0.0
+
+
+def test_a_call_bound_prices_the_prompt_it_is_given_as_a_cache_write() -> None:
+    def worst(prompt: int) -> float | None:
+        usage = Usage(input_tokens=prompt, cache_write_tokens=prompt, output_tokens=4096)
+        return cost_usd("claude-haiku-4-5", usage)
+
+    assert call_bound_usd("claude-haiku-4-5", 4096) == worst(PROMPT_TOKENS_BOUND)  # single-shot
+    assert call_bound_usd("claude-haiku-4-5", 4096, prompt_tokens=200_000) == worst(200_000)

@@ -268,15 +268,66 @@ def test_the_chain_is_pinned_whatever_the_env_says(
     ]
 
 
+def test_the_session_prompt_bound_covers_the_measured_turn_3(settings: Settings) -> None:
+    # Turn 3 of the live re-run after the v3 complete-estimate fix sent 7,885 input tokens.
+    assert smoke_live_session.session_prompt_tokens(settings) > 7_885
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("MAX_HISTORY_CHARS", "500000"),
+        ("MAX_TRANSCRIPTION_CHARS", "60000"),
+        ("ATTACHMENT_MAX_CHARS", "60000"),
+        ("ATTACHMENT_MAX_FILES", "6"),
+        ("LLM_MAX_OUTPUT_TOKENS", "8192"),
+    ],
+)
+def test_the_session_prompt_bound_grows_with_each_setting(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+    larger = smoke_live_session.pinned_settings()
+    assert smoke_live_session.session_prompt_tokens(
+        larger
+    ) > smoke_live_session.session_prompt_tokens(settings)
+
+
 def test_the_guard_covers_every_turn_at_its_worst_case(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    haiku = call_bound_usd("claude-haiku-4-5", 4096)
-    # The dearer model of the chain may serve any turn.
+    prompt = smoke_live_session.session_prompt_tokens(settings)
+    haiku = call_bound_usd("claude-haiku-4-5", 4096, prompt_tokens=prompt)
+    # The dearer model of the chain may serve any turn, with a session-sized prompt.
     assert smoke_live_session.turn_bound_usd(settings) == pytest.approx(haiku)
+    assert haiku > call_bound_usd("claude-haiku-4-5", 4096)  # stricter than a single-shot call
     assert smoke_live_session.guard_usd(settings) == pytest.approx(3 * haiku)
-    assert smoke_live_session.guard_usd(settings) > smoke_live_session.ESTIMATE_USD
 
-    monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "16")
+    # Tiny limits: the brief's estimate is the floor.
+    for name, value in {
+        "LLM_MAX_OUTPUT_TOKENS": "16",
+        "MAX_TRANSCRIPTION_CHARS": "100",
+        "ATTACHMENT_MAX_CHARS": "100",
+        "ATTACHMENT_MAX_FILES": "1",
+        "MAX_HISTORY_CHARS": "100",
+    }.items():
+        monkeypatch.setenv(name, value)
     small = smoke_live_session.pinned_settings()
+    assert 3 * smoke_live_session.turn_bound_usd(small) < smoke_live_session.ESTIMATE_USD
     assert smoke_live_session.guard_usd(small) == smoke_live_session.ESTIMATE_USD
+
+
+async def test_the_script_checks_the_budget_for_every_turn_at_its_worst(
+    settings: Settings, ledger: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checked: list[float] = []
+
+    def ensure(estimated_usd: float, *, ledger: Path) -> float:
+        checked.append(estimated_usd)
+        raise BudgetExceeded("stop before any call")
+
+    monkeypatch.setattr(smoke_live_session, "ensure_budget", ensure)
+    with pytest.raises(BudgetExceeded):
+        await run(settings, fake_with(), ledger)
+    turn = smoke_live_session.turn_bound_usd(settings)
+    assert checked == [pytest.approx(max(smoke_live_session.ESTIMATE_USD, 3 * turn))]

@@ -14,7 +14,14 @@ from contextlib import aclosing
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.attachments.extractor import Attachment, AttachmentError, ExtractedAttachment
+from app.attachments.extractor import (
+    MAX_NAME_CHARS,
+    TRUNCATED,
+    Attachment,
+    AttachmentError,
+    ExtractedAttachment,
+    format_attachments,
+)
 from app.config import Settings
 from app.main import build_services
 from app.observability import configure_logging
@@ -25,7 +32,19 @@ from app.services.conversation import ConversationService
 from app.services.errors import LLMError
 from app.services.providers.base import LLMProvider
 from app.services.providers.factory import build_provider
-from scripts.live_budget import LEDGER, call_bound_usd, ensure_budget, record_spend
+from app.sessions import (
+    MAX_PROJECT_NAME_CHARS,
+    MAX_SCOPE_CHARS,
+    MAX_TECHNOLOGIES,
+    MAX_TECHNOLOGY_CHARS,
+)
+from scripts.live_budget import (
+    LEDGER,
+    PROMPT_TOKENS_BOUND,
+    call_bound_usd,
+    ensure_budget,
+    record_spend,
+)
 
 OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
@@ -75,10 +94,40 @@ def pinned_settings() -> Settings:
     )
 
 
+# Per attachment, besides its name: the blank line and "--- attachment: <name> ---" line before
+# its text, and the "[truncated]" marker a clipped text ends with.
+EMPTY_CLIPPED = ExtractedAttachment(filename="", kind="text", text=TRUNCATED, pages=None)
+ATTACHMENT_FRAME_CHARS = 2 + len(format_attachments([EMPTY_CLIPPED]))
+
+
+def session_prompt_tokens(settings: Settings) -> int:
+    """An upper bound on a session turn's prompt, at one token per character (stricter, never
+    looser): the single-shot bound (system prompt, schema, user template), a full metadata block,
+    the history window (its cap, or one pair over it: the latest pair always stays), and this
+    turn's transcript and attachments."""
+    metadata = (
+        MAX_PROJECT_NAME_CHARS + MAX_SCOPE_CHARS + MAX_TECHNOLOGIES * (MAX_TECHNOLOGY_CHARS + 2)
+    )
+    turn = (
+        settings.max_transcription_chars
+        + settings.attachment_max_chars
+        + settings.attachment_max_files * (MAX_NAME_CHARS + ATTACHMENT_FRAME_CHARS)
+    )
+    # A pair's compact answer is shorter than the JSON output it renders. Its user message's own
+    # template text (some 350 characters) fits the headroom of PROMPT_TOKENS_BOUND, which is about
+    # 1,300 tokens above the v3 prompt measured live (6,752 tokens with a 480-character transcript).
+    pair = turn + settings.llm_max_output_tokens
+    return PROMPT_TOKENS_BOUND + metadata + max(settings.max_history_chars, pair) + turn
+
+
 def turn_bound_usd(settings: Settings) -> float:
-    """A turn's worst case: the dearest model of the chain serves it. Recorded for a turn that
-    started but reported no cost."""
-    return max(call_bound_usd(model, settings.llm_max_output_tokens) for _, model in settings.chain)
+    """A turn's worst case: the dearest model of the chain serves it, with a session-sized prompt.
+    Recorded for a turn that started but reported no cost."""
+    prompt = session_prompt_tokens(settings)
+    return max(
+        call_bound_usd(model, settings.llm_max_output_tokens, prompt_tokens=prompt)
+        for _, model in settings.chain
+    )
 
 
 def guard_usd(settings: Settings) -> float:
