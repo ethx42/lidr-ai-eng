@@ -1,8 +1,10 @@
 """Live three-turn session check (`make smoke-live-session`, budget-guarded): one in-process
 session against the real provider chain, the second turn with a PDF attached. Prints what the
 session learned after each turn (the scope as its length only), never the transcripts or the
-attachment text. Exits 1 if a turn fails, the project name is not kept across turns, or Redsys
-(named only in the PDF) is missing from the technologies after turn 2."""
+attachment text. Exits 1 if a turn fails, the project name is not kept across turns, Redsys
+(named only in the PDF) is missing from the technologies after turn 2, or turn 3, which only adds
+an admin page, drops scope: fewer requirements than turn 2, or no requirement or task that still
+mentions Stripe (named only in turn 1)."""
 
 import asyncio
 import json
@@ -30,6 +32,7 @@ ANTHROPIC_MODEL = "claude-haiku-4-5"
 ESTIMATE_USD = 0.05
 PDF = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "attachments" / "spec.pdf"
 ATTACHMENT_ONLY_TECHNOLOGY = "Redsys"
+TURN_ONE_ONLY_FACT = "Stripe"
 
 
 @dataclass(frozen=True)
@@ -127,6 +130,15 @@ def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
     return f"{' | '.join(cells)}\n  metadata: {json.dumps(facts)}"
 
 
+def mentions(response: TurnResponse, fact: str) -> bool:
+    b = response.breakdown
+    texts = [
+        *(f"{r.statement} {r.evidence}" for r in b.requirements),
+        *(f"{t.name} {t.rationale}" for t in b.tasks),
+    ]
+    return any(fact.casefold() in text.casefold() for text in texts)
+
+
 def problems(responses: Sequence[TurnResponse]) -> list[str]:
     names = [response.project_metadata.project_name for response in responses]
     found = []
@@ -135,6 +147,14 @@ def problems(responses: Sequence[TurnResponse]) -> list[str]:
     after_pdf = responses[1].project_metadata.mentioned_technologies
     if not any(ATTACHMENT_ONLY_TECHNOLOGY.casefold() in t.casefold() for t in after_pdf):
         found.append(f"{ATTACHMENT_ONLY_TECHNOLOGY} missing from the technologies after turn 2")
+    # Turn 3 only adds an admin page: its answer must still be the whole project.
+    second, third = (r.grounding.requirements_total for r in responses[1:3])
+    if third < second:
+        found.append(f"turn 3 dropped scope (requirements {second} -> {third})")
+    if not mentions(responses[2], TURN_ONE_ONLY_FACT):
+        found.append(
+            f"turn 3 dropped turn 1's scope (no requirement or task mentions {TURN_ONE_ONLY_FACT})"
+        )
     return found
 
 

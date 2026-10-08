@@ -13,7 +13,7 @@ from app.services.pricing import cost_usd
 from app.services.providers.base import ChatMessage
 from scripts import smoke_live_session
 from scripts.live_budget import BudgetExceeded, call_bound_usd, record_spend, total_spent
-from tests.factories import breakdown
+from tests.factories import breakdown, task
 from tests.fakes import FakeProvider
 
 # What FakeProvider reports for every call.
@@ -129,6 +129,49 @@ async def test_fails_when_redsys_is_missing_after_the_turn_with_the_pdf(
     assert await run(settings, fake_with(*kept(*technologies)), ledger) == 1
     last = capsys.readouterr().out.splitlines()[-1]
     assert "FAIL: Redsys missing from the technologies after turn 2" in last
+
+
+ADMIN = ("R1", "Refund admin page", "an admin page to issue refunds")
+RESEND = ("R2", "Resend confirmation emails", "resend confirmation emails")
+
+
+@pytest.mark.parametrize(
+    ("third", "failure"),
+    [
+        (
+            breakdown(project_name="Lumen Checkout", technologies=[], requirements=[ADMIN]),
+            "FAIL: turn 3 dropped scope (requirements 2 -> 1)",
+        ),
+        (
+            breakdown(project_name="Lumen Checkout", technologies=[], requirements=[ADMIN, RESEND]),
+            "FAIL: turn 3 dropped turn 1's scope (no requirement or task mentions Stripe)",
+        ),
+    ],
+    ids=["fewer requirements", "turn 1 forgotten"],
+)
+async def test_fails_when_turn_3_estimates_only_its_own_message(
+    settings: Settings,
+    ledger: Path,
+    capsys: pytest.CaptureFixture[str],
+    third: EstimationBreakdown,
+    failure: str,
+) -> None:
+    first, second = kept(["Stripe"], ["Redsys"])
+    assert await run(settings, fake_with(first, second, third), ledger) == 1
+    assert failure in capsys.readouterr().out.splitlines()[-1]
+
+
+async def test_turn_1_scope_may_be_carried_by_a_task_alone(
+    settings: Settings, ledger: Path
+) -> None:
+    stripe_task = task("T1") | {"name": "Stripe card payments"}
+    third = breakdown(
+        project_name="Lumen Checkout",
+        technologies=[],
+        requirements=[ADMIN, RESEND],
+        tasks=[stripe_task, task("T2", basis=["R2"], phase="qa")],
+    )
+    assert await run(settings, fake_with(*kept(["Stripe"], ["Redsys"]), third), ledger) == 0
 
 
 async def test_redsys_matches_whatever_the_model_calls_it(settings: Settings, ledger: Path) -> None:

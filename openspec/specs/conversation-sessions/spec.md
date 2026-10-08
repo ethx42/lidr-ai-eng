@@ -101,7 +101,7 @@ The transcript's and the output language's line breaks SHALL be normalised to LF
 - **THEN** the response status is `413`
 
 ### Requirement: Conversation history
-Each session SHALL keep its history as a sliding window of turns, a turn being one user message and one assistant message. The window SHALL keep the last `MAX_TURNS` pairs and SHALL then drop the oldest pairs while the window holds more than `MAX_HISTORY_CHARS` characters, never dropping the latest pair, however large. A pair SHALL count the longer of its user message and its raw client text (see `Grounding in a conversation`) plus its assistant message, so the cap bounds both what the model is sent and what the session holds. The user message kept SHALL be the rendered user message of the turn (transcript and attachments); the assistant message kept SHALL be a compact rendering of the answer, one line per fact: project name, summary, each task with its phase and likely hours, totals with the team size, and open questions. `to_messages_list(system)` SHALL return the system message first, then the pairs oldest first; a turn SHALL send the provider its system prompt, the window, and the new user message.
+Each session SHALL keep its history as a sliding window of turns, a turn being one user message and one assistant message. The window SHALL keep the last `MAX_TURNS` pairs and SHALL then drop the oldest pairs while the window holds more than `MAX_HISTORY_CHARS` characters, never dropping the latest pair, however large. A pair SHALL count the longer of its user message and its raw client text (see `Grounding in a conversation`) plus its assistant message, so the cap bounds both what the model is sent and what the session holds. The user message kept SHALL be the rendered user message of the turn (transcript and attachments); the assistant message kept SHALL be a compact rendering of the answer, one line per fact: project name, summary, each requirement with its id, statement and evidence quote (each cut to a bound, so later turns can carry the ids and quotes forward), each task with its phase and likely hours, totals with the team size, and open questions. `to_messages_list(system)` SHALL return the system message first, then the pairs oldest first; a turn SHALL send the provider its system prompt, the window, and the new user message.
 
 #### Scenario: Window bounded by turns
 - **WHEN** a session with `MAX_TURNS=6` completes eight turns
@@ -114,6 +114,10 @@ Each session SHALL keep its history as a sliding window of turns, a turn being o
 #### Scenario: System message first
 - **WHEN** `to_messages_list(system)` is called on a window of two pairs
 - **THEN** it returns the system message, then user, assistant, user, assistant in turn order
+
+#### Scenario: Earlier requirements carried forward
+- **WHEN** a turn's answer has a requirement whose statement or quote spans several lines
+- **THEN** its compact assistant message has one line for it, with its id, statement and quote, each within its bound
 
 ### Requirement: Project metadata
 Each session SHALL keep `project_metadata` with `project_name`, `assumed_team_size`, `mentioned_technologies`, and `agreed_scope`, derived in code from each turn's structured output (no pattern matching over text and no second LLM call) and merged after every turn:
