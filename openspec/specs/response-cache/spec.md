@@ -50,7 +50,7 @@ The cache key SHALL be a SHA-256 over canonical JSON of: a cache schema version,
 - **THEN** the cache key changes
 
 ### Requirement: Conversation turns bypass the cache
-Session turns, blocking or streamed, SHALL never read or write the response cache, whatever their content, because the same message means something else in another conversation, and the stored response would carry another session's history and metadata. Their `llm_call` records SHALL report cache status `bypass` (see `conversation-sessions`).
+Session turns, blocking or streamed, SHALL never read or write the response cache, whatever their content, because the same message means something else in another conversation, and the stored response would carry another session's history and metadata. Their `llm_call` records SHALL report cache status `bypass`. Sessions are specified in `conversation-sessions`.
 
 #### Scenario: Session turn with the cache configured
 - **WHEN** `REDIS_URL` is set and a session turn is estimated twice with the same transcript in two sessions

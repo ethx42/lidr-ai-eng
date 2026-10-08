@@ -35,7 +35,7 @@ The system SHALL expose `POST /sessions/{session_id}/estimate`, accepting a `mul
 - `output_language` (optional): at most 40 characters after stripping; an empty value means not given
 - `attachments` (optional, repeatable): up to `ATTACHMENT_MAX_FILES` files (see `Attachments`); file inputs without a name or without content are ignored
 
-It SHALL respond `200` with the single-shot response body (see `estimation-api`) plus `session_id`, `project_metadata` (the merged facts after this turn), `metadata_changes` (the names of the metadata fields this turn changed, in field order), and `history_turns` (the pairs in the window after this turn). Its `prompt_version` SHALL be the session's version (see `Session prompt version`). The endpoint SHALL have no `prompt_version` or `refresh` parameter: a turn's version and its cache behaviour are fixed.
+It SHALL respond `200` with the single-shot response body (see `estimation-api`) plus `session_id`, `project_metadata` (the merged facts after this turn), `metadata_changes` (the names of the metadata fields this turn changed, in field order), and `history_turns` (the pairs in the window after this turn). Its `prompt_version` SHALL be the session's version (see `Session prompt version`). The endpoint SHALL have no `prompt_version` or `refresh` parameter: a turn's version and its cache behaviour are fixed, and turns never use the response cache (see `Conversation turns bypass the cache` in `response-cache`).
 
 #### Scenario: Two turns build on each other
 - **WHEN** a session's first turn returns technologies `["Stripe"]` and its second returns `["Twilio"]` for the same project name
@@ -75,7 +75,7 @@ The system SHALL check every turn before calling any LLM provider, answering fai
 | Missing or invalid field, blank transcript, or a transcript longer than `MAX_TRANSCRIPTION_CHARS` (the single-shot limit) | 422 | `invalid_request` |
 | An attachment that is unsupported, unreadable, password-protected, larger than `ATTACHMENT_MAX_BYTES`, over the page budget, without extractable text, too slow to read, or one more than `ATTACHMENT_MAX_FILES` | 422 | `invalid_attachment`, with a message naming the sanitised file |
 | No free attachment reader within `ATTACHMENT_TIMEOUT_SECONDS` | 503 | `attachments_busy` |
-| A body larger than `ATTACHMENT_MAX_FILES` × `ATTACHMENT_MAX_BYTES` + 1 MiB | 413 | none: a plain-text body (see `Request body limit` in `estimation-api`) |
+| A body larger than `ATTACHMENT_MAX_FILES` × `ATTACHMENT_MAX_BYTES` + 1 MiB | 413 | none: not the API's error shape (see `Request body limit` in `estimation-api`) |
 
 The transcript length, the attachment count and each attachment's size SHALL be checked before any attachment is parsed. The busy check SHALL run again after extraction, since extraction can take seconds. Provider failures SHALL follow the single-shot mapping. The API contract SHALL document each of these responses for both turn endpoints.
 
@@ -228,10 +228,3 @@ Session turns SHALL be rendered with `estimation/v3`, the conversation service's
 - **WHEN** the service runs with `PROMPT_VERSION=v2` and a session completes a turn
 - **THEN** the turn's prompt is rendered from `v3` and its response reports `prompt_version` `v3`
 - **AND** a single-shot request without `prompt_version` is still rendered from `v2`
-
-### Requirement: Turns bypass the response cache
-Session turns SHALL never read or write the response cache, since the same message means something else in another conversation; each turn's `llm_call` record SHALL report cache status `bypass` (see `response-cache`).
-
-#### Scenario: Repeated turn reaches the provider
-- **WHEN** two sessions send the same first turn with a response cache configured
-- **THEN** the provider is called for both, the cache is neither read nor written, and both `llm_call` records report cache status `bypass`
