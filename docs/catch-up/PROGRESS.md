@@ -43,7 +43,7 @@ Spend ledger: `docs/catch-up/spend.jsonl` (budget US$5). Spent so far: US$0.1283
 - [x] Task 8: E2E, accessibility and media (207e3d9, 8b79b92, 8e5b6e0, 31874f6, c7381f6)
 - [x] Task 9: Branch close-out (104e9a2, 4b00916, 7ab7829, 914c43a)
 - [x] Review panel findings resolved (12 found, 11 confirmed, 1 refuted; 9 fixed: AI 867fcca, 4a0280e, 914c43a; web 7dcc9a2..108ccc3 merged in a225dbe; 2 deferred into S5 Task 5: ai-1, ai-2)
-- Gate:
+- Gate: GATE PASS pre-session-04 9b9fa484d47bbcd7187069a4fd55f452d1bcaa56 (2026-10-08; recorded on pre-session-05 so the gated commit stays untouched)
 
 ## pre-session-05
 
