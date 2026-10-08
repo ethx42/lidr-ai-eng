@@ -1,7 +1,7 @@
 // A turn's attachments, checked in the browser and again in the BFF before the upload goes on. These are the AI
 // service's defaults (`ATTACHMENT_MAX_FILES`, `ATTACHMENT_MAX_BYTES` in app/config.py): the dropzone uses the configured
-// values GET /api/context reports once it has loaded, these until then; the BFF keeps these as its outer limit. The
-// service still detects each file's type by its content and enforces its own settings.
+// values GET /api/context reports once it has loaded, never above these, and these until then; the BFF keeps these as its
+// outer limit. The service still detects each file's type by its content and enforces its own settings.
 export const MAX_ATTACHMENTS = 5;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // The service's body cap: every attachment at its limit plus 1 MiB for the form fields.
@@ -17,5 +17,6 @@ const size = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 export const formatBytes = (bytes: number) =>
   bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${size.format(bytes / 1024)} KB` : `${size.format(bytes / (1024 * 1024))} MB`;
 
-// A configured limit from the service context (unchecked wire data), or the default.
-export const limitOr = (value: unknown, fallback: number) => (Number.isInteger(value) && Number(value) > 0 ? Number(value) : fallback);
+// A configured limit from the service context (unchecked wire data), capped at the BFF's: a raised setting must not
+// offer files the BFF refuses. The BFF's limit when the value is unreadable.
+export const limitWithin = (value: unknown, cap: number) => (Number.isInteger(value) && Number(value) > 0 ? Math.min(Number(value), cap) : cap);

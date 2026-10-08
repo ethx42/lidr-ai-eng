@@ -668,6 +668,16 @@ describe("Workspace", () => {
       expect(screen.getByText("big.txt is too large: each file can be up to 1 KB.")).toBeInTheDocument();
     });
 
+    it("caps a raised service limit at the BFF's, so it never offers files the BFF refuses", async () => {
+      serviceContext = Promise.resolve(Response.json({ ...context, max_attachments: 8, max_attachment_bytes: 20 * 1024 * 1024 }));
+      const { user } = setup();
+      await loaded();
+      expect(screen.getByText("PDF, DOCX or TXT, up to 5 files of 10 MB each")).toBeInTheDocument();
+      await attach(user, ...["a", "b", "c", "d", "e", "f"].map((name) => pdf(`${name}.pdf`)));
+      expect(within(screen.getByRole("list", { name: "Attached documents" })).getAllByRole("listitem")).toHaveLength(5);
+      expect(screen.getByText("f.pdf was not added: up to 5 files per message.")).toBeInTheDocument();
+    });
+
     it("counts the transcript against 50,000 characters until the service context loads, then against its limit", async () => {
       let load!: (res: Response) => void;
       serviceContext = new Promise((resolve) => (load = resolve));
