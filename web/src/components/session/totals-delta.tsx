@@ -5,7 +5,8 @@ import { formatHours, formatUsd } from "@/lib/estimate/format";
 type Totals = components["schemas"]["Totals"];
 // What the comparison reads; a full `Totals` fits.
 export type Sums = Pick<Totals, "expected_hours"> & Partial<Pick<Totals, "estimated_cost">>;
-export type TotalsDelta = { expectedHours: number; costUsd?: number };
+// `since`: the turn compared with, when it is not the one just before (a stopped or failed turn sits between).
+export type TotalsDelta = { expectedHours: number; costUsd?: number; since?: number };
 
 // Hours carry one decimal (PERT halves) and costs whole dollars; rounding drops float noise such as 0.30000000000000004.
 const round = (value: number, digits: number) => Math.round(value * 10 ** digits) / 10 ** digits;
@@ -20,10 +21,12 @@ export const computeTotalsDelta = (prev: Sums | null, next: Sums): TotalsDelta |
 
 const signed = (value: number, format: (value: number) => string) => `${value < 0 ? "−" : "+"}${format(Math.abs(value))}`;
 
-export const describeDelta = ({ expectedHours, costUsd }: TotalsDelta) =>
-  expectedHours === 0
-    ? "No change in hours vs previous turn"
-    : `${[signed(expectedHours, formatHours), costUsd !== undefined && signed(costUsd, formatUsd)].filter(Boolean).join(", ")} vs previous turn`;
+export const describeDelta = ({ expectedHours, costUsd, since }: TotalsDelta) => {
+  const against = since ? `vs turn ${since}` : "vs previous turn";
+  return expectedHours === 0
+    ? `No change in hours ${against}`
+    : `${[signed(expectedHours, formatHours), costUsd !== undefined && signed(costUsd, formatUsd)].filter(Boolean).join(", ")} ${against}`;
+};
 
 // "+30 h vs previous turn": what changed, at a glance, on the turn that changed it.
 export const TotalsDeltaBadge = ({ delta }: { delta: TotalsDelta }) => (

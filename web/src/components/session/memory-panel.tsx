@@ -7,6 +7,7 @@ type Field = keyof components["schemas"]["ProjectMetadata"];
 type Props = {
   metadata?: unknown; // the session's facts, unchecked wire data; undefined until the session is known
   changed?: readonly string[]; // the fields the latest completed turn changed (`metadata_changes`)
+  turn?: number; // that turn's number
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -16,14 +17,14 @@ const texts = (value: unknown) => (Array.isArray(value) ? value.map(text).filter
 
 const Unknown = () => <span className="text-muted-foreground">Not mentioned yet</span>;
 
-// The badge sits in the term, so it is read with the fact's name ("Technologies Updated").
-const Fact = ({ label, updated, children }: { label: string; updated: boolean; children: ReactNode }) => (
+// The badge sits in the term, so it is read with the fact's name ("Technologies Updated in turn 2").
+const Fact = ({ label, updated, children }: { label: string; updated?: string; children: ReactNode }) => (
   <div className="flex flex-col gap-1">
     <dt className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
       <span>{label}</span>
       {updated && (
         <Badge variant="outline" className="font-normal text-foreground">
-          Updated
+          {updated}
         </Badge>
       )}
     </dt>
@@ -43,11 +44,12 @@ const Loading = () => (
 );
 
 // What the session remembers apart from the history (spec §7.3): the four facts the AI service merges after each turn
-// and sends with every prompt. A fact the latest turn changed carries a subtle "Updated" badge.
+// and sends with every prompt. A fact the latest completed turn changed carries a subtle badge that names the turn, so
+// it stays true while a newer turn streams, or after one stopped or failed.
 // The page's column is the landmark ("Project memory"), so the panel is a plain block under its heading.
-export const MemoryPanel = ({ metadata, changed = [] }: Props) => {
+export const MemoryPanel = ({ metadata, changed = [], turn }: Props) => {
   const facts = isObject(metadata) ? metadata : {};
-  const updated = (field: Field) => changed.includes(field);
+  const updated = (field: Field) => (changed.includes(field) ? (turn ? `Updated in turn ${turn}` : "Updated") : undefined);
   const name = text(facts.project_name);
   const team = count(facts.assumed_team_size);
   const technologies = texts(facts.mentioned_technologies);

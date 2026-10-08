@@ -48,6 +48,7 @@ const UNSENT = "your unsent message";
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const count = (value: unknown) => (Number.isInteger(value) && Number(value) >= 0 ? Number(value) : undefined);
 const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item) => typeof item === "string") : []);
+const isDone = (state: StreamState): state is Done => state.status === "done";
 
 // A completed turn's totals, when readable: the result is unchecked wire data.
 const sumsOf = (state: StreamState): Sums | null => {
@@ -136,7 +137,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const latest = turns.at(-1);
   const shown = turns.map((turn) => turn.settled ?? state);
   const sums = shown.map(sumsOf);
-  const lastDone = shown.findLast((turnState): turnState is Done => turnState.status === "done");
+  const lastDone = shown.findLast(isDone);
   const answer: unknown = lastDone?.result;
   const result = isObject(answer) ? answer : {};
   // The memory and the meter follow the latest completed turn's answer, else the session's view.
@@ -145,6 +146,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const noSession = failed && !view;
   // The view is loaded with the session and not after each turn, so its count is the turns held before this page's.
   const earlier = view?.history_turns ?? 0;
+  const lastDoneNumber = earlier + shown.findLastIndex(isDone) + 1;
   // `current()` rather than the rendered state: a result that arrived but is not rendered yet already ended the turn.
   const answering = () => Boolean(latest && !latest.settled && current().status === "streaming");
 
@@ -245,7 +247,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
           className="flex flex-col gap-6 border-b bg-surface px-4 py-6 sm:px-6 lg:sticky lg:top-12 lg:order-last lg:h-[calc(100dvh-3rem)] lg:w-80 lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-l xl:w-96"
         >
           {noSession && <SessionError onRetry={() => void session.refresh()} />}
-          <MemoryPanel metadata={noSession ? null : metadata} changed={lastDone ? strings(result.metadata_changes) : []} />
+          <MemoryPanel metadata={noSession ? null : metadata} changed={lastDone ? strings(result.metadata_changes) : []} turn={lastDoneNumber} />
           {!noSession && <ContextMeter turns={history} max={view?.max_turns} />}
         </aside>
         {/* `relative` contains sr-only descendants, so they never extend the page's scroll. */}
@@ -259,6 +261,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                   const isLatest = turn === latest;
                   const turnState = shown[i];
                   const own = sums[i];
+                  // The previous completed turn, named when a stopped or failed turn sits between.
+                  const before = sums.findLastIndex((other, j) => j < i && other !== null);
+                  const delta = own && computeTotalsDelta(sums[before] ?? null, own);
                   return (
                     <TurnCard
                       key={turn.id}
@@ -267,7 +272,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                       input={turn.input}
                       state={turnState}
                       attempt={turn.attempt}
-                      delta={own && computeTotalsDelta(sums.slice(0, i).findLast((earlier) => earlier !== null) ?? null, own)}
+                      delta={delta && (before === i - 1 ? delta : { ...delta, since: earlier + before + 1 })}
                       onStop={stop}
                       onRetry={isLatest && (turnState.status === "cancelled" || turnState.status === "error") ? () => retry(turn) : undefined}
                       onEdit={() => restore(turn.input, editing(turnState))}

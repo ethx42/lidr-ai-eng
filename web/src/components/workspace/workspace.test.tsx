@@ -263,7 +263,7 @@ describe("Workspace", () => {
       await finish(0);
       expect(fact("Project name")).toHaveTextContent("Physiotherapy patient portal");
       expect(fact("Technologies")).toHaveTextContent("ClinicCloud");
-      expect(within(memory()).getAllByText("Updated")).toHaveLength(4);
+      expect(within(memory()).getAllByText("Updated in turn 1")).toHaveLength(4);
       expect(screen.getByText("History 1 / 6 turns")).toBeInTheDocument();
       expect(within(turn(1)).queryByText(/vs previous turn/)).not.toBeInTheDocument(); // nothing to compare the first turn with
 
@@ -271,10 +271,26 @@ describe("Workspace", () => {
       const bigger = { ...fullEstimate, totals: { ...fullEstimate.totals, expected_hours: 125, estimated_cost: 7500 } };
       await finish(1, turnResult({ breakdown: bigger, project_metadata: { ...MEMORY, mentioned_technologies: ["ClinicCloud", "Redsys"] }, metadata_changes: ["mentioned_technologies"], history_turns: 2 }));
       expect(fact("Technologies")).toHaveTextContent("ClinicCloudRedsys");
-      expect(within(memory()).getAllByText("Updated")).toHaveLength(1);
-      expect(within(fact("Technologies").previousElementSibling as HTMLElement).getByText("Updated")).toBeInTheDocument();
+      expect(within(memory()).getAllByText(/^Updated/)).toHaveLength(1);
+      expect(within(fact("Technologies").previousElementSibling as HTMLElement).getByText("Updated in turn 2")).toBeInTheDocument();
       expect(screen.getByText("History 2 / 6 turns")).toBeInTheDocument();
       expect(within(turn(2)).getByText("+30 h, +$1,800 vs previous turn")).toBeInTheDocument();
+    });
+
+    // A stopped or failed turn has no totals and changes no memory: what is compared, and what changed, names its turn.
+    it("names the turn behind the memory's marks and the totals' change when a stopped turn sits between", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      await run(user, input, "Second call");
+      await user.click(within(turn(2)).getByRole("button", { name: "Stop" }));
+      await run(user, input, "Third call");
+      expect(within(memory()).getAllByText("Updated in turn 1")).toHaveLength(4); // while turn 3 streams
+      const bigger = { ...fullEstimate, totals: { ...fullEstimate.totals, expected_hours: 125, estimated_cost: 7500 } };
+      await finish(2, turnResult({ breakdown: bigger, metadata_changes: ["agreed_scope"], history_turns: 2 }));
+      expect(within(turn(3)).getByText("+30 h, +$1,800 vs turn 1")).toBeInTheDocument();
+      expect(within(fact("Agreed scope").previousElementSibling as HTMLElement).getByText("Updated in turn 3")).toBeInTheDocument();
+      expect(within(memory()).getAllByText(/^Updated/)).toHaveLength(1);
     });
 
     // Heading navigation reads the conversation turn by turn: each turn's label is its h2, and its estimate sits below it.

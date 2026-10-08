@@ -296,7 +296,7 @@ test.describe("session", () => {
     // The memory holds the first answer's facts, each marked as updated; the meter counts one turn.
     await expect(fact(page, "Project name")).toHaveText(FREIGHT.name);
     await expectTechnologies(page, FREIGHT.technologies);
-    for (const label of ["Project name", "Team size", "Technologies", "Agreed scope"]) await expect(factTerm(page, label)).toContainText("Updated");
+    for (const label of ["Project name", "Team size", "Technologies", "Agreed scope"]) await expect(factTerm(page, label)).toContainText("Updated in turn 1");
     await expectMeter(page, 1);
 
     // Hovering a grounded requirement highlights its quote in the turn's transcript; so does reaching it with Tab.
@@ -358,7 +358,7 @@ test.describe("session", () => {
     await expect(two.getByText(/ vs previous turn$/)).toBeVisible();
     // Technologies merge: the new answer's are added to the known ones, and the fact is marked as updated.
     await expectTechnologies(page, [...FREIGHT.technologies, ...DENTAL.technologies]);
-    await expect(factTerm(page, "Technologies")).toContainText("Updated");
+    await expect(factTerm(page, "Technologies")).toContainText("Updated in turn 2");
     await expectMeter(page, 2);
     await two.scrollIntoViewIfNeeded();
     await shot(page, "turn-with-attachment");
@@ -371,7 +371,7 @@ test.describe("session", () => {
     await expect(projectName(three)).toHaveText(FREIGHT.name);
     await expectMeter(page, 3);
     await expect(fact(page, "Project name")).toHaveText(FREIGHT.name);
-    await expect(factTerm(page, "Project name")).toContainText("Updated");
+    await expect(factTerm(page, "Project name")).toContainText("Updated in turn 3");
     await expectTechnologies(page, [...FREIGHT.technologies, ...DENTAL.technologies]);
     await expect(factTerm(page, "Technologies")).not.toContainText("Updated"); // nothing new to add
     await expect(flagged(three)).toHaveCount(0);
