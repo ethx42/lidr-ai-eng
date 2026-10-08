@@ -113,7 +113,8 @@ const memory = (page: Page) => page.getByRole("complementary", { name: "Project 
 const thread = (page: Page) => page.getByRole("list", { name: "Conversation" });
 const turn = (page: Page, n: number) => thread(page).getByRole("listitem", { name: `Turn ${n}`, exact: true });
 const estimate = (scope: Locator) => scope.getByRole("article");
-const projectName = (scope: Locator) => estimate(scope).getByRole("heading", { level: 2 });
+// Inside a turn, whose "Turn n" label is the h2, the estimate's title is an h3.
+const projectName = (scope: Locator) => estimate(scope).getByRole("heading", { level: 3 });
 const totals = (scope: Locator) => estimate(scope).locator("header dl");
 const turnTranscript = (page: Page, n: number) => page.getByRole("region", { name: `Transcript of turn ${n}`, exact: true });
 const stopped = (page: Page) => page.getByRole("status").filter({ hasText: /^Stopped/ });
@@ -189,7 +190,7 @@ const expectPartial = (page: Page) =>
       () =>
         page.evaluate(() => {
           const article = document.querySelector("article[aria-busy=true]");
-          return Boolean(article?.querySelector("h2:not(.sr-only)")?.textContent && article.querySelector("header dl [data-slot=skeleton]"));
+          return Boolean(article?.querySelector("h3:not(.sr-only)")?.textContent && article.querySelector("header dl [data-slot=skeleton]"));
         }),
       { message: "partial render: project name streamed in, totals still skeletons" },
     )
@@ -466,7 +467,7 @@ test.describe("session", () => {
       const document = scope.getByRole("radiogroup", { name: "Result view" }).getByRole("radio", { name: "Document" });
       await document.click();
       await expect(document).toBeChecked();
-      await expect(scope.getByRole("heading", { level: 2, name: /^Estimation: / })).toBeVisible();
+      await expect(scope.getByRole("heading", { level: 3, name: /^Estimation: / })).toBeVisible(); // one level below "Turn n"
     };
     await showDocument(one);
     // The table's region is named by the server's heading above it.

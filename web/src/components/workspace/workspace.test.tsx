@@ -277,6 +277,30 @@ describe("Workspace", () => {
       expect(within(turn(2)).getByText("+30 h, +$1,800 vs previous turn")).toBeInTheDocument();
     });
 
+    // Heading navigation reads the conversation turn by turn: each turn's label is its h2, and its estimate sits below it.
+    it("gives each turn a heading, with the estimate's title and sections, structured or as a document, one level below", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0, turnResult({ estimation: "## Estimation: Booking\n\n### Task breakdown\n\nThree tasks.\n" }));
+      const card = turn(1);
+      expect(within(card).getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["Turn 1"]);
+      expect(within(card).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([fullEstimate.project_name]);
+      expect(within(card).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)).toEqual([
+        "Summary",
+        "Requirements",
+        "Assumptions",
+        "Open questions",
+        "Tasks",
+        "Team",
+        "Risks",
+        "Confidence",
+      ]);
+
+      await user.click(within(card).getByRole("radio", { name: "Document" }));
+      expect(within(card).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Estimation: Booking"]);
+      expect(within(card).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)).toEqual(["Task breakdown"]);
+    });
+
     // S5-R3: re-running a completed turn would fork the history.
     it("offers no Regenerate on a completed turn; a stopped turn offers Retry and resubmits the same transcript, choices and files", async () => {
       const { user, input } = setup();

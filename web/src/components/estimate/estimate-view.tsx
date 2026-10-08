@@ -49,7 +49,8 @@ const Assumptions = ({ items, streaming }: { items?: EstimateModel["assumptions"
   );
 };
 
-// Renders any snapshot: every value is read through a guard, and whatever is missing shows as a skeleton.
+// Renders any snapshot: every value is read through a guard, and whatever is missing shows as a skeleton. It sits in a
+// conversation turn, whose label is the h2: the title is an h3 and the sections are h4.
 // While streaming the article is `aria-busy` and nothing inside it is live; one polite region announces completion.
 export const EstimateView = ({ data, grounding, streaming, completed = false, activeRequirement, onRequirementFocus, pinFor, evidenceNote }: Props) => {
   const estimate = readEstimate(data);
@@ -59,10 +60,10 @@ export const EstimateView = ({ data, grounding, streaming, completed = false, ac
     <article aria-busy={streaming} className="group/estimate flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-3">
         {estimate.project_name ? (
-          <h2 className="text-2xl font-semibold text-balance">{estimate.project_name}</h2>
+          <h3 className="text-2xl font-semibold text-balance">{estimate.project_name}</h3>
         ) : (
           <>
-            <h2 className="sr-only">Estimate</h2>
+            <h3 className="sr-only">Estimate</h3>
             <Pending className="h-8 w-64 max-w-full" />
           </>
         )}

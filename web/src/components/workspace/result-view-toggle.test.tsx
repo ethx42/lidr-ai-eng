@@ -46,7 +46,7 @@ describe("EstimateDocument", () => {
 
   it("names each table's region by the heading above it", () => {
     render(<EstimateDocument markdown={"### Phases\n\n| Phase | Tasks |\n|---|---:|\n| backend | 3 |\n\n### Line items\n\n| ID | Task |\n|---|---|\n| T1 | API |\n"} />);
-    const headings = screen.getAllByRole("heading", { level: 3 });
+    const headings = screen.getAllByRole("heading", { level: 4 }); // "###", one level down inside a turn
     const regions = screen.getAllByRole("region");
     expect(regions.map((region) => region.getAttribute("aria-labelledby"))).toEqual(headings.map((heading) => heading.id));
     expect(screen.getByRole("region", { name: "Phases" })).toContainElement(screen.getByRole("cell", { name: "backend" }));
@@ -66,7 +66,7 @@ describe("EstimateDocument", () => {
       },
     );
     render(<EstimateDocument markdown={"## Estimation: Portal\n\n### Task breakdown\n\n| ID | Task | Expected |\n|---|---|---:|\n| T1 | API | 12.0 |\n"} />);
-    expect(screen.getByRole("heading", { level: 2, name: "Estimation: Portal" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Estimation: Portal" })).toBeInTheDocument(); // "##", below the turn's h2
     const region = screen.getByRole("region", { name: "Task breakdown" });
     expect(within(region).getByRole("cell", { name: "12.0" })).toHaveStyle({ textAlign: "right" });
     // jsdom has no layout: the region is 400 px wide and its table `scrollWidth`

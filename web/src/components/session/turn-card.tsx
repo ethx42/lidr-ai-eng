@@ -97,10 +97,11 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
   return (
     <li ref={ref} aria-labelledby={labelId} className="scroll-mt-16 rounded-lg border bg-card">
       <div className="flex flex-col gap-2 rounded-t-lg border-b bg-surface px-4 py-3 sm:px-6">
-        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span id={labelId} className="text-sm font-semibold">{`Turn ${number}`}</span>
+        {/* The turn's heading (its estimate's headings sit one level below), so heading navigation reads turn by turn. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id={labelId} className="text-sm font-semibold">{`Turn ${number}`}</h2>
           <span className="text-xs text-muted-foreground">{describe(input.body)}</span>
-        </p>
+        </div>
         {input.files.length > 0 && (
           <ul role="list" aria-label="Attachments" className="flex flex-wrap gap-2">
             {input.files.map((file, i) => (
