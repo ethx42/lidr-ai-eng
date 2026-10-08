@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleAlert, MessageSquarePlus, RotateCcw } from "lucide-react";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/app-header";
@@ -39,8 +39,10 @@ import { limitWithin, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS } from "@/lib/sessio
 type Done = Extract<StreamState, { status: "done" }>;
 // `settled`: how the turn ended, kept once a newer turn owns the stream; the latest turn shows the stream's live state.
 type Turn = { id: number; input: TurnInput; attempt: number; settled?: StreamState };
-// The turns this page sent in one session: a new session (New conversation, or an expired one replaced) starts empty.
-type Thread = { sessionId: string | null; turns: Turn[] };
+// The turns this page sent in one session; a new session starts with none. `expired`: the turns of sessions that expired
+// under this page (idle too long, or the AI service restarted), numbered from `first` and shown read-only until New
+// conversation, since the user never asked to discard those answers.
+type Thread = { sessionId: string | null; turns: Turn[]; expired: { first: number; turns: Turn[] }[] };
 
 const BUSY = "This conversation is still answering the previous turn";
 const UNSENT = "your unsent message";
@@ -90,6 +92,14 @@ const NoTurnYet = ({ earlier }: { earlier: number }) => (
   </Empty>
 );
 
+// Below the turns of a conversation that expired; the toast that said so is gone in seconds.
+const ExpiredNote = () => (
+  <div className="flex flex-col gap-1 border-t pt-4">
+    <h2 className="text-sm font-semibold">This conversation expired</h2>
+    <p className="text-sm text-muted-foreground">The answers above are kept for reference. The new conversation starts without their history and memory.</p>
+  </div>
+);
+
 // No live region: the failure is shown where the memory would be, and Retry is the way on (spec §8, recoverable errors).
 const SessionError = ({ onRetry }: { onRetry: () => void }) => (
   <Alert role={undefined} className="border-destructive/40 bg-danger-subtle">
@@ -114,9 +124,10 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const session = useSession();
   const { sessionId, view, failed } = session;
   const { state, start, stop, current } = useEstimateStream();
-  const [thread, setThread] = useState<Thread>({ sessionId: null, turns: [] });
-  if (thread.sessionId !== sessionId) setThread({ sessionId, turns: [] }); // a new session starts an empty thread
+  const [thread, setThread] = useState<Thread>({ sessionId: null, turns: [], expired: [] });
+  if (thread.sessionId !== sessionId) setThread({ ...thread, sessionId, turns: [] }); // a new session starts with no turns
   const turns = thread.sessionId === sessionId ? thread.turns : [];
+  const { expired } = thread;
   const [files, setFiles] = useState<File[]>([]);
   // The AI service's reason for a file it rejected, shown in the composer while the files put back are attached.
   const [rejection, setRejection] = useState<{ files: File[]; reason: string } | null>(null);
@@ -135,7 +146,6 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
 
   const latest = turns.at(-1);
   const shown = turns.map((turn) => turn.settled ?? state);
-  const sums = shown.map(sumsOf);
   const lastDone = shown.findLast(isDone);
   const answer: unknown = lastDone?.result;
   const result = isObject(answer) ? answer : {};
@@ -168,8 +178,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   };
 
   // How a turn's stream ended. A turn the session refused never happened: 409 (another turn holds the session) takes it
-  // out of the thread, and 404 (the session expired or was evicted) starts a new conversation; either way its message
-  // goes back to the composer. A result is the session's new state: the memory and the meter read it.
+  // out of the thread, and 404 (the session expired or was evicted) starts a new conversation, below the turns already
+  // shown; either way its message goes back to the composer. A result is the session's new state: the memory and the
+  // meter read it.
   const ended = (turnId: number, input: TurnInput, end: StreamState) => {
     if (end.status !== "error") return;
     if (end.error.code === "session_busy") {
@@ -178,6 +189,10 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
       toast(BUSY);
     }
     if (end.error.code === "session_not_found") {
+      setThread((current) => {
+        const kept = current.turns.filter((turn) => turn.id !== turnId);
+        return { ...current, turns: [], expired: kept.length ? [...current.expired, { first: earlier + 1, turns: kept }] : current.expired };
+      });
       restore(input, UNSENT);
       toast("This conversation expired, so a new one was started. Your message is back in the composer.");
       void session.reset();
@@ -220,6 +235,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
 
   const startOver = () => {
     stop();
+    setThread((current) => ({ ...current, expired: [] }));
     void session.reset().then(() => toast("Started a new conversation."));
   };
   // Managed focus after a new conversation starts: with a mouse the transcript, for the new conversation's first turn;
@@ -234,6 +250,35 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
     }
     startOver();
     focusAfterStart();
+  };
+
+  // One conversation's turns, numbered from `first`. Only the current one's latest turn streams or runs again (a turn of
+  // an expired conversation is never the latest).
+  const turnCards = (list: Turn[], first: number) => {
+    const sums = list.map((turn) => sumsOf(turn.settled ?? state));
+    return list.map((turn, i) => {
+      const isLatest = turn === latest;
+      const turnState = turn.settled ?? state;
+      const own = sums[i];
+      // The previous completed turn, named when a stopped or failed turn sits between.
+      const before = sums.findLastIndex((other, j) => j < i && other !== null);
+      const delta = own && computeTotalsDelta(sums[before] ?? null, own);
+      return (
+        <TurnCard
+          key={turn.id}
+          ref={isLatest ? latestRef : undefined}
+          number={first + i}
+          input={turn.input}
+          state={turnState}
+          attempt={turn.attempt}
+          delta={delta && (before === i - 1 ? delta : { ...delta, since: first + before })}
+          onStop={stop}
+          onRetry={isLatest && (turnState.status === "cancelled" || turnState.status === "error") ? () => retry(turn) : undefined}
+          onEdit={() => edit(turn.input, turnState)}
+          stopRef={isLatest ? stopRef : undefined}
+        />
+      );
+    });
   };
 
   return (
@@ -263,35 +308,21 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
         </aside>
         {/* `relative` contains sr-only descendants, so they never extend the page's scroll. */}
         <main className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex-1 px-4 py-6 sm:px-6">
-            {turns.length === 0 ? (
-              <NoTurnYet earlier={earlier} />
-            ) : (
+          <div className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
+            {expired.map(({ first, turns: kept }) => (
+              <Fragment key={kept[0].id}>
+                <ol aria-label="Expired conversation" className="flex flex-col gap-6">
+                  {turnCards(kept, first)}
+                </ol>
+                <ExpiredNote />
+              </Fragment>
+            ))}
+            {turns.length > 0 ? (
               <ol aria-label="Conversation" className="flex flex-col gap-6">
-                {turns.map((turn, i) => {
-                  const isLatest = turn === latest;
-                  const turnState = shown[i];
-                  const own = sums[i];
-                  // The previous completed turn, named when a stopped or failed turn sits between.
-                  const before = sums.findLastIndex((other, j) => j < i && other !== null);
-                  const delta = own && computeTotalsDelta(sums[before] ?? null, own);
-                  return (
-                    <TurnCard
-                      key={turn.id}
-                      ref={isLatest ? latestRef : undefined}
-                      number={earlier + i + 1}
-                      input={turn.input}
-                      state={turnState}
-                      attempt={turn.attempt}
-                      delta={delta && (before === i - 1 ? delta : { ...delta, since: earlier + before + 1 })}
-                      onStop={stop}
-                      onRetry={isLatest && (turnState.status === "cancelled" || turnState.status === "error") ? () => retry(turn) : undefined}
-                      onEdit={() => edit(turn.input, turnState)}
-                      stopRef={isLatest ? stopRef : undefined}
-                    />
-                  );
-                })}
+                {turnCards(turns, earlier + 1)}
               </ol>
+            ) : (
+              expired.length === 0 && <NoTurnYet earlier={earlier} />
             )}
           </div>
           <div className="border-t bg-background">

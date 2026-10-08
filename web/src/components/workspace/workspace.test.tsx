@@ -415,6 +415,48 @@ describe("Workspace", () => {
       expect(fileNames(sent(1).form)).toEqual(["spec.pdf"]);
     });
 
+    // The answers on screen are the user's until they ask for a new conversation: they have not copied them all yet.
+    it("keeps the turns already shown, read-only, above a note when the session expires mid-conversation, until New conversation", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      await run(user, input, "Second call");
+      await user.click(within(turn(2)).getByRole("button", { name: "Stop" }));
+      respond = () => Response.json({ error: { code: "session_not_found", message: "Session not found or expired." }, request_id: "r" }, { status: 404 });
+      await run(user, input, "Third call");
+      expect(await screen.findByText("This conversation expired, so a new one was started. Your message is back in the composer.")).toBeInTheDocument();
+      await waitFor(() => expect(sessionStorage.getItem("estimator.sessionId")).toBe(SESSIONS[1]));
+      expect(input).toHaveValue("Third call");
+      expect(await screen.findByText("History 0 / 6 turns")).toBeInTheDocument();
+      expect(fact("Project name")).toHaveTextContent("Not mentioned yet"); // the new conversation's memory
+
+      const expired = screen.getByRole("list", { name: "Expired conversation" });
+      const kept = within(expired).getAllByRole("listitem").filter((item) => item.parentElement === expired);
+      expect(kept.map((card) => within(card).getByRole("heading", { level: 2 }).textContent)).toEqual(["Turn 1", "Turn 2"]);
+      expect(within(kept[0]).getByRole("heading", { level: 3, name: fullEstimate.project_name })).toBeInTheDocument();
+      expect(within(kept[0]).getByRole("button", { name: "Copy as markdown" })).toBeInTheDocument();
+      expect(within(kept[1]).getByText("Stopped")).toBeInTheDocument();
+      expect(within(kept[1]).queryByRole("button", { name: "Retry" })).not.toBeInTheDocument(); // its session is gone
+      expect(screen.getByRole("heading", { level: 2, name: "This conversation expired" })).toBeInTheDocument();
+      expect(screen.getByText("The answers above are kept for reference. The new conversation starts without their history and memory.")).toBeInTheDocument();
+      expect(screen.queryByText("Start the conversation")).not.toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Conversation" })).not.toBeInTheDocument();
+
+      respond = undefined;
+      await user.click(screen.getByRole("button", { name: "Estimate" }));
+      await waitFor(() => expect(turnCalls()).toHaveLength(4));
+      expect(sent(3).url).toBe(`/api/sessions/${SESSIONS[1]}/estimate/stream`);
+      expect(turns()).toHaveLength(1);
+      expect(turn(1)).toHaveTextContent("Turn 1"); // the new conversation numbers its own turns
+      expect(screen.getByRole("list", { name: "Expired conversation" })).toBeInTheDocument();
+
+      await user.click(within(turn(1)).getByRole("button", { name: "Stop" }));
+      await user.click(screen.getByRole("button", { name: "New conversation" }));
+      expect(screen.queryByRole("list", { name: "Expired conversation" })).not.toBeInTheDocument();
+      expect(screen.queryByText("This conversation expired")).not.toBeInTheDocument();
+      expect(screen.getByText("Start the conversation")).toBeInTheDocument();
+    });
+
     it("recovers when the session vanishes mid-turn (an error event)", async () => {
       const { user, input } = setup();
       await run(user, input, "Mid-turn");
