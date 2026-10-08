@@ -287,6 +287,35 @@ def test_the_transcript_limit_applies_before_extraction(
         assert extractions == [] and client.fake.calls == []
 
 
+@pytest.mark.parametrize("endpoint", TURN_ENDPOINTS)
+@pytest.mark.parametrize(
+    ("transcript", "status"), [("ab\r\ncd\refgh", 200), ("ab\r\ncd\refghi", 422)]
+)
+def test_a_line_break_counts_once_against_the_transcript_limit(
+    make_client: ClientFactory, endpoint: str, transcript: str, status: int
+) -> None:
+    # Multipart sends a form's line breaks as CRLF; the composer counts each "\n" as one character.
+    with make_client(max_transcription_chars=10) as client:
+        sid = client.post("/sessions").json()["session_id"]
+        r = client.post(f"/sessions/{sid}/{endpoint}", data=FORM | {"transcript": transcript})
+    assert r.status_code == status
+    if status == 200:
+        sent = client.fake.calls[0]["messages"][-1].content
+        assert "ab\ncd\nefgh" in sent and "\r" not in sent
+
+
+async def test_a_line_break_counts_once_against_the_output_language_limit(
+    async_client: httpx2.AsyncClient, fake_provider: FakeProvider
+) -> None:
+    sid = await new_session(async_client)
+    language = "x" * 20 + "\r\n" + "x" * 19  # 41 characters as sent, 40 as typed
+    r = await async_client.post(
+        f"/sessions/{sid}/estimate", data=FORM | {"output_language": language}
+    )
+    assert r.status_code == 200
+    assert "x" * 20 + "\n" + "x" * 19 in fake_provider.calls[0]["messages"][-1].content
+
+
 @pytest.mark.parametrize(
     ("form", "loc"),
     [

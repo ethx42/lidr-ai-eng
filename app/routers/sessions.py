@@ -11,7 +11,14 @@ import anyio
 from fastapi import APIRouter, Depends, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+)
 
 from app.attachments.extractor import (
     Attachment,
@@ -51,21 +58,31 @@ def get_conversation(request: Request) -> ConversationService:
 ConversationDep = Annotated[ConversationService, Depends(get_conversation)]
 
 
+def single_line_breaks(value: object) -> object:
+    """Multipart sends every line break of a form field as CRLF (browsers and undici alike), while
+    the composer counts a line break as one character: normalise before any length check."""
+    return value.replace("\r\n", "\n").replace("\r", "\n") if isinstance(value, str) else value
+
+
+LineBreaks = BeforeValidator(single_line_breaks)
+
+
 # One model for the fields and the files: a separate `Form()`/`File()` param next to a form model
 # makes FastAPI expect the model embedded under its name (422).
 class SessionEstimateForm(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    transcript: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
-        description="This turn's meeting transcription. Treated strictly as data."
-    )
+    transcript: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1), LineBreaks
+    ] = Field(description="This turn's meeting transcription. Treated strictly as data.")
     project_type: ProjectType
     detail_level: DetailLevel
     output_format: OutputFormat
-    output_language: (
+    output_language: Annotated[
         Annotated[str, StringConstraints(strip_whitespace=True, max_length=MAX_LANGUAGE_CHARS)]
-        | None
-    ) = Field(
+        | None,
+        LineBreaks,
+    ] = Field(
         default=None,
         description=(
             f"At most {MAX_LANGUAGE_CHARS} characters. Empty means not given: the "

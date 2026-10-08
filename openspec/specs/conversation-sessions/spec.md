@@ -77,7 +77,7 @@ The system SHALL check every turn before calling any LLM provider, answering fai
 | No free attachment reader within `ATTACHMENT_TIMEOUT_SECONDS` | 503 | `attachments_busy` |
 | A body larger than `ATTACHMENT_MAX_FILES` × `ATTACHMENT_MAX_BYTES` + 1 MiB | 413 | none: not the API's error shape (see `Request body limit` in `estimation-api`) |
 
-The transcript length, the attachment count and each attachment's size SHALL be checked before any attachment is parsed. The busy check SHALL run again after extraction, since extraction can take seconds. Provider failures SHALL follow the single-shot mapping. The API contract SHALL document each of these responses for both turn endpoints.
+The transcript's and the output language's line breaks SHALL be normalised to LF before any check, since multipart sends them as CRLF: a line break counts as one character, as the composer counts it. The transcript length, the attachment count and each attachment's size SHALL be checked before any attachment is parsed. The busy check SHALL run again after extraction, since extraction can take seconds. Provider failures SHALL follow the single-shot mapping. The API contract SHALL document each of these responses for both turn endpoints.
 
 #### Scenario: Unsupported attachment
 - **WHEN** a turn attaches a Windows executable named `spec.pdf`
@@ -87,6 +87,10 @@ The transcript length, the attachment count and each attachment's size SHALL be 
 #### Scenario: Transcript limit shared with single-shot
 - **WHEN** a turn's transcript is longer than `MAX_TRANSCRIPTION_CHARS` and it attaches a file
 - **THEN** the response status is `422` with error code `invalid_request`, and the attachment is never parsed
+
+#### Scenario: A line break counts once
+- **WHEN** a turn's transcript arrives with CRLF line breaks and is exactly `MAX_TRANSCRIPTION_CHARS` long once each counts as one character
+- **THEN** the turn is accepted, and the model is sent the transcript with LF line breaks
 
 #### Scenario: No free reader
 - **WHEN** every attachment reader stays busy for `ATTACHMENT_TIMEOUT_SECONDS`
