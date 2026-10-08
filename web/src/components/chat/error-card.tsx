@@ -7,20 +7,24 @@ import { copyText } from "@/lib/copy";
 import { toUserMessage } from "@/lib/errors";
 import type { StreamError } from "@/lib/estimate/types";
 
-type Props = { error: StreamError; keptPrevious?: boolean; onRetry: () => void; onEditTranscript: () => void };
+// `onRetry` absent: this attempt can no longer run again (a later turn of the conversation exists).
+type Props = { error: StreamError; keptPrevious?: boolean; onRetry?: () => void; onEditTranscript: () => void };
 type Action = { label: string; run: () => void };
 
 // What the user can do next, mapped from the error taxonomy; `role="alert"` announces it once.
 export const ErrorCard = ({ error, keptPrevious = false, onRetry, onEditTranscript }: Props) => {
   const { title, action } = toUserMessage(error);
   const { requestId } = error;
-  const retry: Action = { label: "Try again", run: onRetry };
-  const [primary, secondary]: [Action, Action?] =
+  const retry: Action[] = onRetry ? [{ label: "Try again", run: onRetry }] : [];
+  const actions: Action[] =
     action === "shorten"
       ? [{ label: "Edit transcript", run: onEditTranscript }]
-      : action === "contact" && requestId
-        ? [{ label: "Copy request ID", run: () => void copyText(requestId, "Request ID copied") }, retry]
-        : [retry];
+      : action === "attachments" // the same files would be refused again
+        ? [{ label: "Edit attachments", run: onEditTranscript }]
+        : action === "contact" && requestId
+          ? [{ label: "Copy request ID", run: () => void copyText(requestId, "Request ID copied") }, ...retry]
+          : retry;
+  const [primary, secondary] = actions;
   return (
     <Alert className="border-destructive/40 bg-danger-subtle">
       <CircleAlert className="text-destructive" />
@@ -32,16 +36,18 @@ export const ErrorCard = ({ error, keptPrevious = false, onRetry, onEditTranscri
             Request ID <code className="font-mono text-foreground">{requestId}</code>
           </div>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={primary.run}>
-            {primary.label}
-          </Button>
-          {secondary && (
-            <Button type="button" variant="ghost" size="sm" onClick={secondary.run}>
-              {secondary.label}
+        {primary && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={primary.run}>
+              {primary.label}
             </Button>
-          )}
-        </div>
+            {secondary && (
+              <Button type="button" variant="ghost" size="sm" onClick={secondary.run}>
+                {secondary.label}
+              </Button>
+            )}
+          </div>
+        )}
       </AlertDescription>
     </Alert>
   );

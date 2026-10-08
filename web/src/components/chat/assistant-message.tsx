@@ -17,13 +17,17 @@ type Props = {
   state: StreamState;
   kept?: Done;
   onStop: () => void;
-  onRegenerate: () => void;
+  // Single-shot: a completed or stopped run can run again, keeping the last estimate until the new one completes.
+  onRegenerate?: () => void;
+  // A conversation turn (S5-R3): only a stopped or failed one runs again, as "Retry" (absent once a later turn exists).
+  onRetry?: () => void;
   onEditTranscript: () => void;
   stopRef?: Ref<HTMLButtonElement>;
   view?: ResultView; // "document" shows a completed estimate as the server's markdown
   activeRequirement?: string;
   onRequirementFocus?: (id: string | null) => void;
   pinFor?: (id: string) => (() => void) | undefined;
+  evidenceNote?: (id: string) => string | undefined; // where a quote comes from, when not from the transcript shown
 };
 
 // A regenerate that was stopped or failed shows the estimate it would have replaced.
@@ -32,10 +36,10 @@ export const keptFor = (state: StreamState, kept?: Done) => (state.status === "c
 // Plain text, so the questions paste cleanly into an email to the client.
 const numbered = (items: string[]) => items.map((item, i) => `${i + 1}. ${item}`).join("\n");
 
-const RegenerateButton = ({ onRegenerate }: { onRegenerate: () => void }) => (
-  <Button type="button" variant="ghost" size="sm" onClick={onRegenerate}>
+const RunAgainButton = ({ label, onClick }: { label: "Regenerate" | "Retry"; onClick: () => void }) => (
+  <Button type="button" variant="ghost" size="sm" onClick={onClick}>
     <RotateCcw />
-    Regenerate
+    {label}
   </Button>
 );
 
@@ -57,14 +61,27 @@ const DoneActions = ({ state, onRegenerate }: { state: Done; onRegenerate?: () =
           <span className="sr-only sm:not-sr-only">for the client</span>
         </Button>
       )}
-      {onRegenerate && <RegenerateButton onRegenerate={onRegenerate} />}
+      {onRegenerate && <RunAgainButton label="Regenerate" onClick={onRegenerate} />}
     </>
   );
 };
 
 const isComposing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229; // Safari reports it only via 229
 
-export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate, onEditTranscript, stopRef, view = "structured", activeRequirement, onRequirementFocus, pinFor }: Props) => {
+export const AssistantMessage = ({
+  state,
+  kept: keptResult,
+  onStop,
+  onRegenerate,
+  onRetry,
+  onEditTranscript,
+  stopRef,
+  view = "structured",
+  activeRequirement,
+  onRequirementFocus,
+  pinFor,
+  evidenceNote,
+}: Props) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const previous = useRef(state.status);
   const focusWithin = useRef(false); // focus was last inside this message, or one of its actions was used
@@ -76,6 +93,7 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
     focusWithin.current = true; // Safari does not focus a clicked button
     action();
   };
+  const runAgain = onRetry ?? onRegenerate;
 
   useEffect(() => {
     if (!streaming) return;
@@ -109,7 +127,9 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
       }}
       className="flex min-w-0 flex-col gap-6"
     >
-      {state.status === "error" && <ErrorCard error={state.error} keptPrevious={Boolean(kept)} onRetry={own(onRegenerate)} onEditTranscript={onEditTranscript} />}
+      {state.status === "error" && (
+        <ErrorCard error={state.error} keptPrevious={Boolean(kept)} onRetry={runAgain && own(runAgain)} onEditTranscript={onEditTranscript} />
+      )}
       {shown.status !== "error" && (
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
           <div className="flex min-w-0 items-center">
@@ -135,8 +155,8 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
               </Button>
             )}
             {/* after a failure the error card's Try again is the one way to run it again */}
-            {shown.status === "done" && <DoneActions state={shown} onRegenerate={state.status === "error" ? undefined : own(onRegenerate)} />}
-            {shown.status === "cancelled" && <RegenerateButton onRegenerate={own(onRegenerate)} />}
+            {shown.status === "done" && <DoneActions state={shown} onRegenerate={state.status === "error" || !onRegenerate ? undefined : own(onRegenerate)} />}
+            {shown.status === "cancelled" && runAgain && <RunAgainButton label={onRetry ? "Retry" : "Regenerate"} onClick={own(runAgain)} />}
           </div>
         </div>
       )}
@@ -153,6 +173,7 @@ export const AssistantMessage = ({ state, kept: keptResult, onStop, onRegenerate
               activeRequirement={activeRequirement}
               onRequirementFocus={onRequirementFocus}
               pinFor={pinFor}
+              evidenceNote={evidenceNote}
             />
           )}
           <AiDisclosure />

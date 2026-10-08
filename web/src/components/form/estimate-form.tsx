@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronRight, Upload } from "lucide-react";
-import { type ChangeEvent, type FormEvent, type Ref, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type ReactNode, type Ref, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { SampleMenu, sampleDraft } from "@/components/chat/sample-picker";
 import { DEFAULT_MAX_CHARS } from "@/components/service-context";
@@ -20,12 +20,16 @@ import { DETAIL_LEVELS, OUTPUT_FORMATS, PROJECT_TYPES } from "@/lib/estimate/cho
 import { DEFAULT_VALUES, DETAIL_LEVEL_LABELS, type EstimateParams, estimateFormSchema, OUTPUT_FORMAT_LABELS, PROJECT_TYPE_LABELS, toRequest } from "./estimate-form-schema";
 import { Segmented } from "./segmented";
 
-export type EstimateFormHandle = { edit: (text: string) => void };
+// `edit` puts text back for editing (asking first when it would replace a different draft); `what` completes "Replace
+// your draft with …?". `clear` empties the transcript once it has been sent, keeping the choices.
+export type EstimateFormHandle = { edit: (text: string, what?: string) => void; clear: () => void };
 type Props = {
   onSubmit: (body: components["schemas"]["EstimateRequest"], opts: { promptVersion: string }) => void;
-  versions: string[];
-  defaultVersion: string; // "" while unknown: the AI service applies its own
+  versions?: string[]; // absent: no prompt-version choice (a conversation's endpoints take none)
+  defaultVersion?: string; // "" while unknown: the AI service applies its own
   maxChars?: number;
+  transcriptLabel?: string;
+  attachments?: ReactNode; // shown under the transcript (the conversation's dropzone)
   samples?: Sample[];
   compact?: boolean; // a result sits below the form, so the transcript box stays short
   onParamsChange?: (params: EstimateParams) => void;
@@ -40,9 +44,20 @@ const isText = (file: File) => file.type === "text/plain" || /\.txt$/i.test(file
 
 // The typed request (spec §6.5): transcript, the three choices, the prompt version behind Advanced, one Estimate.
 // The form keeps its values after a run, so the next estimate starts from the last one.
-export const EstimateForm = ({ onSubmit, versions, defaultVersion, maxChars = DEFAULT_MAX_CHARS, samples = [], compact = false, onParamsChange, handle }: Props) => {
+export const EstimateForm = ({
+  onSubmit,
+  versions,
+  defaultVersion = "",
+  maxChars = DEFAULT_MAX_CHARS,
+  transcriptLabel = "Transcript",
+  attachments,
+  samples = [],
+  compact = false,
+  onParamsChange,
+  handle,
+}: Props) => {
   const id = useId();
-  const { control, getValues, setValue, setError, clearErrors, handleSubmit } = useForm({ resolver: zodResolver(estimateFormSchema), defaultValues: DEFAULT_VALUES });
+  const { control, getValues, setValue, setError, clearErrors, handleSubmit, resetField } = useForm({ resolver: zodResolver(estimateFormSchema), defaultValues: DEFAULT_VALUES });
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -80,10 +95,11 @@ export const EstimateForm = ({ onSubmit, versions, defaultVersion, maxChars = DE
 
   // The rejected transcript goes back for editing; the user asked to edit, so it takes focus on any pointer.
   useImperativeHandle(handle, () => ({
-    edit: (text) => {
+    edit: (text, what = "the transcript to shorten") => {
       askedFrom.current = null;
-      if (draft.replace({ text, what: "the transcript to shorten" })) inputRef.current?.focus();
+      if (draft.replace({ text, what })) inputRef.current?.focus();
     },
+    clear: () => resetField("transcription"), // also clears its error and dirty state, so no "empty" message shows
   }));
 
   const paramsChanged = () => {
@@ -145,7 +161,7 @@ export const EstimateForm = ({ onSubmit, versions, defaultVersion, maxChars = DE
           <Field data-invalid={fieldState.invalid || over} className="gap-1.5">
             <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
               <FieldLabel htmlFor={field.name} className="mr-auto">
-                Transcript
+                {transcriptLabel}
               </FieldLabel>
               {samples.length > 0 && (
                 <SampleMenu
@@ -207,6 +223,7 @@ export const EstimateForm = ({ onSubmit, versions, defaultVersion, maxChars = DE
           </Field>
         )}
       />
+      {attachments}
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
         <Controller
           name="project_type"
@@ -258,43 +275,47 @@ export const EstimateForm = ({ onSubmit, versions, defaultVersion, maxChars = DE
         />
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Button type="button" variant="ghost" size="sm" aria-expanded={advanced} aria-controls={advancedId} onClick={() => setAdvanced(!advanced)}>
-          <ChevronRight className={cn("transition-transform", advanced && "rotate-90")} />
-          Advanced
-        </Button>
-        <div id={advancedId} hidden={!advanced} className="flex items-center gap-2">
-          <label htmlFor={versionId} className="text-sm">
-            Prompt version
-          </label>
-          <Controller
-            name="prompt_version"
-            control={control}
-            render={({ field }) => (
-              <select
-                id={versionId}
-                ref={field.ref}
-                name={field.name}
-                value={field.value || defaultVersion}
-                onBlur={field.onBlur}
-                onChange={(event) => {
-                  field.onChange(event.target.value);
-                  paramsChanged();
-                }}
-                className="h-7 rounded-md border border-input bg-background px-2 font-mono text-xs"
-              >
-                {versions.length === 0 ? (
-                  <option value="">Service default</option>
-                ) : (
-                  versions.map((version) => (
-                    <option key={version} value={version}>
-                      {version}
-                    </option>
-                  ))
+        {versions && (
+          <>
+            <Button type="button" variant="ghost" size="sm" aria-expanded={advanced} aria-controls={advancedId} onClick={() => setAdvanced(!advanced)}>
+              <ChevronRight className={cn("transition-transform", advanced && "rotate-90")} />
+              Advanced
+            </Button>
+            <div id={advancedId} hidden={!advanced} className="flex items-center gap-2">
+              <label htmlFor={versionId} className="text-sm">
+                Prompt version
+              </label>
+              <Controller
+                name="prompt_version"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    id={versionId}
+                    ref={field.ref}
+                    name={field.name}
+                    value={field.value || defaultVersion}
+                    onBlur={field.onBlur}
+                    onChange={(event) => {
+                      field.onChange(event.target.value);
+                      paramsChanged();
+                    }}
+                    className="h-7 rounded-md border border-input bg-background px-2 font-mono text-xs"
+                  >
+                    {versions.length === 0 ? (
+                      <option value="">Service default</option>
+                    ) : (
+                      versions.map((version) => (
+                        <option key={version} value={version}>
+                          {version}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 )}
-              </select>
-            )}
-          />
-        </div>
+              />
+            </div>
+          </>
+        )}
         <Button type="submit" aria-describedby={over ? `${overId} ${overById}` : undefined} aria-keyshortcuts={apple ? "Meta+Enter" : "Control+Enter"} className="ml-auto min-w-28">
           Estimate
           {/* opacity-80 keeps 4.5:1 on the light primary, at rest and hovered (70 gave 4.1:1, flagged by axe in the e2e run) */}

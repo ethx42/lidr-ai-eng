@@ -11,11 +11,14 @@ type Requirement = NonNullable<EstimateModel["requirements"]>[number];
 type FocusHandler = (id: string | null) => void;
 // The action that pins a requirement (below 768 px), or undefined when it has no mark in the transcript to show.
 type PinFor = (id: string) => (() => void) | undefined;
+// The card's caption for a grounded quote that is not in the transcript shown (it came from an earlier message or an
+// attachment), or undefined for the default.
+type EvidenceNote = (id: string) => string | undefined;
 
 // Radix opens a hover card on mouse hover and keyboard focus but ignores touch (and cancels the tap), so touch opens it explicitly.
-// With `onPin` (below 768 px, where the transcript sits behind a tab, and for a quote marked there) the button shows the
-// quote in the transcript instead.
-const Evidence = ({ id, quote, ungrounded, onPin }: { id?: string; quote: string; ungrounded: boolean; onPin?: () => void }) => {
+// With `onPin` (below 768 px, where the transcript sits behind its turn's disclosure, and for a quote marked there) the
+// button shows the quote in the transcript instead.
+const Evidence = ({ id, quote, ungrounded, note, onPin }: { id?: string; quote: string; ungrounded: boolean; note?: string; onPin?: () => void }) => {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
   // While it pins, the card never opens, not even later: a card opened then would show once the viewport widens.
@@ -37,16 +40,16 @@ const Evidence = ({ id, quote, ungrounded, onPin }: { id?: string; quote: string
       </HoverCardTrigger>
       <span id={descriptionId} className="sr-only">{`“${quote}”`}</span>
       <HoverCardContent align="end" className="flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 wrap-anywhere">
-        <p className="text-xs text-muted-foreground">{ungrounded ? "Quote given by the model, not found in the transcript" : "Quote from the transcript"}</p>
+        <p className="text-xs text-muted-foreground">{ungrounded ? "Quote given by the model, not found in the transcript" : (note ?? "Quote from the transcript")}</p>
         <blockquote className="border-l-2 border-border-strong pl-3 text-sm">{`“${quote}”`}</blockquote>
       </HoverCardContent>
     </HoverCard>
   );
 };
 
-type RowProps = { requirement: Requirement; ungrounded: boolean; active: boolean; onFocusChange?: FocusHandler; pinFor?: PinFor };
+type RowProps = { requirement: Requirement; ungrounded: boolean; active: boolean; onFocusChange?: FocusHandler; pinFor?: PinFor; evidenceNote?: EvidenceNote };
 
-const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onFocusChange, pinFor }: RowProps) => {
+const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onFocusChange, pinFor, evidenceNote }: RowProps) => {
   const enter = () => id && onFocusChange?.(id);
   const leave = () => id && onFocusChange?.(null);
   return (
@@ -70,7 +73,7 @@ const Row = ({ requirement: { id, statement, evidence }, ungrounded, active, onF
           )}
         </div>
         {evidence ? (
-          <Evidence id={id} quote={evidence} ungrounded={ungrounded} onPin={id ? pinFor?.(id) : undefined} />
+          <Evidence id={id} quote={evidence} ungrounded={ungrounded} note={id ? evidenceNote?.(id) : undefined} onPin={id ? pinFor?.(id) : undefined} />
         ) : (
           <Pending className="mt-1 w-16" />
         )}
@@ -86,9 +89,10 @@ type Props = {
   activeRequirement?: string;
   onRequirementFocus?: FocusHandler;
   pinFor?: PinFor;
+  evidenceNote?: EvidenceNote;
 };
 
-export const RequirementsList = ({ items, streaming, ungrounded, activeRequirement, onRequirementFocus, pinFor }: Props) => {
+export const RequirementsList = ({ items, streaming, ungrounded, activeRequirement, onRequirementFocus, pinFor, evidenceNote }: Props) => {
   const requirements = received(items, streaming);
   return (
     <Section title="Requirements">
@@ -106,6 +110,7 @@ export const RequirementsList = ({ items, streaming, ungrounded, activeRequireme
               active={requirement.id !== undefined && requirement.id === activeRequirement}
               onFocusChange={onRequirementFocus}
               pinFor={pinFor}
+              evidenceNote={evidenceNote}
             />
           ))}
         </ul>

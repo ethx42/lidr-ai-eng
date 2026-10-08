@@ -19,16 +19,6 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
-/* Short viewports (landscape phones, 400% zoom), and side by side up to 772 px tall: the fixed header and form would
-   leave the result no usable height. 48.25rem is form height + bar: side by side the compact form ends at 461 px and the
-   estimate's content starts 71 px lower (pane header, padding), so a taller window keeps >= 240 px of it; re-measure if
-   either grows (estimate.spec.ts SHORT_MAX_HEIGHT). Keep SHORT (split-view.tsx) equal. Block form: the parenthesised
-   shorthand splits on commas, as a selector list, and drops the second query. */
-@custom-variant short {
-  @media (max-height: 30rem), (min-width: 48rem) and (max-height: 48.25rem) {
-    @slot;
-  }
-}
 
 @theme inline {
   --color-background: var(--background);
@@ -229,8 +219,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* The sticky 48 px header must never cover what focus or a scroll brings into view (WCAG 2.4.11). */
   html {
     @apply font-sans;
+    scroll-padding-top: 3.5rem;
   }
 }
 /* Unlayered on purpose: beats `outline-none` / `outline-hidden` utilities on generated components. */

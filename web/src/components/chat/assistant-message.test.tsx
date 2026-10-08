@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { fullEstimate, fullResponse } from "@/lib/estimate/fixtures";
@@ -276,5 +276,71 @@ describe("AssistantMessage focus management", () => {
 
     setup(done);
     expect(document.body).toHaveFocus();
+  });
+});
+
+// A conversation turn (S5-R3): running a completed turn again would fork the history, so only a stopped or failed one
+// can be retried, and only while it is the latest turn (the workspace passes `onRetry` then).
+describe("AssistantMessage as a conversation turn", () => {
+  const turn = (state: StreamState, { latest = true }: { latest?: boolean } = {}) => {
+    const handlers = { onStop: vi.fn(), onRetry: vi.fn(), onEditTranscript: vi.fn() };
+    const user = userEvent.setup();
+    const view = render(<AssistantMessage state={state} onStop={handlers.onStop} onRetry={latest ? handlers.onRetry : undefined} onEditTranscript={handlers.onEditTranscript} />);
+    const rerender = (next: StreamState) =>
+      view.rerender(<AssistantMessage state={next} onStop={handlers.onStop} onRetry={latest ? handlers.onRetry : undefined} onEditTranscript={handlers.onEditTranscript} />);
+    return { ...handlers, user, rerender };
+  };
+
+  it("offers no Regenerate and no Retry on a completed turn", () => {
+    turn(done);
+    expect(button("Copy as markdown")).toBeInTheDocument();
+    noButton("Regenerate");
+    noButton("Retry");
+  });
+
+  it("offers Retry on a stopped turn, and moves focus to it after Stop", async () => {
+    const { user, onRetry, rerender } = turn(streaming);
+    await user.click(button("Stop"));
+    rerender(cancelled);
+    expect(button("Retry")).toHaveFocus();
+    noButton("Regenerate");
+    await user.click(button("Retry"));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed turn from the error card", async () => {
+    const { user, onRetry } = turn(failed("upstream_unavailable", { retryable: true }));
+    await user.click(within(screen.getByRole("alert")).getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no way to run an earlier stopped or failed turn again", () => {
+    turn(cancelled, { latest: false });
+    noButton("Retry");
+    noButton("Regenerate");
+    cleanup();
+    turn(failed("upstream_unavailable", { retryable: true }), { latest: false });
+    expect(screen.getByRole("alert")).toHaveTextContent("The AI service is unavailable right now.");
+    noButton("Try again");
+  });
+
+  it("puts a turn whose attachment was rejected back in the composer", async () => {
+    const { user, onEditTranscript } = turn({
+      status: "error",
+      error: { code: "invalid_attachment", message: "virus.exe: unsupported file type (PDF, DOCX or plain text only)", retryable: false },
+      partial: null,
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("An attachment was rejected: virus.exe: unsupported file type (PDF, DOCX or plain text only).");
+    await user.click(button("Edit attachments"));
+    expect(onEditTranscript).toHaveBeenCalledTimes(1);
+    noButton("Try again"); // the same files would be rejected again
+  });
+
+  it("captions a grounded quote that is not in this turn's transcript with where it came from", async () => {
+    render(<AssistantMessage state={done} onStop={vi.fn()} onEditTranscript={vi.fn()} evidenceNote={(id) => (id === "R2" ? "Quote from an earlier message" : undefined)} />);
+    act(() => button("Evidence for R2").focus());
+    expect(await screen.findByText("Quote from an earlier message")).toBeInTheDocument();
+    act(() => button("Evidence for R1").focus());
+    expect(await screen.findByText("Quote from the transcript")).toBeInTheDocument();
   });
 });

@@ -58,12 +58,20 @@ const apply = (event: string | undefined, data: string, update: Update, requestI
   }
 };
 
+// A JSON request (single-shot) or a multipart turn of a session. A FormData body is sent as it is: the browser writes
+// its content-type with the boundary.
+type Body = Schemas["EstimateRequest"] | FormData;
+type StartOptions = { refresh?: boolean; promptVersion?: string; url?: string; onEnd?: (end: StreamState) => void };
+
+const requestInit = (body: Body, signal: AbortSignal): RequestInit =>
+  body instanceof FormData
+    ? { method: "POST", headers: { accept: "text/event-stream" }, body, signal }
+    : { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body: JSON.stringify(body), signal };
+
 // After an abort, `update` ignores every failure below.
-const run = async (url: string, body: Schemas["EstimateRequest"], signal: AbortSignal, update: Update) => {
+const run = async (url: string, body: Body, signal: AbortSignal, update: Update) => {
   const fail = (error: StreamError) => update((s) => ({ status: "error", error, partial: partialOf(s) }));
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body: JSON.stringify(body), signal }).catch(
-    () => null,
-  );
+  const res = await fetch(url, requestInit(body, signal)).catch(() => null);
   if (!res) return fail(streamInterrupted()); // network failure
   if (!res.ok) return fail(await fromErrorResponse(res));
   const requestId = res.headers.get("x-request-id") ?? undefined;
@@ -99,9 +107,10 @@ export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
   }, []);
   const current = useCallback(() => latest.current, []);
 
-  // `promptVersion` "" means the AI service's default; `refresh` skips its exact-match cache.
+  // `promptVersion` "" means the AI service's default; `refresh` skips its exact-match cache; `url` replaces the
+  // endpoint (a session's turn); `onEnd` hears once how the stream ended (a result or an error), never after a stop.
   const start = useCallback(
-    (body: Schemas["EstimateRequest"], { refresh = false, promptVersion = "" }: { refresh?: boolean; promptVersion?: string } = {}) => {
+    (body: Body, { refresh = false, promptVersion = "", url = endpoint, onEnd }: StartOptions = {}) => {
       controllerRef.current?.abort();
       const controller = new AbortController();
       controllerRef.current = controller;
@@ -109,13 +118,15 @@ export const useEstimateStream = (endpoint = "/api/estimate/stream") => {
       commit(() => ({ status: "streaming", phase: "calling_llm", partial: null, startedAt }));
       // a superseded or stopped request never writes state again
       const update: Update = (next) => {
-        if (!controller.signal.aborted) commit(next);
+        if (controller.signal.aborted) return;
+        commit(next);
+        if (latest.current.status !== "streaming") onEnd?.(latest.current);
       };
       const query = new URLSearchParams();
       if (promptVersion) query.set("prompt_version", promptVersion);
       if (refresh) query.set("refresh", "true");
       const search = query.toString();
-      void run(search ? `${endpoint}?${search}` : endpoint, body, controller.signal, update);
+      void run(search ? `${url}?${search}` : url, body, controller.signal, update);
     },
     [endpoint, commit],
   );

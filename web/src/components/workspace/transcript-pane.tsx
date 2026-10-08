@@ -3,11 +3,21 @@
 import { type RefObject, useEffect, useMemo, useRef } from "react";
 import { type EvidenceQuote, type EvidenceRange, evidenceFinder } from "@/lib/evidence";
 import { scrollBehavior } from "@/lib/focus";
+import { cn } from "@/lib/utils";
 
 // A requirement pinned from its Evidence button (below 768 px): a new object per pin, so pinning it again brings its
 // quote back into view.
 export type Pin = { id: string };
-type Props = { transcript: string; quotes: EvidenceQuote[]; active?: string | null; pinned?: Pin | null; ref?: RefObject<HTMLDivElement | null> };
+// `label` names the region (one per turn in a conversation); `className` sizes it where the parent does not.
+type Props = {
+  transcript: string;
+  quotes: EvidenceQuote[];
+  active?: string | null;
+  pinned?: Pin | null;
+  label?: string;
+  className?: string;
+  ref?: RefObject<HTMLDivElement | null>;
+};
 type Segment = { text: string; ids: string[] };
 
 // The transcript cut at every quote edge; a stretch several quotes cover names them all ("R1 R2").
@@ -27,7 +37,7 @@ const markOf = (pane: HTMLElement, id: string) => [...pane.querySelectorAll("mar
 // and the estimate never move); a pinned one is brought into view through every scrolling ancestor, because below
 // 768 px the pane is as tall as its text and `main` (or the page) scrolls. Each happens once per activation or pin, as
 // soon as the mark exists (while streaming, the quote may arrive after the requirement).
-export const TranscriptPane = ({ transcript, quotes, active, pinned, ref }: Props) => {
+export const TranscriptPane = ({ transcript, quotes, active, pinned, label = "Submitted transcript", className, ref }: Props) => {
   const own = useRef<HTMLDivElement>(null);
   const pane = ref ?? own;
   const scrolledFor = useRef<string | null>(null);
@@ -63,9 +73,9 @@ export const TranscriptPane = ({ transcript, quotes, active, pinned, ref }: Prop
     <div
       ref={pane}
       role="region"
-      aria-label="Submitted transcript"
+      aria-label={label}
       tabIndex={0}
-      className="relative h-full overflow-y-auto px-4 py-4 focus-visible:-outline-offset-2! sm:px-6"
+      className={cn("relative h-full overflow-y-auto px-4 py-4 focus-visible:-outline-offset-2! sm:px-6", className)}
     >
       <p className="max-w-prose text-sm/6 whitespace-pre-wrap wrap-anywhere">
         {segments.map(({ text, ids }, i) =>

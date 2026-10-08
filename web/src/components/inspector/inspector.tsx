@@ -1,7 +1,7 @@
 "use client";
 
 import { PanelRight } from "lucide-react";
-import { type ReactNode, type Ref, type RefObject, useEffect, useId, useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,12 +9,10 @@ import { ContextTab } from "./context-tab";
 import { type Call, MetricsTab } from "./metrics-tab";
 import type { PromptContext } from "./use-prompt-context";
 
-// `context` comes from one `usePromptContext` in the workspace, shared by the panel and the sheet.
+// `context` comes from `usePromptContext` in the workspace.
 type Props = { call?: Call; context: PromptContext };
 
 const TITLE = "text-sm font-semibold";
-// Matches Tailwind's `lg`, where the panel replaces the sheet.
-const WIDE = "(min-width: 1024px)";
 // Each tab scrolls on its own under the title and tab list; `relative` contains its sr-only descendants.
 // The panel is the scroll container, so its focus ring (the global one, in --focus-ring) is drawn inset;
 // `!` beats that unlayered rule's 2 px outer offset.
@@ -38,65 +36,20 @@ const InspectorBody = ({ call, context, title }: Props & { title: ReactNode }) =
   </Tabs>
 );
 
-// From 1024 px: a panel beside the workspace. Below that it is hidden and `InspectorSheet` opens the same content.
-// Where the page scrolls as a whole (`short`), it sticks a viewport tall, so bringing the result into view keeps its tabs.
-export const InspectorPanel = ({ call, context, ref }: Props & { ref?: Ref<HTMLElement> }) => {
-  const titleId = useId();
-  return (
-    <aside
-      ref={ref}
-      tabIndex={-1}
-      aria-labelledby={titleId}
-      className="hidden w-88 shrink-0 flex-col border-l bg-surface lg:flex xl:w-96 short:sticky short:top-0 short:h-dvh short:self-start"
-    >
-      <InspectorBody
-        call={call}
-        context={context}
-        title={
-          <h2 id={titleId} className={TITLE}>
-            Inspector
-          </h2>
-        }
-      />
-    </aside>
-  );
-};
-
-// The header button below 1024 px; the sheet is a modal dialog (focus trapped, Esc closes, focus returns to the button).
-// Widening past 1024 px closes it and hands focus to the panel, because the button is hidden from then on.
-export const InspectorSheet = ({ call, context, panelRef }: Props & { panelRef: RefObject<HTMLElement | null> }) => {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const wide = window.matchMedia(WIDE);
-    const close = () => {
-      if (wide.matches) setOpen(false);
-    };
-    wide.addEventListener("change", close);
-    return () => wide.removeEventListener("change", close);
-  }, [open]);
-
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button type="button" variant="ghost" className="lg:hidden">
-          <PanelRight />
-          <span className="sr-only sm:not-sr-only">Inspector</span>
-        </Button>
-      </SheetTrigger>
-      {/* No description: the title and tabs say what the sheet holds. */}
-      <SheetContent
-        aria-describedby={undefined}
-        onCloseAutoFocus={(event) => {
-          if (!window.matchMedia(WIDE).matches) return; // the button is visible: Radix returns focus to it
-          event.preventDefault();
-          panelRef.current?.focus();
-        }}
-        className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md"
-      >
-        <InspectorBody call={call} context={context} title={<SheetTitle className={TITLE}>Inspector</SheetTitle>} />
-      </SheetContent>
-    </Sheet>
-  );
-};
+// The inspector (spec §8 transparency: the prompt, its references and the last call's metrics) opens from a header
+// button as a sheet at every width; the workspace's right column holds the project memory. The sheet is a modal dialog:
+// focus is trapped, Esc closes it, and focus returns to the button.
+export const InspectorSheet = ({ call, context }: Props) => (
+  <Sheet>
+    <SheetTrigger asChild>
+      <Button type="button" variant="ghost">
+        <PanelRight />
+        <span className="sr-only sm:not-sr-only">Inspector</span>
+      </Button>
+    </SheetTrigger>
+    {/* No description: the title and tabs say what the sheet holds. */}
+    <SheetContent aria-describedby={undefined} className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+      <InspectorBody call={call} context={context} title={<SheetTitle className={TITLE}>Inspector</SheetTitle>} />
+    </SheetContent>
+  </Sheet>
+);
