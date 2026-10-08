@@ -161,12 +161,16 @@ const pickSample = async (page: Page) => {
   await expect(page.getByRole("menu")).toHaveCount(0);
 };
 
-// Sends the composer's turn; resolves with the request ID the BFF answered with (the stream's headers arrive first).
-const send = async (page: Page, submit = () => estimateButton(page).click()) => {
-  const response = page.waitForResponse((res) => TURN_PATH.test(new URL(res.url()).pathname) && res.request().method() === "POST");
-  await submit();
+const clickEstimate = async (page: Page) => {
+  await estimateButton(page).click();
   // The pointer leaves the content: a turn scrolling under it would highlight a requirement or open an Evidence card.
   await page.mouse.move(0, 0);
+};
+
+// Sends the composer's turn; resolves with the request ID the BFF answered with (the stream's headers arrive first).
+const send = async (page: Page, submit = () => clickEstimate(page)) => {
+  const response = page.waitForResponse((res) => TURN_PATH.test(new URL(res.url()).pathname) && res.request().method() === "POST");
+  await submit();
   const requestId = (await response).headers()["x-request-id"];
   expect(requestId).toBeTruthy();
   return requestId;

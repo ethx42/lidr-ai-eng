@@ -572,6 +572,21 @@ describe("Workspace", () => {
       await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote from an earlier message"));
     });
 
+    // The extracted text of a turn's files is part of what the model saw, but not of the transcript shown in the turn.
+    it("says a grounded quote with no mark may come from an attachment when the turn sent files", async () => {
+      const { user, input } = setup();
+      await loaded();
+      await user.type(input, "See the attached brief.");
+      await attach(user, pdf("brief.pdf"));
+      await user.click(screen.getByRole("button", { name: "Estimate" }));
+      await waitFor(() => expect(turnCalls()).toHaveLength(1));
+      await finish(0);
+      await openTranscript(user);
+      expect(transcriptPane().querySelector("mark")).toBeNull();
+      act(() => within(turn(1)).getByRole("button", { name: "Evidence for R1" }).focus());
+      await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote from an attachment or an earlier message"));
+    });
+
     it("below 768 px, Evidence opens the turn's transcript at its quote and pins it, until the next pin or attempt", async () => {
       stubPointer("fine", { wide: false });
       const { user, input } = setup();
@@ -801,6 +816,10 @@ describe("Workspace", () => {
       const { user } = setup();
       await loaded();
       expect(screen.getByText("PDF, DOCX or TXT, up to 5 files of 10 MB each")).toBeInTheDocument();
+      // Within the service's 20 MiB but over the BFF's 10 MiB.
+      await attach(user, new File([new Uint8Array(15 * 1024 * 1024)], "scan.pdf", { type: "application/pdf" }));
+      expect(screen.getByText("scan.pdf is too large: each file can be up to 10 MB.")).toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Attached documents" })).not.toBeInTheDocument();
       await attach(user, ...["a", "b", "c", "d", "e", "f"].map((name) => pdf(`${name}.pdf`)));
       expect(within(screen.getByRole("list", { name: "Attached documents" })).getAllByRole("listitem")).toHaveLength(5);
       expect(screen.getByText("f.pdf was not added: up to 5 files per message.")).toBeInTheDocument();
