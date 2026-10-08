@@ -151,6 +151,47 @@ async def test_a_session_taken_during_extraction_is_409_json(
     assert fake_provider.calls == []
 
 
+@pytest.mark.parametrize("settings", [{"max_sessions": 2}], indirect=True)
+@pytest.mark.parametrize("endpoint", TURN_ENDPOINTS)
+async def test_a_first_turn_being_extracted_is_not_evicted_by_a_create(
+    app: FastAPI,
+    async_client: httpx2.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+) -> None:
+    conversation = app.state.conversation
+    first = await new_session(async_client)  # no turns yet
+    other = await new_session(async_client)
+    await async_client.post(f"/sessions/{other}/estimate", data=FORM)  # an idle conversation
+    extracting, release = asyncio.Event(), asyncio.Event()
+
+    async def parked(files: Sequence[Attachment]) -> list[ExtractedAttachment]:
+        extracting.set()
+        await release.wait()
+        return []
+
+    monkeypatch.setattr(conversation, "extract", parked)
+    turn = asyncio.create_task(
+        async_client.post(f"/sessions/{first}/{endpoint}", data=FORM, files=[NOTES])
+    )
+    await asyncio.wait_for(extracting.wait(), timeout=1)
+    created = await async_client.post("/sessions")  # at the cap: the idle conversation goes
+    release.set()
+    r = await turn
+    assert created.status_code == 201 and r.status_code == 200
+    assert (await async_client.get(f"/sessions/{other}")).status_code == 404
+    session = conversation.get(first)
+    assert session.history.turns == 1 and session.pending == 0
+
+
+async def test_a_turn_whose_extraction_fails_is_no_longer_pending(
+    app: FastAPI, async_client: httpx2.AsyncClient
+) -> None:
+    sid = await new_session(async_client)
+    r = await async_client.post(f"/sessions/{sid}/estimate", data=FORM, files=[EXE])
+    assert r.status_code == 422 and app.state.conversation.get(sid).pending == 0
+
+
 @pytest.mark.parametrize(
     ("error", "code", "retryable"),
     [(SessionBusy, "session_busy", True), (SessionNotFound, "session_not_found", False)],
@@ -285,6 +326,35 @@ def test_the_transcript_limit_applies_before_extraction(
             }
         ]
         assert extractions == [] and client.fake.calls == []
+
+
+@pytest.mark.parametrize("endpoint", TURN_ENDPOINTS)
+@pytest.mark.parametrize(
+    ("transcript", "status"), [("ab\r\ncd\refgh", 200), ("ab\r\ncd\refghi", 422)]
+)
+def test_a_line_break_counts_once_against_the_transcript_limit(
+    make_client: ClientFactory, endpoint: str, transcript: str, status: int
+) -> None:
+    # Multipart sends a form's line breaks as CRLF; the composer counts each "\n" as one character.
+    with make_client(max_transcription_chars=10) as client:
+        sid = client.post("/sessions").json()["session_id"]
+        r = client.post(f"/sessions/{sid}/{endpoint}", data=FORM | {"transcript": transcript})
+    assert r.status_code == status
+    if status == 200:
+        sent = client.fake.calls[0]["messages"][-1].content
+        assert "ab\ncd\nefgh" in sent and "\r" not in sent
+
+
+async def test_a_line_break_counts_once_against_the_output_language_limit(
+    async_client: httpx2.AsyncClient, fake_provider: FakeProvider
+) -> None:
+    sid = await new_session(async_client)
+    language = "x" * 20 + "\r\n" + "x" * 19  # 41 characters as sent, 40 as typed
+    r = await async_client.post(
+        f"/sessions/{sid}/estimate", data=FORM | {"output_language": language}
+    )
+    assert r.status_code == 200
+    assert "x" * 20 + "\n" + "x" * 19 in fake_provider.calls[0]["messages"][-1].content
 
 
 @pytest.mark.parametrize(

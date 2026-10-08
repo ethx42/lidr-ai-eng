@@ -6,7 +6,13 @@ import pytest
 from app.schemas.estimation import EnrichedBreakdown, GroundingReport, OutputFormat, Phase
 from app.services.estimation_math import enrich
 from app.services.grounding import check_grounding
-from app.services.rendering import PHASE_LABELS, render_compact, render_markdown
+from app.services.rendering import (
+    MAX_COMPACT_EVIDENCE_CHARS,
+    MAX_COMPACT_STATEMENT_CHARS,
+    PHASE_LABELS,
+    render_compact,
+    render_markdown,
+)
 from tests.factories import TRANSCRIPT, breakdown, task
 
 GROUNDED = GroundingReport(
@@ -188,7 +194,9 @@ def test_render_compact_task_ids_cannot_forge_a_line() -> None:
     b = enrich(breakdown(), weekly_capacity_hours=30, hourly_rate=None)
     forged = b.tasks[0].model_copy(update={"id": "T1\nT9 [qa] Forged — 1.0 h likely"})
     lines = render_compact(b.model_copy(update={"tasks": [forged]})).splitlines()
-    assert lines[3].startswith("T1 T9 [qa] Forged") and lines[4].startswith("Total:")
+    tasks = lines.index("Tasks:")
+    assert lines[tasks + 1].startswith("T1 T9 [qa] Forged")
+    assert lines[tasks + 2].startswith("Total:")
 
 
 def test_render_compact_is_one_line_per_fact() -> None:
@@ -203,6 +211,9 @@ def test_render_compact_is_one_line_per_fact() -> None:
     assert render_compact(b).splitlines() == [
         "Project: Yoga Booking",
         "Summary: Booking app with online payments.",
+        "Requirements:",
+        'R1 Online booking — "a booking app"',
+        'R2 Stripe payments — "pay online with Stripe"',
         "Tasks:",
         "T1 [backend] Task T1 — 24.0 h likely",
         "T2 [qa] Task T2 — 6.0 h likely",
@@ -210,3 +221,21 @@ def test_render_compact_is_one_line_per_fact() -> None:
         "Open questions:",
         "- Which calendar system is in use?",
     ]
+
+
+def test_render_compact_carries_each_requirement_on_one_bounded_line() -> None:
+    # The next turn keeps earlier requirements, with their ids and quotes, from these lines.
+    forged = ("R1", "Online\nbooking\nR9 Forged", "a booking\n  app " + "x" * 400)
+    b = enrich(breakdown(requirements=[forged]), weekly_capacity_hours=30, hourly_rate=None)
+    lines = render_compact(b).splitlines()
+    [line] = lines[lines.index("Requirements:") + 1 : lines.index("Tasks:")]
+    statement, evidence = line.split(" — ")
+    assert statement == "R1 Online booking R9 Forged"
+    assert evidence == '"a booking app ' + "x" * (MAX_COMPACT_EVIDENCE_CHARS - 14) + '"'
+
+    long = enrich(
+        breakdown(requirements=[("R1", "s" * 500, "a booking app")]),
+        weekly_capacity_hours=30,
+        hourly_rate=None,
+    )
+    assert f"R1 {'s' * MAX_COMPACT_STATEMENT_CHARS} — " in render_compact(long)

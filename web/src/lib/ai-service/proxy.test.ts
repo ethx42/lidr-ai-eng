@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { proxyJson, proxySse } from "./proxy";
+import { type FormCheck, proxyJson, proxyMultipartSse, proxySse } from "./proxy";
 
 const STREAM = "/api/v1/estimate/stream";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -201,6 +201,84 @@ describe("proxyJson", () => {
     const res = await proxyJson(new Request("http://web/api/context", { headers: HOST }), "/api/v1/context");
     expect(res.status).toBe(503);
     expect((await res.json()).error.code).toBe("upstream_unavailable");
+  });
+});
+
+// formData() buffers the body and builds every part at once, so the part count is bounded while the body streams in.
+describe("proxyMultipartSse part count", () => {
+  const PATH = "/sessions/0b6f3c1e-4d2a-4f8b-9c3e-2a1d5e6f7a8b/estimate/stream";
+  const keep: FormCheck = (form) => form;
+  const part = (name: string) => `--b0und\r\nContent-Disposition: form-data; name="${name}"\r\n\r\nx\r\n`;
+  const body = (parts: number) => Array.from({ length: parts }, (_, i) => part(`f${i}`)).join("") + "--b0und--\r\n";
+  const multipart = (stream: ReadableStream<Uint8Array>, type = "multipart/form-data; boundary=b0und") => {
+    const init: RequestInit & { duplex: "half" } = { method: "POST", body: stream, duplex: "half", headers: { ...HOST, "content-type": type } };
+    return new Request("http://web/api/sessions/x/estimate/stream", init);
+  };
+  // The body in chunks of `size` bytes, so delimiters are split between chunks.
+  const chunked = (text: string, size: number) => {
+    const bytes = new TextEncoder().encode(text);
+    let at = 0;
+    return new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        if (at >= bytes.length) return controller.close();
+        controller.enqueue(bytes.slice(at, (at += size)));
+      },
+    });
+  };
+  const send = (request: Request) => proxyMultipartSse(request, PATH, { maxBodyBytes: 1_000_000, maxParts: 3, check: keep });
+
+  beforeEach(() => vi.stubEnv("AI_SERVICE_URL", "http://ai-service:8000"));
+  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+  it.each([1, 3, 7])("accepts maxParts parts whatever the chunk size (%i bytes)", async (size) => {
+    const fetchMock = mockFetch();
+    const res = await send(multipart(chunked(body(3), size)));
+    expect(res.status).toBe(200);
+    expect([...((upstreamInit(fetchMock).body as FormData).keys())]).toEqual(["f0", "f1", "f2"]);
+  });
+
+  it.each([1, 3, 7, 4096])("rejects one part more with 422 before parsing, whatever the chunk size (%i bytes)", async (size) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const res = await send(multipart(chunked(body(4), size)));
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toEqual({ code: "invalid_request", message: "The multipart body has too many parts (at most 3)." });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stops reading an endless run of tiny parts long before the byte limit, and cancels the body", async () => {
+    const seen = { pulls: 0, cancelled: false };
+    const tiny = new TextEncoder().encode(part("attachments"));
+    const endless = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        seen.pulls += 1;
+        controller.enqueue(tiny);
+      },
+      cancel: () => {
+        seen.cancelled = true;
+      },
+    });
+    const res = await send(multipart(endless));
+    expect(res.status).toBe(422);
+    expect(seen.cancelled).toBe(true);
+    expect(seen.pulls).toBeLessThan(10);
+  });
+
+  it.each([
+    ["no boundary", "multipart/form-data; charset=utf-8"],
+    ["an empty boundary", "multipart/form-data; boundary="],
+    ["a boundary with a character RFC 2046 does not allow", "multipart/form-data; boundary=b0und<"],
+  ])("rejects a content type with %s as malformed, without calling upstream", async (_, type) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const res = await send(multipart(chunked(body(1), 4096), type));
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.message).toBe("The multipart body could not be parsed.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("parses with the boundary it counted, quoted or not", async () => {
+    const fetchMock = mockFetch();
+    expect((await send(multipart(chunked(body(2), 5), 'multipart/form-data; boundary="b0und"; charset=utf-8'))).status).toBe(200);
+    expect([...((upstreamInit(fetchMock).body as FormData).keys())]).toEqual(["f0", "f1"]);
   });
 });
 

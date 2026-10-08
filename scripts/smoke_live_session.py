@@ -1,8 +1,10 @@
 """Live three-turn session check (`make smoke-live-session`, budget-guarded): one in-process
 session against the real provider chain, the second turn with a PDF attached. Prints what the
 session learned after each turn (the scope as its length only), never the transcripts or the
-attachment text. Exits 1 if a turn fails, the project name is not kept across turns, or Redsys
-(named only in the PDF) is missing from the technologies after turn 2."""
+attachment text. Exits 1 if a turn fails, the project name is not kept across turns, Redsys
+(named only in the PDF) is missing from the technologies after turn 2, or turn 3, which only adds
+an admin page, drops scope: fewer requirements than turn 2, or no requirement or task that still
+mentions Stripe (named only in turn 1)."""
 
 import asyncio
 import json
@@ -12,7 +14,14 @@ from contextlib import aclosing
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.attachments.extractor import Attachment, AttachmentError, ExtractedAttachment
+from app.attachments.extractor import (
+    MAX_NAME_CHARS,
+    TRUNCATED,
+    Attachment,
+    AttachmentError,
+    ExtractedAttachment,
+    format_attachments,
+)
 from app.config import Settings
 from app.main import build_services
 from app.observability import configure_logging
@@ -23,13 +32,26 @@ from app.services.conversation import ConversationService
 from app.services.errors import LLMError
 from app.services.providers.base import LLMProvider
 from app.services.providers.factory import build_provider
-from scripts.live_budget import LEDGER, call_bound_usd, ensure_budget, record_spend
+from app.sessions import (
+    MAX_PROJECT_NAME_CHARS,
+    MAX_SCOPE_CHARS,
+    MAX_TECHNOLOGIES,
+    MAX_TECHNOLOGY_CHARS,
+)
+from scripts.live_budget import (
+    LEDGER,
+    PROMPT_TOKENS_BOUND,
+    call_bound_usd,
+    ensure_budget,
+    record_spend,
+)
 
 OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 ESTIMATE_USD = 0.05
 PDF = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "attachments" / "spec.pdf"
 ATTACHMENT_ONLY_TECHNOLOGY = "Redsys"
+TURN_ONE_ONLY_FACT = "Stripe"
 
 
 @dataclass(frozen=True)
@@ -72,10 +94,40 @@ def pinned_settings() -> Settings:
     )
 
 
+# Per attachment, besides its name: the blank line and "--- attachment: <name> ---" line before
+# its text, and the "[truncated]" marker a clipped text ends with.
+EMPTY_CLIPPED = ExtractedAttachment(filename="", kind="text", text=TRUNCATED, pages=None)
+ATTACHMENT_FRAME_CHARS = 2 + len(format_attachments([EMPTY_CLIPPED]))
+
+
+def session_prompt_tokens(settings: Settings) -> int:
+    """An upper bound on a session turn's prompt, at one token per character (stricter, never
+    looser): the single-shot bound (system prompt, schema, user template), a full metadata block,
+    the history window (its cap, or one pair over it: the latest pair always stays), and this
+    turn's transcript and attachments."""
+    metadata = (
+        MAX_PROJECT_NAME_CHARS + MAX_SCOPE_CHARS + MAX_TECHNOLOGIES * (MAX_TECHNOLOGY_CHARS + 2)
+    )
+    turn = (
+        settings.max_transcription_chars
+        + settings.attachment_max_chars
+        + settings.attachment_max_files * (MAX_NAME_CHARS + ATTACHMENT_FRAME_CHARS)
+    )
+    # A pair's compact answer is shorter than the JSON output it renders. Its user message's own
+    # template text (some 350 characters) fits the headroom of PROMPT_TOKENS_BOUND, which is about
+    # 1,300 tokens above the v3 prompt measured live (6,752 tokens with a 480-character transcript).
+    pair = turn + settings.llm_max_output_tokens
+    return PROMPT_TOKENS_BOUND + metadata + max(settings.max_history_chars, pair) + turn
+
+
 def turn_bound_usd(settings: Settings) -> float:
-    """A turn's worst case: the dearest model of the chain serves it. Recorded for a turn that
-    started but reported no cost."""
-    return max(call_bound_usd(model, settings.llm_max_output_tokens) for _, model in settings.chain)
+    """A turn's worst case: the dearest model of the chain serves it, with a session-sized prompt.
+    Recorded for a turn that started but reported no cost."""
+    prompt = session_prompt_tokens(settings)
+    return max(
+        call_bound_usd(model, settings.llm_max_output_tokens, prompt_tokens=prompt)
+        for _, model in settings.chain
+    )
 
 
 def guard_usd(settings: Settings) -> float:
@@ -106,8 +158,18 @@ async def take_turn(
     return response
 
 
+def mentions(response: TurnResponse, fact: str) -> bool:
+    b = response.breakdown
+    texts = [
+        *(f"{r.statement} {r.evidence}" for r in b.requirements),
+        *(f"{t.name} {t.rationale}" for t in b.tasks),
+    ]
+    return any(fact.casefold() in text.casefold() for text in texts)
+
+
 def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
     usage, metrics, grounding = response.usage, response.metrics, response.grounding
+    kept = mentions(response, TURN_ONE_ONLY_FACT)  # where turn 1's scope was kept, or lost
     attached = f" + {', '.join(p.name for p in turn.attachments)}" if turn.attachments else ""
     cost = "-" if metrics.cost_usd is None else f"{metrics.cost_usd:.6f}"
     cells = [
@@ -117,6 +179,7 @@ def format_turn(number: int, turn: Turn, response: TurnResponse) -> str:
         f"out {usage.output_tokens}",
         f"cost {cost}",
         f"grounded {grounding.requirements_grounded}/{grounding.requirements_total}",
+        f"mentions {TURN_ONE_ONLY_FACT} {'yes' if kept else 'no'}",
         f"history {response.history_turns}",
         f"changes: {', '.join(response.metadata_changes) or '-'}",
     ]
@@ -135,6 +198,14 @@ def problems(responses: Sequence[TurnResponse]) -> list[str]:
     after_pdf = responses[1].project_metadata.mentioned_technologies
     if not any(ATTACHMENT_ONLY_TECHNOLOGY.casefold() in t.casefold() for t in after_pdf):
         found.append(f"{ATTACHMENT_ONLY_TECHNOLOGY} missing from the technologies after turn 2")
+    # Turn 3 only adds an admin page: its answer must still be the whole project.
+    second, third = (r.grounding.requirements_total for r in responses[1:3])
+    if third < second:
+        found.append(f"turn 3 dropped scope (requirements {second} -> {third})")
+    if not mentions(responses[2], TURN_ONE_ONLY_FACT):
+        found.append(
+            f"turn 3 dropped turn 1's scope (no requirement or task mentions {TURN_ONE_ONLY_FACT})"
+        )
     return found
 
 

@@ -7,8 +7,9 @@ seam for a Redis or Postgres implementation.
 
 Concurrency assumes one event loop and async endpoints: the store is touched only from that loop,
 never from a thread, so it needs no lock of its own, and each session's `asyncio.Lock` serialises
-its turns. The cap never evicts a session whose turn is in flight, and it takes sessions with no
-turns before conversations, so a flood of creates evicts its own empty sessions first.
+its turns. The cap never evicts a session whose turn is in flight, being prepared included (its
+attachments read and extracted before it takes the lock), and it takes sessions with no turns
+before conversations, so a flood of creates evicts its own empty sessions first.
 """
 
 import asyncio
@@ -160,6 +161,9 @@ class Session:
     created_at: float
     last_used: float
     lock: asyncio.Lock
+    # Turn requests in progress, counted from their checks on, so the cap cannot evict the session
+    # while their attachments are read or extracted, before the turn takes the lock.
+    pending: int = 0
 
 
 class SessionsFull(Exception):
@@ -180,7 +184,8 @@ class SessionStore(Protocol):
 class InMemorySessionStore:
     """LRU-ordered: `get` refreshes a session and idle sessions expire. At the cap, `create` evicts
     an expired session, else the least recently used one with no turns, else the least recently
-    used one; never one whose turn is in flight (all of them in flight: SessionsFull)."""
+    used one; never one whose turn is in flight or being prepared (all of them busy:
+    SessionsFull)."""
 
     def __init__(
         self,
@@ -209,7 +214,7 @@ class InMemorySessionStore:
     def create(self) -> Session:
         now = self._clock()
         if len(self._sessions) >= self._max_sessions:
-            idle = [s for s in self._sessions.values() if not s.lock.locked()]
+            idle = [s for s in self._sessions.values() if not (s.lock.locked() or s.pending)]
             victim = next(
                 chain(
                     (s for s in idle if now - s.last_used > self._ttl_seconds),

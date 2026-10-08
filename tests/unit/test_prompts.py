@@ -32,12 +32,12 @@ from tests.factories import typed_request
 PINNED_SHA256 = {
     "v1": "72fe57bfc9b18459fe354b3acc9a077c3736d6d946faedf23a3a9ed22c855c9a",
     "v2": "0c84aa152004f4f1a0c93233a689975623d43a8d4703cb840602f3053010b107",
-    "v3": "f326e4ef376a31f66c7426c3414235f26da630a16f92a2d3b95a454ca70f5578",
+    "v3": "74943ef078e6aa8789be69b516571edc7223d8a8eb227a479b3f2e6712afd3f9",
 }
 # From v3 on, a version also renders the session inputs: every system prompt with filled metadata,
 # plus a user message with two attachments. Pinned apart so the earlier versions' digests stay put.
 PINNED_SESSION_SHA256 = {
-    "v3": "60d89e007632b81c2e19ef0ee04174549e84719d8314af6570150e935b455237",
+    "v3": "f5d30b29a009dd74c6c149e34e2f6a4d3f90a9a5bad01061a1e36eb91cf2e2b1",
 }
 SESSION_VERSIONS_FROM = 3
 SESSION_METADATA = ProjectMetadata(

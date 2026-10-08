@@ -77,7 +77,7 @@ The system SHALL check every turn before calling any LLM provider, answering fai
 | No free attachment reader within `ATTACHMENT_TIMEOUT_SECONDS` | 503 | `attachments_busy` |
 | A body larger than `ATTACHMENT_MAX_FILES` × `ATTACHMENT_MAX_BYTES` + 1 MiB | 413 | none: not the API's error shape (see `Request body limit` in `estimation-api`) |
 
-The transcript length, the attachment count and each attachment's size SHALL be checked before any attachment is parsed. The busy check SHALL run again after extraction, since extraction can take seconds. Provider failures SHALL follow the single-shot mapping. The API contract SHALL document each of these responses for both turn endpoints.
+The transcript's and the output language's line breaks SHALL be normalised to LF before any check, since multipart sends them as CRLF: a line break counts as one character, as the composer counts it. The transcript length, the attachment count and each attachment's size SHALL be checked before any attachment is parsed. The busy check SHALL run again after extraction, since extraction can take seconds. Provider failures SHALL follow the single-shot mapping. The API contract SHALL document each of these responses for both turn endpoints.
 
 #### Scenario: Unsupported attachment
 - **WHEN** a turn attaches a Windows executable named `spec.pdf`
@@ -88,6 +88,10 @@ The transcript length, the attachment count and each attachment's size SHALL be 
 - **WHEN** a turn's transcript is longer than `MAX_TRANSCRIPTION_CHARS` and it attaches a file
 - **THEN** the response status is `422` with error code `invalid_request`, and the attachment is never parsed
 
+#### Scenario: A line break counts once
+- **WHEN** a turn's transcript arrives with CRLF line breaks and is exactly `MAX_TRANSCRIPTION_CHARS` long once each counts as one character
+- **THEN** the turn is accepted, and the model is sent the transcript with LF line breaks
+
 #### Scenario: No free reader
 - **WHEN** every attachment reader stays busy for `ATTACHMENT_TIMEOUT_SECONDS`
 - **THEN** the response status is `503` with error code `attachments_busy`
@@ -97,7 +101,7 @@ The transcript length, the attachment count and each attachment's size SHALL be 
 - **THEN** the response status is `413`
 
 ### Requirement: Conversation history
-Each session SHALL keep its history as a sliding window of turns, a turn being one user message and one assistant message. The window SHALL keep the last `MAX_TURNS` pairs and SHALL then drop the oldest pairs while the window holds more than `MAX_HISTORY_CHARS` characters, never dropping the latest pair, however large. A pair SHALL count the longer of its user message and its raw client text (see `Grounding in a conversation`) plus its assistant message, so the cap bounds both what the model is sent and what the session holds. The user message kept SHALL be the rendered user message of the turn (transcript and attachments); the assistant message kept SHALL be a compact rendering of the answer, one line per fact: project name, summary, each task with its phase and likely hours, totals with the team size, and open questions. `to_messages_list(system)` SHALL return the system message first, then the pairs oldest first; a turn SHALL send the provider its system prompt, the window, and the new user message.
+Each session SHALL keep its history as a sliding window of turns, a turn being one user message and one assistant message. The window SHALL keep the last `MAX_TURNS` pairs and SHALL then drop the oldest pairs while the window holds more than `MAX_HISTORY_CHARS` characters, never dropping the latest pair, however large. A pair SHALL count the longer of its user message and its raw client text (see `Grounding in a conversation`) plus its assistant message, so the cap bounds both what the model is sent and what the session holds. The user message kept SHALL be the rendered user message of the turn (transcript and attachments); the assistant message kept SHALL be a compact rendering of the answer, one line per fact: project name, summary, each requirement with its id, statement and evidence quote (each cut to a bound, so later turns can carry the ids and quotes forward), each task with its phase and likely hours, totals with the team size, and open questions. `to_messages_list(system)` SHALL return the system message first, then the pairs oldest first; a turn SHALL send the provider its system prompt, the window, and the new user message.
 
 #### Scenario: Window bounded by turns
 - **WHEN** a session with `MAX_TURNS=6` completes eight turns
@@ -110,6 +114,10 @@ Each session SHALL keep its history as a sliding window of turns, a turn being o
 #### Scenario: System message first
 - **WHEN** `to_messages_list(system)` is called on a window of two pairs
 - **THEN** it returns the system message, then user, assistant, user, assistant in turn order
+
+#### Scenario: Earlier requirements carried forward
+- **WHEN** a turn's answer has a requirement whose statement or quote spans several lines
+- **THEN** its compact assistant message has one line for it, with its id, statement and quote, each within its bound
 
 ### Requirement: Project metadata
 Each session SHALL keep `project_metadata` with `project_name`, `assumed_team_size`, `mentioned_technologies`, and `agreed_scope`, derived in code from each turn's structured output (no pattern matching over text and no second LLM call) and merged after every turn:
@@ -148,7 +156,7 @@ Each session SHALL serialise its turns: a turn that arrives while another turn o
 - **THEN** the session's history and metadata are unchanged
 
 ### Requirement: Session store lifecycle
-Sessions SHALL live in process memory, behind a store interface (create a session; get one by id) that a shared store can replace; they are lost on restart and not shared between worker processes. A session idle for longer than `SESSION_TTL_SECONDS` since its last use SHALL expire, and every read of a session SHALL count as a use. The store SHALL hold at most `MAX_SESSIONS` sessions; at the cap, creating a session SHALL evict, in this order, an expired session, else the least recently used session with no turns, else the least recently used session without a turn in flight. A session with a turn in flight SHALL never be evicted; when every session has one, creation SHALL fail with `sessions_full`. An expired or evicted session SHALL be answered `404` `session_not_found`, and the client recovers by creating a new session.
+Sessions SHALL live in process memory, behind a store interface (create a session; get one by id) that a shared store can replace; they are lost on restart and not shared between worker processes. A session idle for longer than `SESSION_TTL_SECONDS` since its last use SHALL expire, and every read of a session SHALL count as a use. The store SHALL hold at most `MAX_SESSIONS` sessions; at the cap, creating a session SHALL evict, in this order, an expired session, else the least recently used session with no turns, else the least recently used session without a turn in flight. A session with a turn in flight SHALL never be evicted, including a turn whose attachments are still being read or extracted; when every session has one, creation SHALL fail with `sessions_full`. An expired or evicted session SHALL be answered `404` `session_not_found`, and the client recovers by creating a new session.
 
 #### Scenario: Idle session expires
 - **WHEN** a session is not used for longer than `SESSION_TTL_SECONDS`
@@ -161,6 +169,10 @@ Sessions SHALL live in process memory, behind a store interface (create a sessio
 #### Scenario: Expired before empty
 - **WHEN** the store is at its cap and holds an expired session and a live empty one
 - **THEN** creating a session evicts the expired one
+
+#### Scenario: A first turn being extracted is kept
+- **WHEN** the store is at its cap, a session with no turns is extracting its first turn's attachments, and a client creates a session
+- **THEN** another session is evicted, and the extracting turn completes
 
 ### Requirement: Attachments
 The system SHALL accept PDF, DOCX and plain-text attachments, detecting the kind from the file's bytes, never from its name, extension or declared content type: a PDF starts with `%PDF-`, a DOCX is a ZIP archive containing `word/document.xml`, and plain text is UTF-8 without NUL bytes; anything else SHALL be rejected as unsupported. Text SHALL be extracted locally with `pypdf` and `python-docx` (PyMuPDF is excluded by its AGPL licence), within these per-turn budgets:
@@ -192,7 +204,7 @@ Password-protected PDFs, unreadable files and files without extractable text SHA
 - **THEN** the user message still contains exactly one `</transcript>`, the prompt's own
 
 ### Requirement: Attachment isolation
-Attachment text SHALL be extracted in a short-lived child process, so a hostile file can at worst take down that process. The child SHALL be killed after `ATTACHMENT_TIMEOUT_SECONDS` (the file is then rejected as too slow to read), SHALL have its address space capped at `ATTACHMENT_MAX_MEMORY_BYTES` where the operating system enforces it (Linux), and SHALL have a CPU-time limit one second above the timeout as a backstop. A child that dies, runs out of memory, or crashes SHALL make the turn fail with `422` `invalid_attachment`, never crash the worker. At most `ATTACHMENT_MAX_CONCURRENT` children SHALL run at once per process; a turn SHALL wait up to `ATTACHMENT_TIMEOUT_SECONDS` for a free one and then fail with `503` `attachments_busy`. A rejection SHALL log its reason only, never the document's text, a parser's message, or a traceback.
+Attachment text SHALL be extracted in a short-lived child process, so a hostile file can at worst take down that process. The child SHALL be killed after `ATTACHMENT_TIMEOUT_SECONDS` (the file is then rejected as too slow to read), SHALL have its address space capped at `ATTACHMENT_MAX_MEMORY_BYTES` where the operating system enforces it (Linux), and SHALL have a CPU-time limit one second above the timeout as a backstop. A child that dies, runs out of memory, or crashes SHALL make the turn fail with `422` `invalid_attachment`, never crash the worker. At most `ATTACHMENT_MAX_CONCURRENT` children SHALL run at once per process; a turn SHALL wait up to `ATTACHMENT_TIMEOUT_SECONDS` for a free one and then fail with `503` `attachments_busy`. A waiting turn SHALL hold no worker thread, so that bound holds however many turns wait, and a turn that is cancelled SHALL free its slot only once its child is gone. A rejection SHALL log its reason only, never the document's text, a parser's message, or a traceback.
 
 #### Scenario: Slow file killed
 - **WHEN** a file keeps its reader busy past `ATTACHMENT_TIMEOUT_SECONDS`
@@ -201,6 +213,10 @@ Attachment text SHALL be extracted in a short-lived child process, so a hostile 
 #### Scenario: Readers bounded
 - **WHEN** `ATTACHMENT_MAX_CONCURRENT` is 1 and a second extraction starts while the first runs
 - **THEN** the second waits for the slot, and fails with `attachments_busy` only if none frees up within the timeout
+
+#### Scenario: Busy within the timeout under load
+- **WHEN** more turns wait for a reader than the server has worker threads
+- **THEN** each turn that gets no reader fails with `attachments_busy` within `ATTACHMENT_TIMEOUT_SECONDS`, and no more than `ATTACHMENT_MAX_CONCURRENT` threads are taken by extraction
 
 #### Scenario: Rejection logged without content
 - **WHEN** an attachment fails to parse

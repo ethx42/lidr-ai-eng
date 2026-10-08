@@ -139,6 +139,15 @@ describe("the turn form", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a body with more parts than a turn can have before parsing it", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const parts = Array.from({ length: 14 }, (_, i) => `--x\r\nContent-Disposition: form-data; name="attachments"; filename="n${i}.txt"\r\n\r\nx\r\n`);
+    const res = await call(post(`${parts.join("")}--x--\r\n`, { "content-type": "multipart/form-data; boundary=x" }));
+    expect(res.status).toBe(422);
+    expect(await errorOf(res)).toEqual({ code: "invalid_request", message: "The multipart body has too many parts (at most 13)." });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects a malformed multipart body", async () => {
     const res = await call(post("garbage", { "content-type": "multipart/form-data; boundary=zzz" }));
     expect(res.status).toBe(422);

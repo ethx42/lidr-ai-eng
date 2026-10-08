@@ -167,6 +167,12 @@ def render_markdown(
     return "\n".join(lines) + "\n"
 
 
+# A compact turn's requirement lines: enough to carry an id, what it asks and its quote into the
+# next turn. The quote is cut, never marked, so a copied prefix still matches the transcript.
+MAX_COMPACT_STATEMENT_CHARS = 200
+MAX_COMPACT_EVIDENCE_CHARS = 300
+
+
 def render_compact(b: EnrichedBreakdown) -> str:
     """The assistant turn kept in a session's history: what the next turn must stay consistent
     with, a fraction of the JSON's size. One line per fact, so model text cannot forge a line."""
@@ -175,6 +181,12 @@ def render_compact(b: EnrichedBreakdown) -> str:
         [
             f"Project: {_inline(b.project_name)}",
             f"Summary: {_inline(b.summary)}",
+            "Requirements:",
+            *(
+                f"{_inline(r.id)} {_inline(r.statement)[:MAX_COMPACT_STATEMENT_CHARS]} — "
+                f'"{_inline(r.evidence)[:MAX_COMPACT_EVIDENCE_CHARS]}"'
+                for r in b.requirements
+            ),
             "Tasks:",
             *(
                 f"{_inline(task.id)} [{task.phase}] {_inline(task.name)} — "

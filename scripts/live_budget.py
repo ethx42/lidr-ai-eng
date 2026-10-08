@@ -42,11 +42,14 @@ def ensure_budget(
     return remaining
 
 
-def call_bound_usd(model: str, max_output_tokens: int) -> float:
-    """One call's worst case: the whole prompt billed as a cache write, then every output token."""
+def call_bound_usd(
+    model: str, max_output_tokens: int, prompt_tokens: int = PROMPT_TOKENS_BOUND
+) -> float:
+    """One call's worst case: the whole prompt billed as a cache write, then every output token.
+    `prompt_tokens` defaults to a single-shot prompt; a session turn passes its own bound."""
     usage = Usage(
-        input_tokens=PROMPT_TOKENS_BOUND,
-        cache_write_tokens=PROMPT_TOKENS_BOUND,
+        input_tokens=prompt_tokens,
+        cache_write_tokens=prompt_tokens,
         output_tokens=max_output_tokens,
     )
     cost = cost_usd(model, usage)

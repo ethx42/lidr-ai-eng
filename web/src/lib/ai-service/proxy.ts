@@ -167,18 +167,23 @@ export const sessionNotFound = (request: Request, method: "GET" | "POST") =>
 
 export type FormCheck = (form: FormData) => FormData | { status: number; code: string; message: string };
 
-// Multipart in, multipart out: the body is parsed here (counted against `maxBodyBytes` as it arrives, and dropped the
-// moment the client leaves), `check` validates it and rebuilds the form from the fields the AI service accepts, and that
-// form is sent without a content-type header, so undici writes the boundary. Parsing buffers the upload in memory, which
-// per-field validation needs; the cap bounds it.
-export const proxyMultipartSse = (request: Request, path: UpstreamPath, { maxBodyBytes, check }: { maxBodyBytes: number; check: FormCheck }) =>
+// Multipart in, multipart out: the body is parsed here (counted against `maxBodyBytes` and `maxParts` as it arrives, and
+// dropped the moment the client leaves), `check` validates it and rebuilds the form from the fields the AI service
+// accepts, and that form is sent without a content-type header, so undici writes the boundary. Parsing buffers the upload
+// in memory and builds every part at once, which per-field validation needs; the two caps bound it.
+export const proxyMultipartSse = (
+  request: Request,
+  path: UpstreamPath,
+  { maxBodyBytes, maxParts, check }: { maxBodyBytes: number; maxParts: number; check: FormCheck },
+) =>
   guarded(request, "POST", async (requestId, env) => {
     if (declaredTooLarge(request, maxBodyBytes)) return tooLarge(maxBodyBytes, requestId);
     const type = request.headers.get("content-type") ?? "";
     if (!/^multipart\/form-data;/i.test(type) || !request.body) return errorResponse(422, "invalid_request", "Expected a multipart/form-data body.", requestId);
-    const parsed = await parseCapped(request.body, type, maxBodyBytes, request.signal);
+    const parsed = await parseCapped(request.body, boundaryOf(type), { maxBytes: maxBodyBytes, maxParts }, request.signal);
     if (parsed === "aborted" || request.signal.aborted) return clientLeft();
     if (parsed === "too_large") return tooLarge(maxBodyBytes, requestId);
+    if (parsed === "too_many_parts") return errorResponse(422, "invalid_request", `The multipart body has too many parts (at most ${maxParts}).`, requestId);
     if (parsed === "malformed") return errorResponse(422, "invalid_request", "The multipart body could not be parsed.", requestId);
     const checked = check(parsed);
     if (!(checked instanceof FormData)) return errorResponse(checked.status, checked.code, checked.message, requestId);
@@ -187,23 +192,52 @@ export const proxyMultipartSse = (request: Request, path: UpstreamPath, { maxBod
   });
 
 class TooLarge extends Error {}
+class TooManyParts extends Error {}
 
-// The parsed form, or why there is none: the client left, the body went over `limit`, or it is not valid multipart.
-const parseCapped = async (body: ReadableStream<Uint8Array>, type: string, limit: number, signal: AbortSignal) => {
+// RFC 2046 boundary characters (bchars without the space), 1 to 70 of them, quoted or not; null when there is none.
+const BOUNDARY = /;\s*boundary=("?)([0-9A-Za-z'()+_,\-./:=?]{1,70})\1\s*(?:;|$)/i;
+const boundaryOf = (type: string) => BOUNDARY.exec(type)?.[2] ?? null;
+
+// Occurrences of "--" + boundary, across chunks: the last delimiter.length - 1 bytes carry over, so a delimiter split
+// between two chunks is counted once. Each part starts with one and the close delimiter adds one, so n parts count
+// n + 1; a "--boundary" inside a part's content only makes the count stricter.
+const delimiterCounter = (boundary: string) => {
+  const delimiter = Buffer.from(`--${boundary}`, "latin1");
+  let tail = Buffer.alloc(0);
+  return (chunk: Uint8Array) => {
+    const bytes = Buffer.concat([tail, chunk]);
+    let found = 0;
+    for (let at = bytes.indexOf(delimiter); at !== -1; at = bytes.indexOf(delimiter, at + 1)) found += 1;
+    tail = bytes.subarray(Math.max(0, bytes.length - delimiter.length + 1));
+    return found;
+  };
+};
+
+// The parsed form, or why there is none: the client left, the body went over `maxBytes` or `maxParts`, or it is not
+// valid multipart. The form is parsed with a content type rebuilt from the boundary counted, so the parts undici builds
+// are the parts counted, whatever else the client's header says.
+const parseCapped = async (body: ReadableStream<Uint8Array>, boundary: string | null, limits: { maxBytes: number; maxParts: number }, signal: AbortSignal) => {
+  if (!boundary) return "malformed" as const;
+  const delimiters = delimiterCounter(boundary);
   let size = 0;
+  let parts = -1; // the close delimiter
   const counted = new TransformStream<Uint8Array, Uint8Array>({
     transform: (chunk, controller) => {
       size += chunk.byteLength;
-      if (size > limit) controller.error(new TooLarge());
+      parts += delimiters(chunk);
+      if (size > limits.maxBytes) controller.error(new TooLarge());
+      else if (parts > limits.maxParts) controller.error(new TooManyParts());
       else controller.enqueue(chunk);
     },
   });
+  const type = `multipart/form-data; boundary=${boundary}`;
   try {
     // the signal cancels the incoming body when the client leaves, which a pending read would otherwise wait out
     return await new Response(body.pipeThrough(counted, { signal }), { headers: { "content-type": type } }).formData();
   } catch (error) {
     if (signal.aborted) return "aborted" as const;
     if (error instanceof TooLarge) return "too_large" as const;
+    if (error instanceof TooManyParts) return "too_many_parts" as const;
     if (error instanceof TypeError) return "malformed" as const;
     throw error;
   }

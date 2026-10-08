@@ -6,6 +6,9 @@ export const MAX_ATTACHMENTS = 5;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // The service's body cap: every attachment at its limit plus 1 MiB for the form fields.
 export const MAX_TURN_BYTES = MAX_ATTACHMENTS * MAX_ATTACHMENT_BYTES + 1024 * 1024;
+// The parts a turn form can need: its five fields, the files, and room for three empty file inputs. The BFF refuses more
+// while the body streams in, before parsing builds them all (a body at the byte cap could hold some 680,000).
+export const MAX_TURN_PARTS = MAX_ATTACHMENTS + 8;
 export const ATTACHMENT_EXTENSIONS = [".pdf", ".docx", ".txt"] as const;
 export const ATTACHMENT_ACCEPT = ATTACHMENT_EXTENSIONS.join(",");
 

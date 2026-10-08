@@ -11,7 +11,14 @@ import anyio
 from fastapi import APIRouter, Depends, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+)
 
 from app.attachments.extractor import (
     Attachment,
@@ -35,6 +42,7 @@ from app.schemas.session import SessionCreated, SessionView, TurnResponse
 from app.schemas.stream import ErrorEvent, PartialEvent, StatusEvent
 from app.services.conversation import ConversationService, SessionBusy, SessionNotFound
 from app.services.errors import LLMError
+from app.sessions import Session
 
 logger = logging.getLogger(__name__)
 
@@ -51,21 +59,31 @@ def get_conversation(request: Request) -> ConversationService:
 ConversationDep = Annotated[ConversationService, Depends(get_conversation)]
 
 
+def single_line_breaks(value: object) -> object:
+    """Multipart sends every line break of a form field as CRLF (browsers and undici alike), while
+    the composer counts a line break as one character: normalise before any length check."""
+    return value.replace("\r\n", "\n").replace("\r", "\n") if isinstance(value, str) else value
+
+
+LineBreaks = BeforeValidator(single_line_breaks)
+
+
 # One model for the fields and the files: a separate `Form()`/`File()` param next to a form model
 # makes FastAPI expect the model embedded under its name (422).
 class SessionEstimateForm(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    transcript: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
-        description="This turn's meeting transcription. Treated strictly as data."
-    )
+    transcript: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1), LineBreaks
+    ] = Field(description="This turn's meeting transcription. Treated strictly as data.")
     project_type: ProjectType
     detail_level: DetailLevel
     output_format: OutputFormat
-    output_language: (
+    output_language: Annotated[
         Annotated[str, StringConstraints(strip_whitespace=True, max_length=MAX_LANGUAGE_CHARS)]
-        | None
-    ) = Field(
+        | None,
+        LineBreaks,
+    ] = Field(
         default=None,
         description=(
             f"At most {MAX_LANGUAGE_CHARS} characters. Empty means not given: the "
@@ -84,9 +102,11 @@ class PreparedTurn:
     attachments: list[ExtractedAttachment]
 
 
-def ensure_idle(conversation: ConversationService, session_id: str) -> None:
-    if conversation.get(session_id).lock.locked():
+def ensure_idle(conversation: ConversationService, session_id: str) -> Session:
+    session = conversation.get(session_id)
+    if session.lock.locked():
         raise SessionBusy(session_id)
+    return session
 
 
 def estimate_request(form: SessionEstimateForm, settings: Settings) -> EstimateRequest:
@@ -129,13 +149,19 @@ async def prepared_turn(
     form: Annotated[SessionEstimateForm, Form(media_type="multipart/form-data")],
     conversation: ConversationDep,
     settings: SettingsDep,
-) -> PreparedTurn:
-    ensure_idle(conversation, session_id)
+) -> AsyncIterator[PreparedTurn]:
+    """Request-scoped: from before its attachments are read until the request ends, the session
+    counts as pending, which the cap never evicts (the turn's lock covers only the model call)."""
+    session = ensure_idle(conversation, session_id)
     request = estimate_request(form, settings)
-    files = await read_attachments(form.attachments, conversation.limits)
-    extracted = await conversation.extract(files) if files else []
-    ensure_idle(conversation, session_id)  # extraction can take seconds
-    return PreparedTurn(session_id, request, extracted)
+    session.pending += 1
+    try:
+        files = await read_attachments(form.attachments, conversation.limits)
+        extracted = await conversation.extract(files) if files else []
+        ensure_idle(conversation, session_id)  # extraction can take seconds
+        yield PreparedTurn(session_id, request, extracted)
+    finally:
+        session.pending -= 1
 
 
 PreparedTurnDep = Annotated[PreparedTurn, Depends(prepared_turn)]

@@ -4,11 +4,19 @@ commits the turn to the session only once the final response exists. Conversatio
 use the exact-match cache: the same message means something else in another conversation."""
 
 import asyncio
+import contextvars
+import functools
 from collections.abc import AsyncGenerator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import aclosing
 
-from app.attachments.extractor import Attachment, ExtractedAttachment, format_attachments
-from app.attachments.isolation import extract_all_isolated
+from app.attachments.extractor import (
+    Attachment,
+    AttachmentError,
+    ExtractedAttachment,
+    format_attachments,
+)
+from app.attachments.isolation import BUSY, extract_all_isolated
 from app.attachments.limits import AttachmentLimits
 from app.prompts.loader import RenderedPrompt, render, renders_attachments
 from app.schemas.estimation import EstimateRequest, EstimateResponse
@@ -47,6 +55,11 @@ class ConversationService:
         self.store = store
         self.limits = limits
         self.prompt_version = prompt_version
+        # Extraction slots, waited for in the event loop, and one thread per slot for the child.
+        self._slots = asyncio.BoundedSemaphore(limits.max_concurrent)
+        self._readers = ThreadPoolExecutor(
+            max_workers=limits.max_concurrent, thread_name_prefix="attachment-reader"
+        )
 
     def start(self) -> Session:
         return self.store.create()
@@ -58,9 +71,26 @@ class ConversationService:
         return session
 
     async def extract(self, files: Sequence[Attachment]) -> list[ExtractedAttachment]:
-        """Raises AttachmentError. The isolated extractor blocks while it waits on its child
-        process, so it runs in a worker thread."""
-        return await asyncio.to_thread(extract_all_isolated, files, self.limits)
+        """Raises AttachmentError, "busy" when no slot frees up within the limits' timeout.
+
+        Callers wait for one of `max_concurrent` slots here, in the event loop, so a waiting
+        caller holds no thread and its busy answer keeps to the timeout. The isolated extractor
+        blocks on its child process, so it runs on a thread of its own, and keeps its slot until
+        the child is gone, even when this caller is cancelled first."""
+        try:
+            async with asyncio.timeout(self.limits.timeout_seconds):
+                await self._slots.acquire()
+        except TimeoutError:
+            raise AttachmentError(BUSY, reason="busy") from None
+        run = asyncio.get_running_loop().run_in_executor(
+            self._readers,
+            # the request id reaches the extractor's log records, as with asyncio.to_thread
+            functools.partial(
+                contextvars.copy_context().run, extract_all_isolated, files, self.limits
+            ),
+        )
+        run.add_done_callback(lambda _: self._slots.release())
+        return await asyncio.shield(run)
 
     def _idle(self, session_id: str) -> Session:
         """The session, unless a turn holds it. Callers take its lock before their first await,

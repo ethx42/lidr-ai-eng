@@ -13,7 +13,7 @@ from app.services.pricing import cost_usd
 from app.services.providers.base import ChatMessage
 from scripts import smoke_live_session
 from scripts.live_budget import BudgetExceeded, call_bound_usd, record_spend, total_spent
-from tests.factories import breakdown
+from tests.factories import breakdown, task
 from tests.fakes import FakeProvider
 
 # What FakeProvider reports for every call.
@@ -75,6 +75,7 @@ async def test_three_turns_pass_and_record_their_summed_cost(
     assert total_spent(ledger) == pytest.approx(3 * TURN_USD)
     out = capsys.readouterr().out
     assert out.count("metadata:") == 3
+    assert out.count("| mentions Stripe yes |") == 3  # where turn 1's scope was kept, or lost
     assert out.splitlines()[-1].endswith(": pass")
     # Prints what the session learned, never what the client sent.
     for turn in smoke_live_session.TURNS:
@@ -129,6 +130,49 @@ async def test_fails_when_redsys_is_missing_after_the_turn_with_the_pdf(
     assert await run(settings, fake_with(*kept(*technologies)), ledger) == 1
     last = capsys.readouterr().out.splitlines()[-1]
     assert "FAIL: Redsys missing from the technologies after turn 2" in last
+
+
+ADMIN = ("R1", "Refund admin page", "an admin page to issue refunds")
+RESEND = ("R2", "Resend confirmation emails", "resend confirmation emails")
+
+
+@pytest.mark.parametrize(
+    ("third", "failure"),
+    [
+        (
+            breakdown(project_name="Lumen Checkout", technologies=[], requirements=[ADMIN]),
+            "FAIL: turn 3 dropped scope (requirements 2 -> 1)",
+        ),
+        (
+            breakdown(project_name="Lumen Checkout", technologies=[], requirements=[ADMIN, RESEND]),
+            "FAIL: turn 3 dropped turn 1's scope (no requirement or task mentions Stripe)",
+        ),
+    ],
+    ids=["fewer requirements", "turn 1 forgotten"],
+)
+async def test_fails_when_turn_3_estimates_only_its_own_message(
+    settings: Settings,
+    ledger: Path,
+    capsys: pytest.CaptureFixture[str],
+    third: EstimationBreakdown,
+    failure: str,
+) -> None:
+    first, second = kept(["Stripe"], ["Redsys"])
+    assert await run(settings, fake_with(first, second, third), ledger) == 1
+    assert failure in capsys.readouterr().out.splitlines()[-1]
+
+
+async def test_turn_1_scope_may_be_carried_by_a_task_alone(
+    settings: Settings, ledger: Path
+) -> None:
+    stripe_task = task("T1") | {"name": "Stripe card payments"}
+    third = breakdown(
+        project_name="Lumen Checkout",
+        technologies=[],
+        requirements=[ADMIN, RESEND],
+        tasks=[stripe_task, task("T2", basis=["R2"], phase="qa")],
+    )
+    assert await run(settings, fake_with(*kept(["Stripe"], ["Redsys"]), third), ledger) == 0
 
 
 async def test_redsys_matches_whatever_the_model_calls_it(settings: Settings, ledger: Path) -> None:
@@ -224,15 +268,66 @@ def test_the_chain_is_pinned_whatever_the_env_says(
     ]
 
 
+def test_the_session_prompt_bound_covers_the_measured_turn_3(settings: Settings) -> None:
+    # Turn 3 of the live re-run after the v3 complete-estimate fix sent 7,885 input tokens.
+    assert smoke_live_session.session_prompt_tokens(settings) > 7_885
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("MAX_HISTORY_CHARS", "500000"),
+        ("MAX_TRANSCRIPTION_CHARS", "60000"),
+        ("ATTACHMENT_MAX_CHARS", "60000"),
+        ("ATTACHMENT_MAX_FILES", "6"),
+        ("LLM_MAX_OUTPUT_TOKENS", "8192"),
+    ],
+)
+def test_the_session_prompt_bound_grows_with_each_setting(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+    larger = smoke_live_session.pinned_settings()
+    assert smoke_live_session.session_prompt_tokens(
+        larger
+    ) > smoke_live_session.session_prompt_tokens(settings)
+
+
 def test_the_guard_covers_every_turn_at_its_worst_case(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    haiku = call_bound_usd("claude-haiku-4-5", 4096)
-    # The dearer model of the chain may serve any turn.
+    prompt = smoke_live_session.session_prompt_tokens(settings)
+    haiku = call_bound_usd("claude-haiku-4-5", 4096, prompt_tokens=prompt)
+    # The dearer model of the chain may serve any turn, with a session-sized prompt.
     assert smoke_live_session.turn_bound_usd(settings) == pytest.approx(haiku)
+    assert haiku > call_bound_usd("claude-haiku-4-5", 4096)  # stricter than a single-shot call
     assert smoke_live_session.guard_usd(settings) == pytest.approx(3 * haiku)
-    assert smoke_live_session.guard_usd(settings) > smoke_live_session.ESTIMATE_USD
 
-    monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "16")
+    # Tiny limits: the brief's estimate is the floor.
+    for name, value in {
+        "LLM_MAX_OUTPUT_TOKENS": "16",
+        "MAX_TRANSCRIPTION_CHARS": "100",
+        "ATTACHMENT_MAX_CHARS": "100",
+        "ATTACHMENT_MAX_FILES": "1",
+        "MAX_HISTORY_CHARS": "100",
+    }.items():
+        monkeypatch.setenv(name, value)
     small = smoke_live_session.pinned_settings()
+    assert 3 * smoke_live_session.turn_bound_usd(small) < smoke_live_session.ESTIMATE_USD
     assert smoke_live_session.guard_usd(small) == smoke_live_session.ESTIMATE_USD
+
+
+async def test_the_script_checks_the_budget_for_every_turn_at_its_worst(
+    settings: Settings, ledger: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checked: list[float] = []
+
+    def ensure(estimated_usd: float, *, ledger: Path) -> float:
+        checked.append(estimated_usd)
+        raise BudgetExceeded("stop before any call")
+
+    monkeypatch.setattr(smoke_live_session, "ensure_budget", ensure)
+    with pytest.raises(BudgetExceeded):
+        await run(settings, fake_with(), ledger)
+    turn = smoke_live_session.turn_bound_usd(settings)
+    assert checked == [pytest.approx(max(smoke_live_session.ESTIMATE_USD, 3 * turn))]
