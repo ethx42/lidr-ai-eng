@@ -39,7 +39,8 @@ const DoneActions = ({ state }: { state: Done }) => {
       {markdown && (
         <Button type="button" variant="outline" size="sm" onClick={() => void copyText(markdown, "Estimate copied as markdown")}>
           <Copy />
-          Copy as markdown
+          Copy{" "}
+          <span className="sr-only sm:not-sr-only">as markdown</span>
         </Button>
       )}
       {questions.length > 0 && (
@@ -111,7 +112,9 @@ export const AssistantMessage = ({
     >
       {state.status === "error" && <ErrorCard error={state.error} onRetry={onRetry && own(onRetry)} onEditTranscript={onEditTranscript} />}
       {state.status !== "error" && (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        // Two rows, so the estimate below never moves when the stream ends: the progress, then the actions, which hold a
+        // button's height from the stream's start (the copy actions take Stop's place, on one line down to 360 px).
+        <div className="flex flex-col items-start gap-2">
           <div className="flex min-w-0 items-center">
             <StatusSteps state={state} />
             {/* Rendered from the stream's start, so "Stopped" is announced when it appears. */}
@@ -124,24 +127,27 @@ export const AssistantMessage = ({
               )}
             </p>
           </div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {state.status === "streaming" && (
-              <Button ref={stopRef} type="button" variant="outline" size="sm" onClick={own(onStop)} aria-keyshortcuts="Escape">
-                <Square />
-                Stop
-                <kbd aria-hidden className="hidden font-sans text-xs text-muted-foreground sm:inline">
-                  Esc
-                </kbd>
-              </Button>
-            )}
-            {state.status === "done" && <DoneActions state={state} />}
-            {state.status === "cancelled" && onRetry && (
-              <Button type="button" variant="ghost" size="sm" onClick={own(onRetry)}>
-                <RotateCcw />
-                Retry
-              </Button>
-            )}
-          </div>
+          {/* A stopped turn that can no longer run again has nothing to hold here. */}
+          {(state.status !== "cancelled" || onRetry) && (
+            <div data-slot="message-actions" className="flex min-h-7 flex-wrap items-center gap-2">
+              {state.status === "streaming" && (
+                <Button ref={stopRef} type="button" variant="outline" size="sm" onClick={own(onStop)} aria-keyshortcuts="Escape">
+                  <Square />
+                  Stop
+                  <kbd aria-hidden className="hidden font-sans text-xs text-muted-foreground sm:inline">
+                    Esc
+                  </kbd>
+                </Button>
+              )}
+              {state.status === "done" && <DoneActions state={state} />}
+              {state.status === "cancelled" && onRetry && (
+                <Button type="button" variant="ghost" size="sm" onClick={own(onRetry)}>
+                  <RotateCcw />
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
       {content && (

@@ -182,7 +182,7 @@ describe("Workspace", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     return text;
   };
-  // A viewport whose width the test changes mid-run: the turn card's query answers `wide`, change listeners fire.
+  // A viewport whose width the test changes mid-run (Tailwind's `md`), change listeners fire: Evidence must not care.
   const viewport = (initiallyWide: boolean) => {
     let wide = initiallyWide;
     const listeners = new Set<() => void>();
@@ -263,7 +263,7 @@ describe("Workspace", () => {
       await finish(0);
       expect(fact("Project name")).toHaveTextContent("Physiotherapy patient portal");
       expect(fact("Technologies")).toHaveTextContent("ClinicCloud");
-      expect(within(memory()).getAllByText("Updated")).toHaveLength(4);
+      expect(within(memory()).getAllByText("Updated in turn 1")).toHaveLength(4);
       expect(screen.getByText("History 1 / 6 turns")).toBeInTheDocument();
       expect(within(turn(1)).queryByText(/vs previous turn/)).not.toBeInTheDocument(); // nothing to compare the first turn with
 
@@ -271,10 +271,50 @@ describe("Workspace", () => {
       const bigger = { ...fullEstimate, totals: { ...fullEstimate.totals, expected_hours: 125, estimated_cost: 7500 } };
       await finish(1, turnResult({ breakdown: bigger, project_metadata: { ...MEMORY, mentioned_technologies: ["ClinicCloud", "Redsys"] }, metadata_changes: ["mentioned_technologies"], history_turns: 2 }));
       expect(fact("Technologies")).toHaveTextContent("ClinicCloudRedsys");
-      expect(within(memory()).getAllByText("Updated")).toHaveLength(1);
-      expect(within(fact("Technologies").previousElementSibling as HTMLElement).getByText("Updated")).toBeInTheDocument();
+      expect(within(memory()).getAllByText(/^Updated/)).toHaveLength(1);
+      expect(within(fact("Technologies").previousElementSibling as HTMLElement).getByText("Updated in turn 2")).toBeInTheDocument();
       expect(screen.getByText("History 2 / 6 turns")).toBeInTheDocument();
       expect(within(turn(2)).getByText("+30 h, +$1,800 vs previous turn")).toBeInTheDocument();
+    });
+
+    // A stopped or failed turn has no totals and changes no memory: what is compared, and what changed, names its turn.
+    it("names the turn behind the memory's marks and the totals' change when a stopped turn sits between", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      await run(user, input, "Second call");
+      await user.click(within(turn(2)).getByRole("button", { name: "Stop" }));
+      await run(user, input, "Third call");
+      expect(within(memory()).getAllByText("Updated in turn 1")).toHaveLength(4); // while turn 3 streams
+      const bigger = { ...fullEstimate, totals: { ...fullEstimate.totals, expected_hours: 125, estimated_cost: 7500 } };
+      await finish(2, turnResult({ breakdown: bigger, metadata_changes: ["agreed_scope"], history_turns: 2 }));
+      expect(within(turn(3)).getByText("+30 h, +$1,800 vs turn 1")).toBeInTheDocument();
+      expect(within(fact("Agreed scope").previousElementSibling as HTMLElement).getByText("Updated in turn 3")).toBeInTheDocument();
+      expect(within(memory()).getAllByText(/^Updated/)).toHaveLength(1);
+    });
+
+    // Heading navigation reads the conversation turn by turn: each turn's label is its h2, and its estimate sits below it.
+    it("gives each turn a heading, with the estimate's title and sections, structured or as a document, one level below", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0, turnResult({ estimation: "## Estimation: Booking\n\n### Task breakdown\n\nThree tasks.\n" }));
+      const card = turn(1);
+      expect(within(card).getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["Turn 1"]);
+      expect(within(card).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([fullEstimate.project_name]);
+      expect(within(card).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)).toEqual([
+        "Summary",
+        "Requirements",
+        "Assumptions",
+        "Open questions",
+        "Tasks",
+        "Team",
+        "Risks",
+        "Confidence",
+      ]);
+
+      await user.click(within(card).getByRole("radio", { name: "Document" }));
+      expect(within(card).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Estimation: Booking"]);
+      expect(within(card).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)).toEqual(["Task breakdown"]);
     });
 
     // S5-R3: re-running a completed turn would fork the history.
@@ -375,6 +415,48 @@ describe("Workspace", () => {
       expect(fileNames(sent(1).form)).toEqual(["spec.pdf"]);
     });
 
+    // The answers on screen are the user's until they ask for a new conversation: they have not copied them all yet.
+    it("keeps the turns already shown, read-only, above a note when the session expires mid-conversation, until New conversation", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      await run(user, input, "Second call");
+      await user.click(within(turn(2)).getByRole("button", { name: "Stop" }));
+      respond = () => Response.json({ error: { code: "session_not_found", message: "Session not found or expired." }, request_id: "r" }, { status: 404 });
+      await run(user, input, "Third call");
+      expect(await screen.findByText("This conversation expired, so a new one was started. Your message is back in the composer.")).toBeInTheDocument();
+      await waitFor(() => expect(sessionStorage.getItem("estimator.sessionId")).toBe(SESSIONS[1]));
+      expect(input).toHaveValue("Third call");
+      expect(await screen.findByText("History 0 / 6 turns")).toBeInTheDocument();
+      expect(fact("Project name")).toHaveTextContent("Not mentioned yet"); // the new conversation's memory
+
+      const expired = screen.getByRole("list", { name: "Expired conversation" });
+      const kept = within(expired).getAllByRole("listitem").filter((item) => item.parentElement === expired);
+      expect(kept.map((card) => within(card).getByRole("heading", { level: 2 }).textContent)).toEqual(["Turn 1", "Turn 2"]);
+      expect(within(kept[0]).getByRole("heading", { level: 3, name: fullEstimate.project_name })).toBeInTheDocument();
+      expect(within(kept[0]).getByRole("button", { name: "Copy as markdown" })).toBeInTheDocument();
+      expect(within(kept[1]).getByText("Stopped")).toBeInTheDocument();
+      expect(within(kept[1]).queryByRole("button", { name: "Retry" })).not.toBeInTheDocument(); // its session is gone
+      expect(screen.getByRole("heading", { level: 2, name: "This conversation expired" })).toBeInTheDocument();
+      expect(screen.getByText("The answers above are kept for reference. The new conversation starts without their history and memory.")).toBeInTheDocument();
+      expect(screen.queryByText("Start the conversation")).not.toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Conversation" })).not.toBeInTheDocument();
+
+      respond = undefined;
+      await user.click(screen.getByRole("button", { name: "Estimate" }));
+      await waitFor(() => expect(turnCalls()).toHaveLength(4));
+      expect(sent(3).url).toBe(`/api/sessions/${SESSIONS[1]}/estimate/stream`);
+      expect(turns()).toHaveLength(1);
+      expect(turn(1)).toHaveTextContent("Turn 1"); // the new conversation numbers its own turns
+      expect(screen.getByRole("list", { name: "Expired conversation" })).toBeInTheDocument();
+
+      await user.click(within(turn(1)).getByRole("button", { name: "Stop" }));
+      await user.click(screen.getByRole("button", { name: "New conversation" }));
+      expect(screen.queryByRole("list", { name: "Expired conversation" })).not.toBeInTheDocument();
+      expect(screen.queryByText("This conversation expired")).not.toBeInTheDocument();
+      expect(screen.getByText("Start the conversation")).toBeInTheDocument();
+    });
+
     it("recovers when the session vanishes mid-turn (an error event)", async () => {
       const { user, input } = setup();
       await run(user, input, "Mid-turn");
@@ -394,18 +476,37 @@ describe("Workspace", () => {
       expect(sessionStorage.getItem("estimator.sessionId")).toBe(SESSIONS[0]); // the same conversation
     });
 
-    it("puts a turn whose attachment was rejected back in the composer, without the server's message lost", async () => {
+    // The fix is in the attachments: focus goes to the rejected file, which carries the service's reason.
+    it("puts a turn whose attachment was rejected back in the composer, with that file marked by the service's reason and focused", async () => {
       respond = () => Response.json({ error: { code: "invalid_attachment", message: "scan.pdf: unreadable PDF" }, request_id: "r" }, { status: 422 });
       const { user, input } = setup();
       await loaded();
       await user.type(input, "With a bad file");
-      await attach(user, pdf("scan.pdf"));
+      await attach(user, pdf("brief.pdf"), pdf("scan.pdf"));
       await user.click(screen.getByRole("button", { name: "Estimate" }));
       const card = await within(turn(1)).findByRole("alert");
       expect(card).toHaveTextContent("An attachment was rejected: scan.pdf: unreadable PDF.");
       await user.click(within(card).getByRole("button", { name: "Edit attachments" }));
       expect(input).toHaveValue("With a bad file");
-      expect(within(screen.getByRole("list", { name: "Attached documents" })).getByText("scan.pdf")).toBeInTheDocument();
+      const attached = screen.getByRole("list", { name: "Attached documents" });
+      const remove = within(attached).getByRole("button", { name: "Remove scan.pdf" });
+      expect(remove).toHaveFocus();
+      expect(remove).toHaveAccessibleDescription("scan.pdf: unreadable PDF");
+      expect(remove.closest("li")).toHaveTextContent("Rejected");
+      expect(within(attached).getByRole("button", { name: "Remove brief.pdf" }).closest("li")).not.toHaveTextContent("Rejected");
+      expect(screen.getByText("scan.pdf: unreadable PDF")).toBeVisible();
+
+      await user.click(remove); // the reason goes with the file
+      expect(screen.queryByText("scan.pdf: unreadable PDF")).not.toBeInTheDocument();
+      expect(screen.queryByText("Rejected")).not.toBeInTheDocument();
+
+      // A different draft in the composer is never replaced silently: its question takes focus first.
+      await user.clear(input);
+      await user.type(input, "Something else");
+      await user.click(within(card).getByRole("button", { name: "Edit attachments" }));
+      expect(screen.getByRole("group", { name: "Replace your draft with the message with the rejected attachment?" })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Keep my draft" })).toHaveFocus());
+      expect(within(screen.getByRole("list", { name: "Attached documents" })).getByRole("button", { name: "Remove scan.pdf" })).toHaveAccessibleDescription("scan.pdf: unreadable PDF");
     });
 
     it("says when no conversation can be started, and tries again", async () => {
@@ -471,6 +572,21 @@ describe("Workspace", () => {
       await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote from an earlier message"));
     });
 
+    // The extracted text of a turn's files is part of what the model saw, but not of the transcript shown in the turn.
+    it("says a grounded quote with no mark may come from an attachment when the turn sent files", async () => {
+      const { user, input } = setup();
+      await loaded();
+      await user.type(input, "See the attached brief.");
+      await attach(user, pdf("brief.pdf"));
+      await user.click(screen.getByRole("button", { name: "Estimate" }));
+      await waitFor(() => expect(turnCalls()).toHaveLength(1));
+      await finish(0);
+      await openTranscript(user);
+      expect(transcriptPane().querySelector("mark")).toBeNull();
+      act(() => within(turn(1)).getByRole("button", { name: "Evidence for R1" }).focus());
+      await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote from an attachment or an earlier message"));
+    });
+
     it("below 768 px, Evidence opens the turn's transcript at its quote and pins it, until the next pin or attempt", async () => {
       stubPointer("fine", { wide: false });
       const { user, input } = setup();
@@ -484,7 +600,7 @@ describe("Workspace", () => {
       expect(within(turn(1)).getByRole("button", { name: /^Transcript/ })).toHaveAttribute("aria-expanded", "true");
       expect(transcriptPane()).toHaveFocus();
       expect(mark("R2")).toHaveAttribute("data-active");
-      // the page, not the pane, scrolls below 768 px, so the quote is brought into view through every scrolling ancestor
+      // the transcript sits far above the requirement, so the quote is brought into view through every scrolling ancestor
       expect(scrolled.mock.contexts).toEqual([mark("R2")]);
       expect(scrolled).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
       expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull(); // the quote shows in the transcript instead
@@ -534,7 +650,9 @@ describe("Workspace", () => {
       await waitFor(() => expect(document.querySelector('[data-slot="hover-card-content"]')).toHaveTextContent("Quote given by the model, not found in the transcript"));
     });
 
-    it("ignores a pin side by side, where hover and focus link requirements to quotes", async () => {
+    // The transcript sits in the turn's header at every width, far above most requirements: a pin is how the quote
+    // reaches the reader, so it holds when the window widens.
+    it("keeps a pin once the viewport widens", async () => {
       const resize = viewport(false);
       const { user, input } = setup();
       await run(user, input);
@@ -542,8 +660,33 @@ describe("Workspace", () => {
       await user.click(screen.getByRole("button", { name: "Evidence for R2" }));
       expect(mark("R2")).toHaveAttribute("data-active");
       resize(true);
-      expect(transcriptPane().querySelector("mark[data-active]")).toBeNull();
-      expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).not.toHaveAttribute("data-active");
+      expect(mark("R2")).toHaveAttribute("data-active");
+      expect(screen.getByRole("button", { name: "Evidence for R2" }).closest("li")).toHaveAttribute("data-active");
+    });
+
+    it("from 768 px too, Evidence opens the turn's transcript at its quote and brings it into view; hover and focus still show its card", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      await finish(0);
+      const card = () => document.querySelector('[data-slot="hover-card-content"]');
+      const evidence = within(turn(1)).getByRole("button", { name: "Evidence for R2" });
+      act(() => evidence.focus());
+      await waitFor(() => expect(card()).toHaveTextContent("Quote from the transcript"));
+      const scrolled = vi.mocked(Element.prototype.scrollIntoView);
+      scrolled.mockClear();
+
+      await user.click(evidence);
+      expect(within(turn(1)).getByRole("button", { name: /^Transcript/ })).toHaveAttribute("aria-expanded", "true");
+      expect(transcriptPane()).toHaveFocus();
+      expect(mark("R2")).toHaveAttribute("data-active");
+      expect(scrolled.mock.contexts).toEqual([mark("R2")]); // through every scrolling ancestor: the page too
+      await waitFor(() => expect(card()).toBeNull());
+      await act(() => new Promise((resolve) => setTimeout(resolve, 300))); // past the open delay: Radix's leaked timer fires
+      expect(card()).toBeNull();
+
+      await user.unhover(evidence);
+      await user.hover(evidence); // the next hover shows the card again
+      await waitFor(() => expect(card()).toHaveTextContent("Quote from the transcript"));
     });
   });
 
@@ -673,6 +816,10 @@ describe("Workspace", () => {
       const { user } = setup();
       await loaded();
       expect(screen.getByText("PDF, DOCX or TXT, up to 5 files of 10 MB each")).toBeInTheDocument();
+      // Within the service's 20 MiB but over the BFF's 10 MiB.
+      await attach(user, new File([new Uint8Array(15 * 1024 * 1024)], "scan.pdf", { type: "application/pdf" }));
+      expect(screen.getByText("scan.pdf is too large: each file can be up to 10 MB.")).toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Attached documents" })).not.toBeInTheDocument();
       await attach(user, ...["a", "b", "c", "d", "e", "f"].map((name) => pdf(`${name}.pdf`)));
       expect(within(screen.getByRole("list", { name: "Attached documents" })).getAllByRole("listitem")).toHaveLength(5);
       expect(screen.getByText("f.pdf was not added: up to 5 files per message.")).toBeInTheDocument();

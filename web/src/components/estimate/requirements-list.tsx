@@ -9,29 +9,38 @@ import { Empty, Section } from "./section";
 
 type Requirement = NonNullable<EstimateModel["requirements"]>[number];
 type FocusHandler = (id: string | null) => void;
-// The action that pins a requirement (below 768 px), or undefined when it has no mark in the transcript to show.
+// The action that pins a requirement, or undefined when it has no mark in the transcript to show.
 type PinFor = (id: string) => (() => void) | undefined;
 // The card's caption for a grounded quote that is not in the transcript shown (it came from an earlier message or an
 // attachment), or undefined for the default.
 type EvidenceNote = (id: string) => string | undefined;
 
-// Radix opens a hover card on mouse hover and keyboard focus but ignores touch (and cancels the tap), so touch opens it explicitly.
-// With `onPin` (below 768 px, where the transcript sits behind its turn's disclosure, and for a quote marked there) the
-// button shows the quote in the transcript instead.
+// Radix opens a hover card on mouse hover and keyboard focus but ignores touch (and cancels the tap), so touch opens it
+// explicitly. With `onPin` (a quote marked in the transcript behind the turn's disclosure) a click or a tap shows the
+// quote there instead: the card closes, and stays shut until the button is hovered or focused again, because Radix can
+// still fire an open timer the click left behind (stack.md), beside a button the page has scrolled away from.
 const Evidence = ({ id, quote, ungrounded, note, onPin }: { id?: string; quote: string; ungrounded: boolean; note?: string; onPin?: () => void }) => {
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const descriptionId = useId();
-  // While it pins, the card never opens, not even later: a card opened then would show once the viewport widens.
-  const show = (next: boolean) => setOpen(next && !onPin);
+  const show = (next: boolean) => setOpen(next && !pinned);
+  const again = () => setPinned(false);
+  const pin = (run: () => void) => {
+    setPinned(true);
+    setOpen(false);
+    run();
+  };
   return (
-    <HoverCard open={open && !onPin} onOpenChange={show} openDelay={200} closeDelay={150}>
+    <HoverCard open={open} onOpenChange={show} openDelay={200} closeDelay={150}>
       <HoverCardTrigger asChild>
         <button
           type="button"
           aria-label={id ? `Evidence for ${id}` : "Evidence"}
           aria-describedby={descriptionId}
-          onClick={() => (onPin ? onPin() : show(true))}
-          onPointerDown={(event) => event.pointerType === "touch" && show(true)}
+          onClick={() => (onPin ? pin(onPin) : show(true))}
+          onPointerEnter={again}
+          onFocus={again}
+          onPointerDown={(event) => event.pointerType === "touch" && !onPin && show(true)}
           className="inline-flex h-6 items-center gap-1 rounded-sm px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <Quote className="size-3.5" />

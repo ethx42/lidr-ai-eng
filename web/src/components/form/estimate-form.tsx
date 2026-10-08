@@ -20,10 +20,11 @@ import { DETAIL_LEVELS, OUTPUT_FORMATS, PROJECT_TYPES } from "@/lib/estimate/cho
 import { DEFAULT_VALUES, DETAIL_LEVEL_LABELS, type EstimateParams, estimateFormSchema, OUTPUT_FORMAT_LABELS, PROJECT_TYPE_LABELS, toRequest } from "./estimate-form-schema";
 import { Segmented } from "./segmented";
 
-// `edit` puts text back for editing (asking first when it would replace a different draft); `what` completes "Replace
-// your draft with …?". `clear` empties the transcript once it has been sent, keeping the choices. `focus` moves focus to
-// the transcript where typing is the next step without covering the page (a fine pointer); false on a touch screen.
-export type EstimateFormHandle = { edit: (text: string, what?: string) => void; clear: () => void; focus: () => boolean };
+// `edit` puts text back for editing, asking first when it would replace a different draft (false then), and focuses the
+// transcript unless `focus` is false; `what` completes "Replace your draft with …?". `clear` empties the transcript once
+// it has been sent, keeping the choices. `focus` moves focus to the transcript where typing is the next step without
+// covering the page (a fine pointer); false on a touch screen.
+export type EstimateFormHandle = { edit: (text: string, what?: string, opts?: { focus?: boolean }) => boolean; clear: () => void; focus: () => boolean };
 type Props = {
   onSubmit: (body: components["schemas"]["EstimateRequest"], opts: { promptVersion: string }) => void;
   versions?: string[]; // absent: no prompt-version choice (a conversation's endpoints take none)
@@ -96,9 +97,11 @@ export const EstimateForm = ({
 
   // The rejected transcript goes back for editing; the user asked to edit, so it takes focus on any pointer.
   useImperativeHandle(handle, () => ({
-    edit: (text, what = "the transcript to shorten") => {
+    edit: (text, what = "the transcript to shorten", { focus = true } = {}) => {
       askedFrom.current = null;
-      if (draft.replace({ text, what })) inputRef.current?.focus();
+      const replaced = draft.replace({ text, what });
+      if (replaced && focus) inputRef.current?.focus();
+      return replaced;
     },
     clear: () => resetField("transcription"), // also clears its error and dirty state, so no "empty" message shows
     focus: () => focusForTyping(inputRef.current),

@@ -45,6 +45,11 @@ const SAMPLE = "Clinic portal";
 
 const FREIGHT = { name: "Freight marketplace", technologies: ["iOS", "Android", "GPS", "SAP"] };
 const DENTAL = { name: "Dental clinic website", technologies: ["email"] };
+// The longest technology names the AI service keeps (80 characters, app/sessions.py), with spaces and without.
+const LONG_TECHNOLOGIES = [
+  "Microsoft Dynamics 365 Finance and Operations (on-premises) with Azure Data Lake",
+  "SalesforceToSAPS4HANABidirectionalSyncConnectorForEnterpriseResourcePlanning2026",
+];
 
 // WCAG 2.2 AA plus axe's best practices; only serious and critical findings fail the run.
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
@@ -108,7 +113,8 @@ const memory = (page: Page) => page.getByRole("complementary", { name: "Project 
 const thread = (page: Page) => page.getByRole("list", { name: "Conversation" });
 const turn = (page: Page, n: number) => thread(page).getByRole("listitem", { name: `Turn ${n}`, exact: true });
 const estimate = (scope: Locator) => scope.getByRole("article");
-const projectName = (scope: Locator) => estimate(scope).getByRole("heading", { level: 2 });
+// Inside a turn, whose "Turn n" label is the h2, the estimate's title is an h3.
+const projectName = (scope: Locator) => estimate(scope).getByRole("heading", { level: 3 });
 const totals = (scope: Locator) => estimate(scope).locator("header dl");
 const turnTranscript = (page: Page, n: number) => page.getByRole("region", { name: `Transcript of turn ${n}`, exact: true });
 const stopped = (page: Page) => page.getByRole("status").filter({ hasText: /^Stopped/ });
@@ -155,12 +161,16 @@ const pickSample = async (page: Page) => {
   await expect(page.getByRole("menu")).toHaveCount(0);
 };
 
-// Sends the composer's turn; resolves with the request ID the BFF answered with (the stream's headers arrive first).
-const send = async (page: Page, submit = () => estimateButton(page).click()) => {
-  const response = page.waitForResponse((res) => TURN_PATH.test(new URL(res.url()).pathname) && res.request().method() === "POST");
-  await submit();
+const clickEstimate = async (page: Page) => {
+  await estimateButton(page).click();
   // The pointer leaves the content: a turn scrolling under it would highlight a requirement or open an Evidence card.
   await page.mouse.move(0, 0);
+};
+
+// Sends the composer's turn; resolves with the request ID the BFF answered with (the stream's headers arrive first).
+const send = async (page: Page, submit = () => clickEstimate(page)) => {
+  const response = page.waitForResponse((res) => TURN_PATH.test(new URL(res.url()).pathname) && res.request().method() === "POST");
+  await submit();
   const requestId = (await response).headers()["x-request-id"];
   expect(requestId).toBeTruthy();
   return requestId;
@@ -184,7 +194,7 @@ const expectPartial = (page: Page) =>
       () =>
         page.evaluate(() => {
           const article = document.querySelector("article[aria-busy=true]");
-          return Boolean(article?.querySelector("h2:not(.sr-only)")?.textContent && article.querySelector("header dl [data-slot=skeleton]"));
+          return Boolean(article?.querySelector("h3:not(.sr-only)")?.textContent && article.querySelector("header dl [data-slot=skeleton]"));
         }),
       { message: "partial render: project name streamed in, totals still skeletons" },
     )
@@ -198,6 +208,11 @@ const expectResult = async (scope: Locator, { timeout }: { timeout?: number } = 
 };
 
 const expectTechnologies = (page: Page, names: string[]) => expect(fact(page, "Technologies").getByRole("listitem")).toHaveText(names);
+
+// px from the turn's top to its estimate: the same while it streams and once the result arrives, because the rows above
+// it (the result bar, the progress steps, and the actions row with Stop, then the copy actions) keep their size.
+const estimateOffset = (scope: Locator) =>
+  estimate(scope).evaluate((article) => article.getBoundingClientRect().top - (article.closest("li")?.getBoundingClientRect().top ?? 0));
 
 const openInspector = async (page: Page, tab: "Context" | "Last call") => {
   await page.getByRole("button", { name: "Inspector" }).click();
@@ -264,15 +279,14 @@ test.describe("session", () => {
     const progress = one.getByRole("list", { name: "Progress" });
     await expect(progress.getByRole("listitem")).toHaveText(["Contacting the model", "Drafting the estimate", "Checking the estimate"].map((step) => new RegExp(step)));
     await expect(stopButton(page)).toBeVisible();
+    await expect(one.getByRole("heading", { level: 2 })).toHaveText("Turn 1");
     await expectPartial(page);
-    // The Structured | Document toggle arrives with the result in a bar held at its size while the turn streams, so
-    // nothing below the bar moves.
-    const belowBar = () =>
-      one.locator("[data-slot=turn-result-bar] + div").evaluate((message) => message.getBoundingClientRect().top - (message.closest("li")?.getBoundingClientRect().top ?? 0));
-    const streamingOffset = await belowBar();
+    // The view toggle and the copy actions arrive with the result in rows held at their size while the turn streams.
+    const streamingOffset = await estimateOffset(one);
     await expectResult(one);
     await expect(one.getByRole("radiogroup", { name: "Result view" })).toBeVisible();
-    expect(await belowBar(), "px from the turn's top to the content below the result bar, once the result arrived").toBe(streamingOffset);
+    await expect(one.getByRole("button", { name: "Copy as markdown" })).toBeVisible();
+    expect(await estimateOffset(one), "px from the turn's top to its estimate, once the result arrived").toBe(streamingOffset);
     await expect(projectName(one)).toHaveText(FREIGHT.name);
     // Tasks grouped by phase: one row group per phase, each with its tasks.
     const tasks = estimate(one).getByRole("table");
@@ -286,7 +300,7 @@ test.describe("session", () => {
     // The memory holds the first answer's facts, each marked as updated; the meter counts one turn.
     await expect(fact(page, "Project name")).toHaveText(FREIGHT.name);
     await expectTechnologies(page, FREIGHT.technologies);
-    for (const label of ["Project name", "Team size", "Technologies", "Agreed scope"]) await expect(factTerm(page, label)).toContainText("Updated");
+    for (const label of ["Project name", "Team size", "Technologies", "Agreed scope"]) await expect(factTerm(page, label)).toContainText("Updated in turn 1");
     await expectMeter(page, 1);
 
     // Hovering a grounded requirement highlights its quote in the turn's transcript; so does reaching it with Tab.
@@ -348,7 +362,7 @@ test.describe("session", () => {
     await expect(two.getByText(/ vs previous turn$/)).toBeVisible();
     // Technologies merge: the new answer's are added to the known ones, and the fact is marked as updated.
     await expectTechnologies(page, [...FREIGHT.technologies, ...DENTAL.technologies]);
-    await expect(factTerm(page, "Technologies")).toContainText("Updated");
+    await expect(factTerm(page, "Technologies")).toContainText("Updated in turn 2");
     await expectMeter(page, 2);
     await two.scrollIntoViewIfNeeded();
     await shot(page, "turn-with-attachment");
@@ -361,7 +375,7 @@ test.describe("session", () => {
     await expect(projectName(three)).toHaveText(FREIGHT.name);
     await expectMeter(page, 3);
     await expect(fact(page, "Project name")).toHaveText(FREIGHT.name);
-    await expect(factTerm(page, "Project name")).toContainText("Updated");
+    await expect(factTerm(page, "Project name")).toContainText("Updated in turn 3");
     await expectTechnologies(page, [...FREIGHT.technologies, ...DENTAL.technologies]);
     await expect(factTerm(page, "Technologies")).not.toContainText("Updated"); // nothing new to add
     await expect(flagged(three)).toHaveCount(0);
@@ -461,7 +475,7 @@ test.describe("session", () => {
       const document = scope.getByRole("radiogroup", { name: "Result view" }).getByRole("radio", { name: "Document" });
       await document.click();
       await expect(document).toBeChecked();
-      await expect(scope.getByRole("heading", { level: 2, name: /^Estimation: / })).toBeVisible();
+      await expect(scope.getByRole("heading", { level: 3, name: /^Estimation: / })).toBeVisible(); // one level below "Turn n"
     };
     await showDocument(one);
     // The table's region is named by the server's heading above it.
@@ -565,6 +579,43 @@ test.describe("session", () => {
     await expect(stopped(page)).toBeVisible();
     await expect(stopButton(page)).toHaveCount(0);
   });
+
+  // The transcript sits in the turn's header, far above most requirements: Evidence brings the quote to the reader.
+  test("Evidence (a click, or Enter) opens the turn's transcript at its quote; hovering a requirement never scrolls the page", async ({ page }) => {
+    await ready(page);
+    const one = turn(page, 1);
+    await sendText(page, FREIGHT_KICKOFF);
+    await expectResult(one);
+    const toggle = one.getByRole("button", { name: /^Transcript/ });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const last = requirements(one).last();
+    const evidence = last.getByRole("button", { name: /^Evidence for / });
+    const id = await idOf(evidence);
+    await evidence.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const pane = turnTranscript(page, 1);
+    await expect(pane).toBeFocused();
+    await expectHighlighted(pane, id);
+    await expect(pane.locator("mark[data-active]").first()).toBeInViewport();
+    await expect(evidenceCard(page)).toHaveCount(0);
+
+    // Hovering a requirement highlights its quote inside the transcript region only: the page stays where it is.
+    const first = requirements(one).first();
+    await first.scrollIntoViewIfNeeded();
+    const scrollTop = await page.evaluate(() => document.scrollingElement?.scrollTop);
+    await first.locator("p").first().hover();
+    await expectHighlighted(pane, await idOf(first.getByRole("button", { name: /^Evidence for / })));
+    expect(await page.evaluate(() => document.scrollingElement?.scrollTop), "the page's scroll after hovering a requirement").toBe(scrollTop);
+    await page.mouse.move(0, 0);
+
+    const second = requirements(one).nth(1).getByRole("button", { name: /^Evidence for / });
+    await second.focus();
+    await page.keyboard.press("Enter");
+    await expect(pane).toBeFocused();
+    await expectHighlighted(pane, await idOf(second));
+    await expect(pane.locator("mark[data-active]").first()).toBeInViewport();
+  });
 });
 
 for (const colorScheme of ["light", "dark"] as const) {
@@ -629,7 +680,10 @@ test.describe("375 px wide", () => {
     await sendText(page, FREIGHT_KICKOFF);
     await expectPartial(page);
     await expectNoHorizontalScroll(page);
+    const streamingOffset = await estimateOffset(one);
     await expectResult(one);
+    await expect(one.getByRole("button", { name: "Copy as markdown" })).toBeVisible();
+    expect(await estimateOffset(one), "px from the turn's top to its estimate, once the result arrived").toBe(streamingOffset);
     await expectNoHorizontalScroll(page);
     await shot(page, "mobile");
 
@@ -665,6 +719,29 @@ test.describe("375 px wide", () => {
     await requirements(two).first().getByRole("button", { name: /^Evidence for / }).click();
     await expect(evidenceCard(page)).toContainText("Quote from an earlier message");
     await expect(two.getByRole("button", { name: /^Transcript/ })).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+test.describe("360 px wide", () => {
+  test.use({ viewport: { width: 360, height: 780 } });
+
+  test("an 80-character technology wraps in the memory: nothing scrolls sideways, nor does the memory column from 1024 px", async ({ page }) => {
+    for (const name of LONG_TECHNOLOGIES) expect(name).toHaveLength(80);
+    // The session's view as if earlier turns had named them: the memory shows it before any turn.
+    await page.route("**/api/sessions/*", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      const response = await route.fetch();
+      const view = await response.json();
+      await route.fulfill({ response, json: { ...view, project_metadata: { ...view.project_metadata, mentioned_technologies: ["SAP", ...LONG_TECHNOLOGIES] } } });
+    });
+    await ready(page);
+    await expectTechnologies(page, ["SAP", ...LONG_TECHNOLOGIES]);
+    await expectNoHorizontalScroll(page);
+    // From 1024 px the memory is a sticky column that scrolls on its own.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(memory(page)).toHaveCSS("position", "sticky");
+    expect(await memory(page).evaluate((aside) => aside.scrollWidth - aside.clientWidth), "horizontal overflow of the memory column, in px").toBe(0);
+    await expectNoHorizontalScroll(page);
   });
 });
 

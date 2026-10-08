@@ -28,15 +28,16 @@ describe("MemoryPanel", () => {
   it("says what is not known yet instead of leaving a blank", () => {
     render(<MemoryPanel metadata={{ project_name: null, assumed_team_size: null, mentioned_technologies: [], agreed_scope: null }} />);
     for (const label of ["Project name", "Team size", "Technologies", "Agreed scope"]) expect(valueOf(label)).toHaveTextContent("Not mentioned yet");
-    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Updated/)).not.toBeInTheDocument();
   });
 
-  it("marks the facts this turn changed with a subtle Updated badge, read with the fact", () => {
-    render(<MemoryPanel metadata={{ ...metadata, assumed_team_size: 1 }} changed={["mentioned_technologies", "assumed_team_size"]} />);
-    expect(within(termOf("Technologies")).getByText("Updated")).toBeInTheDocument();
-    expect(within(termOf("Team size")).getByText("Updated")).toBeInTheDocument();
-    expect(within(termOf("Project name")).queryByText("Updated")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Updated")).toHaveLength(2);
+  // It names the turn: while a newer turn streams, or after one stopped or failed, the marks are still that turn's.
+  it("marks the facts the latest completed turn changed with a subtle badge naming that turn, read with the fact", () => {
+    render(<MemoryPanel metadata={{ ...metadata, assumed_team_size: 1 }} changed={["mentioned_technologies", "assumed_team_size"]} turn={2} />);
+    expect(within(termOf("Technologies")).getByText("Updated in turn 2")).toBeInTheDocument();
+    expect(within(termOf("Team size")).getByText("Updated in turn 2")).toBeInTheDocument();
+    expect(within(termOf("Project name")).queryByText(/^Updated/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Updated in turn 2")).toHaveLength(2);
     expect(valueOf("Team size")).toHaveTextContent("1 person");
   });
 

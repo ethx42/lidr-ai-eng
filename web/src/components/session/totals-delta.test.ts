@@ -33,4 +33,9 @@ describe("describeDelta", () => {
     expect(describeDelta({ expectedHours: -12.3, costUsd: -738 })).toBe("−12.3 h, −$738 vs previous turn");
     expect(describeDelta({ expectedHours: 0, costUsd: 0 })).toBe("No change in hours vs previous turn");
   });
+
+  it("names the turn compared with when a stopped or failed turn sits between", () => {
+    expect(describeDelta({ expectedHours: 30, since: 1 })).toBe("+30 h vs turn 1");
+    expect(describeDelta({ expectedHours: 0, since: 2 })).toBe("No change in hours vs turn 2");
+  });
 });

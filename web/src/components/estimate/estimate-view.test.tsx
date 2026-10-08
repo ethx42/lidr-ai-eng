@@ -16,7 +16,7 @@ const closest = (element: Element, selector: string) => {
   if (!(found instanceof HTMLElement)) throw new Error(`no ${selector} around ${element.textContent}`);
   return found;
 };
-const sectionOf = (title: string) => closest(screen.getByRole("heading", { level: 3, name: title }), "section");
+const sectionOf = (title: string) => closest(screen.getByRole("heading", { level: 4, name: title }), "section");
 const rowOf = (text: string) => closest(screen.getByText(text), "tr");
 const requirementOf = (id: string) => closest(within(sectionOf("Requirements")).getByText(id), "li");
 const totalsStrip = () => closest(screen.getByText("Expected", { selector: "dt" }), "dl");
@@ -30,16 +30,16 @@ const liveRegions = (element: Element) => element.querySelectorAll('[aria-live],
 const SECTIONS = ["Summary", "Requirements", "Assumptions", "Open questions", "Tasks", "Team", "Risks", "Confidence"];
 
 describe("EstimateView with the final estimate", () => {
-  it("renders the project name as the only h2 and one h3 per section in schema order", () => {
+  it("renders the project name as the only h3 and one h4 per section in schema order (the turn's label is the h2)", () => {
     render(<EstimateView data={fullEstimate} streaming={false} />);
-    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Physiotherapy patient portal"]);
-    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(SECTIONS);
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Physiotherapy patient portal"]);
+    expect(screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(SECTIONS);
   });
 
   it("pins the totals strip under the title: expected hours, range, duration and cost", () => {
     render(<EstimateView data={fullEstimate} streaming={false} />);
     const strip = totalsStrip();
-    const title = screen.getByRole("heading", { level: 2 });
+    const title = screen.getByRole("heading", { level: 3 });
     expect(title.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(strip.compareDocumentPosition(screen.getByRole("heading", { name: "Summary" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (const value of ["95 h", "62–144 h", "1–2 weeks", "$5,700"]) expect(within(strip).getByText(value)).toBeInTheDocument();
@@ -101,8 +101,8 @@ describe("EstimateView with the final estimate", () => {
 describe("EstimateView with partial snapshots", () => {
   it.each(Object.entries(partials))("renders the %s snapshot without throwing", (_name, data) => {
     render(<EstimateView data={data} streaming />);
-    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
-    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(SECTIONS);
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(SECTIONS);
   });
 
   it("renders sections not yet received as skeletons shaped like the final section", () => {
@@ -122,7 +122,7 @@ describe("EstimateView with partial snapshots", () => {
 
   it("shows the project name as soon as it arrives", () => {
     render(<EstimateView data={partials.projectNameOnly} streaming />);
-    expect(screen.getByRole("heading", { level: 2, name: "Yo" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Yo" })).toBeInTheDocument();
   });
 
   it("shows skeleton cells for a task whose hours have not arrived", () => {
@@ -172,7 +172,7 @@ describe("EstimateView with partial snapshots", () => {
 
   it("renders valid nesting and keeps list semantics on unstyled lists", () => {
     const { container, rerender } = render(<EstimateView data={partials.empty} streaming />);
-    const invalid = 'span div, p div, h2 div, dt div, dd > div, li > span div';
+    const invalid = 'span div, p div, h3 div, h4 div, dt div, dd > div, li > span div';
     expect(container.querySelectorAll(invalid)).toHaveLength(0);
     rerender(<EstimateView data={wire('{"requirements": [{"id": "R1"}], "tasks": [{"id": "T1"}], "team": [{}], "risks": [{}], "assumptions": [{}]}')} streaming />);
     expect(container.querySelectorAll(invalid)).toHaveLength(0);
@@ -189,9 +189,9 @@ describe("EstimateView with partial snapshots", () => {
   ])("never throws on malformed wire data (%s), streaming or not", (_name, json) => {
     const data = wire(json);
     const { rerender } = render(<EstimateView data={data} streaming />);
-    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
     rerender(<EstimateView data={data} grounding={wireGrounding('{"ungrounded_requirement_ids": "R1", "tasks_without_valid_basis": null}')} streaming={false} />);
-    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(SECTIONS);
+    expect(screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(SECTIONS);
   });
 
   it("drops malformed values instead of rendering them", () => {
@@ -228,7 +228,7 @@ describe("EstimateView grounding", () => {
 describe("EstimateView announcements and focus", () => {
   it("does not announce growing text; one polite region says 'Estimate ready' when streaming ends", () => {
     const { container, rerender } = render(<EstimateView data={breakdown} streaming />);
-    const article = closest(screen.getByRole("heading", { level: 2 }), "article");
+    const article = closest(screen.getByRole("heading", { level: 3 }), "article");
     expect(article).toHaveAttribute("aria-busy", "true");
     const [live, ...others] = liveRegions(container);
     expect(others).toHaveLength(0);

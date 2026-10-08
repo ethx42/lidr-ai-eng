@@ -15,13 +15,14 @@ export const ResultViewToggle = ({ value, onChange }: { value: ResultView; onCha
   <Segmented label="Result view" hideLabel options={VIEWS} labels={LABELS} value={value} onChange={onChange} />
 );
 
-// Headings carry ids, so the region around a table can be named by the heading above it.
-const headingWithId = (Tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") =>
+// Headings carry ids, so the region around a table can be named by the heading above it. They sit one level down: the
+// document is a conversation turn's answer, and the turn's label is the h2 ("## Estimation: …" becomes an h3).
+const headingWithId = (Tag: "h2" | "h3" | "h4" | "h5" | "h6") =>
   function Heading({ children }: ComponentProps<"h2">) {
     const id = useId();
     return <Tag id={id}>{children}</Tag>;
   };
-const HEADINGS = { h1: headingWithId("h1"), h2: headingWithId("h2"), h3: headingWithId("h3"), h4: headingWithId("h4"), h5: headingWithId("h5"), h6: headingWithId("h6") };
+const HEADINGS = { h1: headingWithId("h2"), h2: headingWithId("h3"), h3: headingWithId("h4"), h4: headingWithId("h5"), h5: headingWithId("h6"), h6: headingWithId("h6") };
 
 const headingAbove = (element: Element) => {
   let above = element.previousElementSibling;
@@ -58,7 +59,7 @@ const ScrollTable = ({ children }: ComponentProps<"table">) => {
 // Markdown elements are styled from here, so no per-element component has to pass react-markdown's `node` along.
 const DOCUMENT = [
   "flex min-w-0 flex-col gap-3 text-sm wrap-anywhere [&_p]:max-w-prose",
-  "[&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:text-balance [&_h3]:mt-3 [&_h3]:text-base [&_h3]:font-semibold",
+  "[&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:text-2xl [&_h3]:font-semibold [&_h3]:text-balance [&_h4]:mt-3 [&_h4]:text-base [&_h4]:font-semibold",
   "[&_ul]:flex [&_ul]:list-disc [&_ul]:flex-col [&_ul]:gap-1 [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5",
   "[&_th]:border-b [&_th]:bg-surface [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-medium [&_th]:text-muted-foreground",
   "[&_td]:num [&_td]:border-b [&_td]:px-3 [&_td]:py-2 [&_tr:last-child>td]:border-b-0",

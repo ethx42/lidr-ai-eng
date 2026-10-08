@@ -8,7 +8,6 @@ import { DETAIL_LEVEL_LABELS, OUTPUT_FORMAT_LABELS, PROJECT_TYPE_LABELS } from "
 import { Button } from "@/components/ui/button";
 import { type ResultView, ResultViewToggle } from "@/components/workspace/result-view-toggle";
 import { type Pin, TranscriptPane } from "@/components/workspace/transcript-pane";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import type { components } from "@/lib/ai-service/schema";
 import { readEstimate, readGrounding } from "@/lib/estimate/read";
 import type { StreamState } from "@/lib/estimate/types";
@@ -20,9 +19,6 @@ import { type TotalsDelta, TotalsDeltaBadge } from "./totals-delta";
 
 // What one turn sent: the typed request and its attachments. A Retry sends the same again.
 export type TurnInput = { body: components["schemas"]["EstimateRequest"]; files: File[] };
-
-// Tailwind's `md`: from here hover and focus link a requirement to its quote; below it, Evidence pins the requirement.
-export const WIDE = "(min-width: 48rem)";
 
 // The quotes to mark: each complete quote while the estimate streams, then only those the server grounded. Evidence is
 // a requirement's last field, so a snapshot can end inside the newest requirement's quote, and a cut-short quote marks
@@ -55,17 +51,17 @@ type Props = {
 
 // One turn of the conversation: what was sent (choices, attachment chips, the transcript behind a disclosure) and the
 // answer. Session 4's evidence link survives inside the card: hovering or focusing a requirement highlights its quote in
-// this turn's transcript; below 768 px, Evidence opens the transcript at the quote and pins it. A grounded quote with no
-// mark here came from an earlier message (grounding covers the conversation the model saw) or an attachment: its
-// Evidence card says so instead.
+// this turn's transcript (which scrolls on its own, never the page); Evidence opens the transcript at the quote, brings it
+// into view and pins it, since the transcript sits in the card's header, usually far above the requirement. A grounded
+// quote with no mark here came from an earlier message (grounding covers the conversation the model saw) or an
+// attachment: its Evidence card says so instead.
 export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry, onEdit, stopRef, ref }: Props) => {
   const labelId = useId();
   const transcriptId = useId();
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const wide = useMediaQuery(WIDE, true);
   const [view, setView] = useState<ResultView>("structured");
   const [open, setOpen] = useState(false);
-  // Hovered or focused; `pinned` (below 768 px) outlives both, until the next pin or attempt.
+  // Hovered or focused; `pinned` outlives both, until the next pin or attempt.
   const [activeRequirement, setActiveRequirement] = useState<string | null>(null);
   const [pinned, setPinned] = useState<Pin | null>(null);
   // A new attempt streams in structured and numbers its own requirements (React's "adjusting state when a prop changes").
@@ -81,7 +77,6 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
   const find = useMemo(() => evidenceFinder(transcript), [transcript]);
   // Only a requirement whose quote is marked here can be pinned; any other keeps its hover card.
   const marked = useMemo(() => new Set(find(quotes).map(({ id }) => id)), [find, quotes]);
-  const shownPin = wide ? null : pinned;
   const elsewhere = input.files.length > 0 ? "Quote from an attachment or an earlier message" : "Quote from an earlier message";
   const evidenceNote = state.status === "done" ? (id: string) => (marked.has(id) ? undefined : elsewhere) : undefined;
 
@@ -97,10 +92,11 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
   return (
     <li ref={ref} aria-labelledby={labelId} className="scroll-mt-16 rounded-lg border bg-card">
       <div className="flex flex-col gap-2 rounded-t-lg border-b bg-surface px-4 py-3 sm:px-6">
-        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span id={labelId} className="text-sm font-semibold">{`Turn ${number}`}</span>
+        {/* The turn's heading (its estimate's headings sit one level below), so heading navigation reads turn by turn. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id={labelId} className="text-sm font-semibold">{`Turn ${number}`}</h2>
           <span className="text-xs text-muted-foreground">{describe(input.body)}</span>
-        </p>
+        </div>
         {input.files.length > 0 && (
           <ul role="list" aria-label="Attachments" className="flex flex-wrap gap-2">
             {input.files.map((file, i) => (
@@ -128,7 +124,7 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
                 transcript={transcript}
                 quotes={quotes}
                 active={activeRequirement}
-                pinned={shownPin}
+                pinned={pinned}
                 className="max-h-80"
               />
             )}
@@ -156,9 +152,9 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
           onEditTranscript={onEdit}
           stopRef={stopRef}
           view={view}
-          activeRequirement={activeRequirement ?? shownPin?.id}
+          activeRequirement={activeRequirement ?? pinned?.id}
           onRequirementFocus={setActiveRequirement}
-          pinFor={wide ? undefined : (id) => (marked.has(id) ? () => pin(id) : undefined)}
+          pinFor={(id) => (marked.has(id) ? () => pin(id) : undefined)}
           evidenceNote={evidenceNote}
         />
       </div>

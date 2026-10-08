@@ -5,8 +5,7 @@ import { type EvidenceQuote, type EvidenceRange, evidenceFinder } from "@/lib/ev
 import { scrollBehavior } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
-// A requirement pinned from its Evidence button (below 768 px): a new object per pin, so pinning it again brings its
-// quote back into view.
+// A requirement pinned from its Evidence button: a new object per pin, so pinning it again brings its quote back into view.
 export type Pin = { id: string };
 // `label` names the region (one per turn in a conversation); `className` sizes it where the parent does not.
 type Props = {
@@ -34,9 +33,9 @@ const markOf = (pane: HTMLElement, id: string) => [...pane.querySelectorAll("mar
 
 // The submitted transcript with each quote behind a requirement marked. The active requirement's quote (hovered or
 // focused, else pinned) is highlighted. An active one out of view is centred in this pane (its own scroll only: the page
-// and the estimate never move); a pinned one is brought into view through every scrolling ancestor, because below
-// 768 px the pane is as tall as its text and `main` (or the page) scrolls. Each happens once per activation or pin, as
-// soon as the mark exists (while streaming, the quote may arrive after the requirement).
+// and the estimate never move); a pinned one is brought into view through every scrolling ancestor, the page included,
+// because the pane sits in its turn's header, usually far above the requirement. Each happens once per activation or
+// pin, as soon as the mark exists (while streaming, the quote may arrive after the requirement).
 export const TranscriptPane = ({ transcript, quotes, active, pinned, label = "Submitted transcript", className, ref }: Props) => {
   const own = useRef<HTMLDivElement>(null);
   const pane = ref ?? own;
