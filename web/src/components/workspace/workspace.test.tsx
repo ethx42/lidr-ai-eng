@@ -67,6 +67,7 @@ describe("Workspace", () => {
   let serviceContext: Promise<Response> | undefined;
   let createSession: (() => Response) | undefined;
   let created: number;
+  let storedHistory: number; // what GET /api/sessions/{id} reports for a session this tab already had
 
   beforeEach(() => {
     streams = [];
@@ -74,6 +75,7 @@ describe("Workspace", () => {
     serviceContext = undefined;
     createSession = undefined;
     created = 0;
+    storedHistory = 0;
     sessionStorage.clear();
     stubPointer("fine");
     Object.defineProperty(HTMLElement.prototype, "scrollTo", { value: vi.fn(), configurable: true });
@@ -91,7 +93,8 @@ describe("Workspace", () => {
         }
         if (path.startsWith("/api/sessions/") && method === "GET") {
           const id = path.split("/").at(-1);
-          return Response.json({ session_id: id, project_metadata: EMPTY_MEMORY, history_turns: 0, max_turns: 6, prompt_version: "v3" });
+          const history_turns = SESSIONS.slice(0, created).includes(id ?? "") ? 0 : storedHistory;
+          return Response.json({ session_id: id, project_metadata: EMPTY_MEMORY, history_turns, max_turns: 6, prompt_version: "v3" });
         }
         if (respond) return respond(init);
         const stream = sseBody(init?.signal);
@@ -206,8 +209,24 @@ describe("Workspace", () => {
       await loaded();
       expect(screen.getByText("History 0 / 6 turns")).toBeInTheDocument();
       expect(fact("Project name")).toHaveTextContent("Not mentioned yet");
+      // one landmark for the memory column (the panel inside is not a second region of the same name)
+      expect(screen.getAllByRole("complementary", { name: "Project memory" })).toHaveLength(1);
+      expect(screen.queryByRole("region", { name: "Project memory" })).not.toBeInTheDocument();
       expect(calls(/^\/api\/sessions$/)).toHaveLength(1);
       expect(sessionStorage.getItem("estimator.sessionId")).toBe(SESSIONS[0]);
+    });
+
+    // After a reload the session is kept (sessionStorage) but this page never showed its turns.
+    it("continues a stored conversation: says how many earlier turns it keeps, and numbers new turns after them", async () => {
+      sessionStorage.setItem("estimator.sessionId", "7e1c9d2a-3b4f-4a5e-8c6d-0f1e2a3b4c5d");
+      storedHistory = 3;
+      const { user, input } = setup();
+      expect(await screen.findByText("This conversation continues")).toBeInTheDocument();
+      expect(screen.getByText(/3 earlier turns are kept in its history/)).toBeInTheDocument();
+      expect(screen.queryByText("Start the conversation")).not.toBeInTheDocument();
+      expect(calls(/^\/api\/sessions$/)).toHaveLength(0); // the stored session is used, not replaced
+      await run(user, input, "Fourth call");
+      expect(turns()[0]).toHaveAccessibleName("Turn 4");
     });
 
     it("sends the typed form and its attachments as one multipart turn of the session, then clears the composer", async () => {
@@ -601,6 +620,22 @@ describe("Workspace", () => {
       expect(turnCalls()[0][1]?.signal?.aborted).toBe(true);
     });
 
+    // The page must not jump when the result arrives: the row that will hold the delta and the view toggle is there,
+    // with a placeholder of the toggle's size, while the turn streams.
+    it("reserves the result bar's room while a turn streams, and fills the same row when it completes", async () => {
+      const { user, input } = setup();
+      await run(user, input);
+      const bar = turn(1).querySelector('[data-slot="turn-result-bar"]');
+      if (!(bar instanceof HTMLElement)) throw new Error("no result bar while streaming");
+      expect(bar).toHaveClass("min-h-9");
+      expect(bar.querySelector('[data-slot="skeleton"]')).toHaveAttribute("aria-hidden", "true");
+      expect(within(bar).queryByRole("radiogroup")).not.toBeInTheDocument();
+      await finish(0);
+      expect(turn(1).querySelector('[data-slot="turn-result-bar"]')).toBe(bar);
+      expect(within(bar).getByRole("radiogroup", { name: "Result view" })).toBeInTheDocument();
+      expect(bar.querySelector('[data-slot="skeleton"]')).toBeNull();
+    });
+
     it("switches a completed turn between the structured view and the server's document; each turn starts structured", async () => {
       const narrative = "## Estimation: Booking\n\n**Backend** — 3 tasks, 120.0 h expected (90.0–170.0 h). T3 Booking API: slot checks.\n";
       const { user, input } = setup();
@@ -655,6 +690,9 @@ describe("Workspace", () => {
         expect(vi.mocked(fetch)).toHaveBeenLastCalledWith("/api/context?project_type=mobile_app&detail_level=medium&output_format=phases_table&prompt_version=v3", expect.anything()),
       );
       expect(screen.queryByRole("complementary", { name: "Inspector" })).not.toBeInTheDocument(); // the right column holds the memory
+      // never the service default's prompt first: nothing is asked until the session's version is known
+      const promptCalls = vi.mocked(fetch).mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith("/api/context?"));
+      expect(promptCalls.every((url) => url.endsWith("prompt_version=v3"))).toBe(true);
       expect(await inspector(user, "Context")).toContain(context.system_prompt);
     });
 

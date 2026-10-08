@@ -70,13 +70,25 @@ const toForm = ({ body, files }: TurnInput) => {
   return form;
 };
 
-const NoTurnYet = () => (
+// `earlier`: turns the session already holds from before this page loaded (a reload keeps the session, not its answers).
+const NoTurnYet = ({ earlier }: { earlier: number }) => (
   <Empty className="py-10">
     <EmptyHeader>
-      <EmptyTitle className="text-base font-semibold">Start the conversation</EmptyTitle>
-      <EmptyDescription>
-        Paste the first meeting transcript and attach any documents. Each turn adds to the project memory, so later turns can refine the estimate.
-      </EmptyDescription>
+      {earlier > 0 ? (
+        <>
+          <EmptyTitle className="text-base font-semibold">This conversation continues</EmptyTitle>
+          <EmptyDescription>
+            {`${earlier} earlier ${earlier === 1 ? "turn is" : "turns are"} kept in its history, with the project memory; their answers are not shown again. Send the next turn, or start a new conversation.`}
+          </EmptyDescription>
+        </>
+      ) : (
+        <>
+          <EmptyTitle className="text-base font-semibold">Start the conversation</EmptyTitle>
+          <EmptyDescription>
+            Paste the first meeting transcript and attach any documents. Each turn adds to the project memory, so later turns can refine the estimate.
+          </EmptyDescription>
+        </>
+      )}
     </EmptyHeader>
   </Empty>
 );
@@ -117,8 +129,9 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const newConversationRef = useRef<HTMLButtonElement>(null);
   const startedOver = useRef(false); // how the confirmation closed: Start new, or Cancel / Esc
   const ids = useRef(0);
-  // The prompt sessions send: the composer's choices on the session's version (v3), not the service default (S5-R4).
-  const promptContext = usePromptContext({ ...params, prompt_version: view?.prompt_version ?? "" });
+  // The prompt sessions send: the composer's choices on the session's version (v3, S5-R4), asked for only once the
+  // session is known, so the service default's prompt is never fetched first.
+  const promptContext = usePromptContext(view && { ...params, prompt_version: view.prompt_version });
 
   const latest = turns.at(-1);
   const shown = turns.map((turn) => turn.settled ?? state);
@@ -130,6 +143,8 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
   const metadata = lastDone ? result.project_metadata : view?.project_metadata;
   const history = (lastDone ? count(result.history_turns) : undefined) ?? view?.history_turns;
   const noSession = failed && !view;
+  // The view is loaded with the session and not after each turn, so its count is the turns held before this page's.
+  const earlier = view?.history_turns ?? 0;
   // `current()` rather than the rendered state: a result that arrived but is not rendered yet already ended the turn.
   const answering = () => Boolean(latest && !latest.settled && current().status === "streaming");
 
@@ -237,7 +252,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
         <main className="relative flex min-w-0 flex-1 flex-col">
           <div className="flex-1 px-4 py-6 sm:px-6">
             {turns.length === 0 ? (
-              <NoTurnYet />
+              <NoTurnYet earlier={earlier} />
             ) : (
               <ol aria-label="Conversation" className="flex flex-col gap-6">
                 {turns.map((turn, i) => {
@@ -248,7 +263,7 @@ export const Workspace = ({ samples }: { samples: Sample[] }) => {
                     <TurnCard
                       key={turn.id}
                       ref={isLatest ? latestRef : undefined}
-                      number={i + 1}
+                      number={earlier + i + 1}
                       input={turn.input}
                       state={turnState}
                       attempt={turn.attempt}

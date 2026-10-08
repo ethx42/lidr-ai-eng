@@ -136,11 +136,16 @@ export const TurnCard = ({ number, input, state, attempt, delta, onStop, onRetry
         </div>
       </div>
       <div className="flex flex-col gap-4 px-4 py-6 sm:px-6">
-        {state.status === "done" && (
-          <div className="flex flex-wrap items-center gap-2">
-            {delta && <TotalsDeltaBadge delta={delta} />}
+        {/* Reserved while the turn streams (a placeholder the toggle's size), so the page does not jump when it completes. */}
+        {(state.status === "streaming" || state.status === "done") && (
+          <div data-slot="turn-result-bar" className="flex min-h-9 flex-wrap items-center gap-2">
+            {state.status === "done" && delta && <TotalsDeltaBadge delta={delta} />}
             <div className="ml-auto">
-              <ResultViewToggle value={view} onChange={setView} />
+              {state.status === "done" ? (
+                <ResultViewToggle value={view} onChange={setView} />
+              ) : (
+                <span aria-hidden data-slot="skeleton" className="block h-8 w-44 rounded-md bg-muted motion-safe:animate-pulse" />
+              )}
             </div>
           </div>
         )}

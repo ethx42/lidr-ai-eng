@@ -24,16 +24,22 @@ const queryOf = ({ prompt_version, ...choices }: ContextParams) => {
 
 // GET /api/context for the given choices: the system prompt the next estimate would use. A change of choices aborts the
 // request it supersedes, whose answer then never lands. A failure keeps the last answer: the page holds the run on
-// screen only in memory, so it must never need a reload.
-export const usePromptContext = (params: ContextParams): PromptContext => {
-  const query = queryOf(params);
+// screen only in memory, so it must never need a reload. `null`: the choices are not known yet (a conversation's
+// prompt version comes with its session), so nothing is asked and the context stays loading.
+export const usePromptContext = (params: ContextParams | null): PromptContext => {
+  const query = params && queryOf(params);
   const [loaded, setLoaded] = useState<{ query: string; context: unknown } | null>(null);
   // The request for the current choices: on its way, answered, or failed. `attempt` counts retries.
-  const [request, setRequest] = useState<{ query: string; attempt: number; status: "pending" | "answered" | "failed" }>({ query, attempt: 0, status: "pending" });
+  const [request, setRequest] = useState<{ query: string | null; attempt: number; status: "pending" | "answered" | "failed" }>({
+    query,
+    attempt: 0,
+    status: "pending",
+  });
   // New choices start a new request, without the last one's failure (React's "adjusting state when a prop changes").
   if (request.query !== query) setRequest({ ...request, query, status: "pending" });
 
   useEffect(() => {
+    if (query === null) return;
     const controller = new AbortController();
     const settle = (update: () => void) => {
       if (!controller.signal.aborted) update();

@@ -18,6 +18,7 @@ describe("MemoryPanel", () => {
   it("shows the four facts the session remembers, technologies as a list", () => {
     render(<MemoryPanel metadata={metadata} />);
     expect(screen.getByRole("heading", { name: "Project memory" })).toBeInTheDocument();
+    expect(screen.queryByRole("region")).not.toBeInTheDocument(); // the page's column is the landmark
     expect(valueOf("Project name")).toHaveTextContent("Clinic portal");
     expect(valueOf("Team size")).toHaveTextContent("4 people");
     expect(within(valueOf("Technologies")).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Stripe", "Redsys"]);

@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from "react";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { components } from "@/lib/ai-service/schema";
@@ -44,8 +44,8 @@ const Loading = () => (
 
 // What the session remembers apart from the history (spec §7.3): the four facts the AI service merges after each turn
 // and sends with every prompt. A fact the latest turn changed carries a subtle "Updated" badge.
+// The page's column is the landmark ("Project memory"), so the panel is a plain block under its heading.
 export const MemoryPanel = ({ metadata, changed = [] }: Props) => {
-  const headingId = useId();
   const facts = isObject(metadata) ? metadata : {};
   const updated = (field: Field) => changed.includes(field);
   const name = text(facts.project_name);
@@ -53,8 +53,8 @@ export const MemoryPanel = ({ metadata, changed = [] }: Props) => {
   const technologies = texts(facts.mentioned_technologies);
   const scope = text(facts.agreed_scope);
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-4">
-      <h2 id={headingId} className="text-sm font-semibold">
+    <div className="flex flex-col gap-4">
+      <h2 className="text-sm font-semibold">
         Project memory
       </h2>
       {metadata === undefined ? (
@@ -87,6 +87,6 @@ export const MemoryPanel = ({ metadata, changed = [] }: Props) => {
           </Fact>
         </dl>
       )}
-    </section>
+    </div>
   );
 };
