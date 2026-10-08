@@ -37,8 +37,10 @@ NO_TEXT = "no extractable text"
 PDF_STREAM_BYTES = 4 * 1024 * 1024
 # What Word writes. zipfile's bzip2 and LZMA readers inflate a whole chunk in one call.
 DOCX_COMPRESSION = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
-# "<" bytes across the XML parts: lxml holds about 130 bytes per element, and Word writes about
-# 25 per paragraph, so this allows some 40,000 paragraphs in about 130 MB.
+# "<" bytes across every member: lxml holds about 130 bytes per element, and Word writes about
+# 25 per paragraph, so this allows some 40,000 paragraphs in about 130 MB. Every member, not only
+# *.xml: python-docx parses a part by its content type, whatever its name; binary media add about
+# one per 256 bytes (some 200,000 at the 50 MB uncompressed cap).
 DOCX_MAX_TAGS = 1_000_000
 
 logger = logging.getLogger(__name__)
@@ -179,8 +181,7 @@ def repacked(data: bytes, max_uncompressed: int) -> io.BytesIO:
         for info in members:
             with source.open(info) as member, copy.open(info.filename, "w") as target:
                 while chunk := member.read(64 * 1024):
-                    if info.filename.endswith((".xml", ".rels")):
-                        tags += chunk.count(b"<")
+                    tags += chunk.count(b"<")
                     target.write(chunk)
         if tags > DOCX_MAX_TAGS:
             raise AttachmentError("DOCX too complex (too many XML elements)")

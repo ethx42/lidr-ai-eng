@@ -458,6 +458,39 @@ def test_docx_with_too_many_xml_elements_is_rejected(monkeypatch: pytest.MonkeyP
         )
 
 
+def renamed_main_part(body: bytes) -> bytes:
+    """spec.docx with its main part moved to word/body.bin. python-docx reaches a part through the
+    relationships and parses it by its content type, whatever its name; the stub
+    word/document.xml keeps the upload a DOCX by name."""
+    with zipfile.ZipFile(FIX + "spec.docx") as src:
+        types, rels = src.read("[Content_Types].xml"), src.read("_rels/.rels")
+    buf = io.BytesIO(
+        rewrite_docx(
+            {
+                "[Content_Types].xml": types.replace(b"/word/document.xml", b"/word/body.bin"),
+                "_rels/.rels": rels.replace(b"word/document.xml", b"word/body.bin"),
+                "word/document.xml": b"stub",
+                "word/_rels/document.xml.rels": None,
+            }
+        )
+    )
+    with zipfile.ZipFile(buf, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/body.bin", body)
+    return buf.getvalue()
+
+
+def test_xml_elements_are_counted_in_every_docx_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    # spec.docx's other members hold about 24,500 "<"; a renamed main part used to go uncounted.
+    monkeypatch.setattr(extractor, "DOCX_MAX_TAGS", 30_000)
+    small = b"<w:document %s><w:body><w:p><w:r><w:t>%s</w:t></w:r></w:p></w:body></w:document>"
+    upload = renamed_main_part(small % (W_NS, b"hello-from-bin"))
+    [read] = extract_all([Attachment("small.docx", upload)], AttachmentLimits())
+    assert read.text == "hello-from-bin"  # the renamed part is what python-docx parses
+    many = b"<w:document %s><w:body>%s</w:body></w:document>" % (W_NS, b"<w:p/>" * 10_000)
+    with pytest.raises(AttachmentError, match="too many XML elements"):
+        extract_all([Attachment("many.docx", renamed_main_part(many))], AttachmentLimits())
+
+
 # Fix round 2: extraction in a killable child process. The targets below run in the child, which
 # imports this module to unpickle them.
 
