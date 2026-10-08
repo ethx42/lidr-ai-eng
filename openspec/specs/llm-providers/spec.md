@@ -1,7 +1,7 @@
 # llm-providers Specification
 
 ## Purpose
-Generates a schema-conformant structured estimation from a prompt, blocking or streamed, through a chain of pluggable LLM providers behind a fallback router, so the rest of the system is independent of which vendor serves the request; an offline replay provider serves recorded streams for tests and demos.
+Generates a schema-conformant structured estimation from a system prompt and a conversation, blocking or streamed, through a chain of pluggable LLM providers behind a fallback router, so the rest of the system is independent of which vendor serves the request; an offline replay provider serves recorded streams for tests and demos.
 
 ## Requirements
 
@@ -11,6 +11,13 @@ The system SHALL support `openai`, `anthropic`, and `replay` (see `Replay provid
 #### Scenario: Anthropic selected
 - **WHEN** `LLM_PROVIDER=anthropic` and `LLM_MODEL=claude-haiku-4-5`
 - **THEN** estimation requests are served by Anthropic with that model and the response reports `provider: "anthropic"`
+
+### Requirement: Conversation messages
+Every provider call SHALL take the system prompt and a list of conversation messages, each with the role `user` or `assistant`, in order: one user message for a single-shot request, or a session's history window followed by the new user message (see `CAG message structure` in `prompt-context`). Each provider SHALL send them in its native form, the system prompt apart from the messages: OpenAI as the request's instructions and one input item per message, Anthropic as the system blocks (see `Prompt cache routing`) and one message per message.
+
+#### Scenario: History sent in order
+- **WHEN** a call carries the messages user `u1`, assistant `a1`, user `u2`
+- **THEN** the provider request carries those three messages with those roles in that order, and the system prompt only in the provider's system field
 
 ### Requirement: Model request profiles
 The system SHALL shape every provider request according to a profile of the configured model's capabilities, so each model receives only parameters it supports:
@@ -129,7 +136,7 @@ Provider clients SHALL be created once at application startup and closed at shut
 - **THEN** every other provider is still closed and the failure is raised afterwards
 
 ### Requirement: Prompt cache routing
-On providers that accept a prompt-cache routing key, every request SHALL carry a key derived only from the version that rendered its prompt (`estimator-<version>`), so requests of one version, whose system prompts share the long static prefix that ends before the output-format and detail-level blocks (see `Cache-stable prompt prefix` in `prompt-context`), are routed to the same cache whatever their choices. The key SHALL contain no per-request or user data. On providers that cache by marked content instead, the system prompt SHALL be sent as its own block marked for caching.
+On providers that accept a prompt-cache routing key, every request SHALL carry a key derived only from the version that rendered its prompt (`estimator-<version>`), so requests of one version, whose system prompts share the long static prefix that ends before the output-format and detail-level blocks (see `Cache-stable prompt prefix` in `prompt-context`), are routed to the same cache whatever their choices. The key SHALL contain no per-request or user data. On providers that cache by marked content instead, the system prompt SHALL be sent as two blocks: its static prefix, through the end of the reference estimations, marked for caching, then the rest (the choice blocks and, from `v3`, the conversation and project-metadata blocks), unmarked; a system prompt without that boundary SHALL be sent as one marked block. The marker then sits on content every request of the version shares, so a request with other choices or other metadata reads the cache another one wrote.
 
 #### Scenario: Same key across requests
 - **WHEN** two estimation requests are served by OpenAI with the same prompt version
@@ -145,7 +152,12 @@ On providers that accept a prompt-cache routing key, every request SHALL carry a
 
 #### Scenario: Anthropic system prompt marked for caching
 - **WHEN** an estimation is served by Anthropic
-- **THEN** the system prompt is sent as one text block with an ephemeral cache-control marker, followed by one user message
+- **THEN** the system prompt is sent as a text block holding the static prefix with an ephemeral cache-control marker, then a text block holding the rest without one, followed by the conversation messages
+- **AND** the two blocks joined are the system prompt
+
+#### Scenario: Session metadata outside the cached block
+- **WHEN** a `v3` turn with known project metadata is served by Anthropic
+- **THEN** the metadata is only in the unmarked block, and a `v3` request with other choices and no metadata starts with the marked block's text
 
 #### Scenario: Streamed and blocking calls share the key
 - **WHEN** one blocking and one streamed estimation are served with the same prompt version
@@ -215,7 +227,7 @@ The router SHALL count consecutive availability failures per `provider:model`, i
 - **THEN** the router still calls the primary
 
 ### Requirement: Replay provider
-The system SHALL provide a `replay` provider that makes no network calls and needs no API key. It SHALL look up a recorded cassette named by the SHA-256 of the system prompt and the user message (joined by a NUL character) in `REPLAY_CASSETTE_DIR`, and stream the recorded text chunks with the recorded gaps multiplied by `REPLAY_DELAY_SCALE` (0 replays instantly), reporting the recorded usage. When no cassette matches, it SHALL synthesise a stream from one of the reference estimations, chosen deterministically from the prompt pair, with zero usage. It SHALL report provider `replay` and model `replay`, and its final text SHALL be validated against the schema like any provider's.
+The system SHALL provide a `replay` provider that makes no network calls and needs no API key. It SHALL look up a recorded cassette named by the SHA-256 of the system prompt and the latest user message (joined by a NUL character) in `REPLAY_CASSETTE_DIR`, ignoring earlier messages, so a single-turn call keeps its recorded cassette, and stream the recorded text chunks with the recorded gaps multiplied by `REPLAY_DELAY_SCALE` (0 replays instantly), reporting the recorded usage. When no cassette matches, as for a session turn whose prompt no recording covers, it SHALL synthesise a stream from one of the reference estimations, chosen deterministically from the system prompt and the latest user message, with zero usage. A call without a user message SHALL fail with an upstream-error failure whose cause is `no_user_message`, which the router does not pass to another provider. It SHALL report provider `replay` and model `replay`, and its final text SHALL be validated against the schema like any provider's.
 
 #### Scenario: Cassette replayed
 - **WHEN** a cassette matches the prompt pair
@@ -228,6 +240,14 @@ The system SHALL provide a `replay` provider that makes no network calls and nee
 #### Scenario: No cassette
 - **WHEN** no cassette matches the prompt pair
 - **THEN** the provider streams a reference estimation chosen deterministically from the prompt pair, with zero usage and no cost
+
+#### Scenario: History ignored by the lookup
+- **WHEN** a call carries earlier user and assistant messages before a user message whose prompt pair has a cassette
+- **THEN** that cassette is replayed
+
+#### Scenario: No user message
+- **WHEN** a call carries no user message
+- **THEN** it fails with an upstream-error failure with cause `no_user_message`, and no fallback is tried
 
 #### Scenario: Invalid recording
 - **WHEN** a cassette's text is not a schema-valid estimation

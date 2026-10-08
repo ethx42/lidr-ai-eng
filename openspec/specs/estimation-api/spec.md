@@ -1,7 +1,7 @@
 # estimation-api Specification
 
 ## Purpose
-Exposes the estimator over HTTP: clients submit a meeting transcription with a project type, detail level and output format, and receive an LLM-generated software estimation, either as one JSON response or as a stream of Server-Sent Events, together with the context the estimator uses, per-call metrics, health, and self-documenting API endpoints.
+Exposes the estimator over HTTP: clients submit a meeting transcription with a project type, detail level and output format, and receive an LLM-generated software estimation, either as one JSON response or as a stream of Server-Sent Events, together with the context the estimator uses, per-call metrics, health, and self-documenting API endpoints. These single-shot endpoints stay alongside the conversational session endpoints (see `conversation-sessions`), whose first turn covers what they do.
 
 ## Requirements
 
@@ -46,7 +46,7 @@ The endpoint SHALL accept an optional boolean `refresh` query parameter; `refres
 - **THEN** `estimation` describes the tasks as prose, one paragraph per delivery phase, with no task table
 
 ### Requirement: Request validation
-The system SHALL reject invalid estimate requests with `422` before calling any LLM provider, on both estimate endpoints; on the streaming endpoint the check SHALL complete before the stream starts, so the `422` is an ordinary JSON response. A request is invalid when `transcription` is missing, empty or whitespace-only, or longer than the configured maximum length, when `project_type`, `detail_level`, or `output_format` is missing or not one of its values, when unknown fields are present, or when the body is not sent with a JSON content type (`Content-Type: application/json`). The JSON content-type requirement SHALL be stated in the API documentation.
+The system SHALL reject invalid estimate requests with `422` before calling any LLM provider, on both estimate endpoints; on the streaming endpoint the check SHALL complete before the stream starts, so the `422` is an ordinary JSON response. A request is invalid when `transcription` is missing, empty or whitespace-only, or longer than the configured maximum length, when `project_type`, `detail_level`, or `output_format` is missing or not one of its values, when unknown fields are present, or when the body is not sent with a JSON content type (`Content-Type: application/json`). The JSON content-type requirement SHALL be stated in the API documentation. A session turn's transcript SHALL be held to the same maximum length, with the same error (see `conversation-sessions`).
 
 #### Scenario: Empty transcription
 - **WHEN** a client posts `{"transcription": "   "}`
@@ -68,12 +68,16 @@ The system SHALL reject invalid estimate requests with `422` before calling any 
 - **AND** no LLM provider call is made
 
 ### Requirement: Prompt version selection
-Both estimate endpoints and the context endpoint SHALL accept an optional `prompt_version` query parameter naming one of the available prompt versions (see `prompt-context`); when it is omitted, the `PROMPT_VERSION` setting applies (see `configuration`). Any other value, including a path such as `../v1`, a different letter case such as `V1`, or an empty value, SHALL be rejected with `422` and error code `invalid_request`, with `error.details` locating `["query", "prompt_version"]`, before any template is looked up and before any LLM provider call. On the streaming endpoint the check SHALL complete before the stream starts. Every response, stream `result`, and call log record SHALL carry the version that rendered the prompt.
+Both estimate endpoints and the context endpoint SHALL accept an optional `prompt_version` query parameter naming one of the available prompt versions (see `prompt-context`); when it is omitted, the `PROMPT_VERSION` setting applies (see `configuration`). Any other value, including a path such as `../v1`, a different letter case such as `V1`, or an empty value, SHALL be rejected with `422` and error code `invalid_request`, with `error.details` locating `["query", "prompt_version"]`, before any template is looked up and before any LLM provider call. On the streaming endpoint the check SHALL complete before the stream starts. Every response, stream `result`, and call log record SHALL carry the version that rendered the prompt. A single-shot request has no session, so a version that renders session inputs (from `v3`) SHALL render an empty project-metadata block and no attachments (see `prompt-context`). The session endpoints SHALL take no `prompt_version`: their turns always use the session's version (see `conversation-sessions`).
 
 #### Scenario: Version chosen per request
 - **WHEN** the service runs with `PROMPT_VERSION=v2` and a client posts a valid request to `/api/v1/estimate?prompt_version=v1`
 - **THEN** the prompt is rendered from the `v1` templates and the response's `prompt_version` is `v1`
 - **AND** a request without the parameter is rendered from `v2`
+
+#### Scenario: Session version on a single-shot request
+- **WHEN** a client posts a valid request to `/api/v1/estimate?prompt_version=v3`
+- **THEN** the prompt is rendered from `v3` with an empty `project_metadata` block and the response's `prompt_version` is `v3`
 
 #### Scenario: Unknown or path-like version rejected
 - **WHEN** a client posts a valid request to either estimate endpoint with `prompt_version` `v999`, `../v1`, `v1/../../x`, `V1`, or an empty value
@@ -124,6 +128,14 @@ The system SHALL answer only requests whose `Host` header names one of the confi
 #### Scenario: Loopback and Compose callers answered
 - **WHEN** a client calls `GET /health` with `Host: 127.0.0.1:8000`, `localhost:8000`, or `ai-service:8000`
 - **THEN** the response status is `200`
+
+### Requirement: Request body limit
+The system SHALL refuse any request whose body is larger than `ATTACHMENT_MAX_FILES` × `ATTACHMENT_MAX_BYTES` + 1 MiB (a session turn's largest upload plus room for its form fields) with `413`, without reading past the limit. That response does not use the API's JSON error shape: its body is plain text when the request declares its length, and FastAPI's `{"detail"}` JSON for a chunked body; the API contract SHALL say so for the session turn endpoints.
+
+#### Scenario: Oversized body
+- **WHEN** a client sends a body one byte over the limit to any endpoint
+- **THEN** the response status is `413` and it carries `X-Request-ID`
+- **AND** no LLM provider call is made
 
 ### Requirement: Health endpoint
 The system SHALL expose `GET /health` returning `200` with `status`, application `version`, `environment`, the primary `provider` and `model`, and the configured provider `chain` (`provider:model` entries, primary first), without calling any LLM provider.
@@ -235,7 +247,7 @@ The system SHALL expose `GET /api/v1/context` returning, without calling any LLM
 
 #### Scenario: Configured version by default
 - **WHEN** the service runs with `PROMPT_VERSION=v2` and a client calls `GET /api/v1/context` without `prompt_version`
-- **THEN** `prompt_version` is `v2` and `available_versions` is `["v1", "v2"]`
+- **THEN** `prompt_version` is `v2` and `available_versions` is `["v1", "v2", "v3"]`
 - **AND** with `?prompt_version=v1` the system prompt is rendered from `v1` and `prompt_version` is `v1`
 
 #### Scenario: Unknown parameter value rejected
